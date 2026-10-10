@@ -1,0 +1,33 @@
+# ===== 密钥与环境（最重要，绝不能提交）=====
+.env
+.env.*
+!.env.example
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ===== 本地数据 / 向量库 =====
+chroma_db/
+*.sqlite3
+*.db
+data/
+
+# ===== 工具与 IDE =====
+# WorkBuddy 本地项目数据（含会话记忆，不必公开）
+.workbuddy/
+.idea/
+.vscode/
+.trae/
+
+# ===== 系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini
