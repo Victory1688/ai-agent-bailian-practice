@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04_具备注销机制 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>04_具备注销机制 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char02 | 教学主题：智能体注销与资源释放 | 技术栈：dashscope function calling + JSON 文件持久化 + 注销清理 | 已验证可运行（2 轮对话 + shutdown + 文件验证全部通过）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>实现一个<strong>带安全注销机制的临时任务 Agent</strong>：任务完成后，Agent 执行完整的注销流程——先审计留底、再释放存储、最后写精简日志——确保不留下僵尸文件和内存泄漏。</p>
+<div class="card">
+  <div class="card-title">核心教学点：注销（shutdown）vs 清理（cleanup）</div>
+  <p>char02 五篇的 Agent 生命周期完整覆盖：<br>
+  <strong>01 → 骨架搭起来（能启动能说话）</strong><br>
+  <strong>02 → 状态追踪（能记住中间变量）</strong><br>
+  <strong>03 → 持久化记忆（重启不丢记忆）</strong><br>
+  <strong>04 → 注销清理（用完能干净退出）</strong><br>
+  <strong>05 → 外部 API（能力边界扩展）</strong></p>
+  <p>04 篇填补的是"Agent 用完之后怎么办"这个空白——没有注销机制的 Agent 就像用完不关机的电脑，长期运行会出问题。</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码的问题</h2>
+<div class="warn">
+  <div class="warn-title">两类问题（和 03 篇相同）</div>
+  <p><strong>第 1 类：虚构 API</strong>：<code class="inline">qwen_agent.Agent / QwenLLM / BaseTool / BaseMemory / CompletionConfig</code> 全部不存在。</p>
+  <p><strong>第 2 类：好代码被框架绑死</strong>：<code class="inline">LoggingMemory</code> 类的 save/clear 逻辑和 <code class="inline">ManagedAgent.shutdown()</code> 三步流程本身是标准 Python，完全正确——但继承了虚构的 BaseMemory 导致整个类被"连坐"。改写时<strong>去掉继承、保留核心逻辑</strong>。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体流程图（注销机制全景）</h2>
+<pre>
+run_task_session() 启动
+  │
+  ├─ ManagedAgent("temp_agent_001")
+  │     │
+  │     ├─ LoggingMemory() 创建（logs=[]）
+  │     └─ config 字典 + agent_chat 循环就绪
+  │
+  ├─ 第 1 轮: "请帮我完成今天的日报任务"
+  │     │ → handle_task("今天的日报任务") → 返回"任务『今天的日报任务』已完成"
+  │     └─ logs 增长到 [system, user1, tool_call, tool_result, assistant1]
+  │
+  ├─ 第 2 轮: "现在关闭智能体"
+  │     │ → 模型直接回复"已关闭智能体..."
+  │     └─ logs 继续增长
+  │
+  ├─ 【关键】agent.shutdown() 执行注销三步
+  │     │
+  │     ├─ 步骤 1: memory.save()
+  │     │     → 把完整对话历史写入 JSON（注销前留底，事后审计用）
+  │     │     → ./memory_cleanup/temp_agent_001.json ✅ 存在
+  │     │
+  │     ├─ 步骤 2: memory.clear()
+  │     │     → os.remove(memory_file) 删除 JSON 文件（释放存储资源）
+  │     │     → ./memory_cleanup/temp_agent_001.json ❌ 不存在
+  │     │
+  │     └─ 步骤 3: 写精简文本日志
+  │           → 遍历 logs，每条写一行 [时间戳] role: 内容预览
+  │           → ./memory_cleanup/temp_agent_001_log.txt ✅ 存在
+  │
+  └─ 验证：JSON=False, log=True
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>代码中的实现</th><th>一句话解释</th></tr>
+  <tr><td><strong>注销（shutdown）</strong></td><td><code class="inline">ManagedAgent.shutdown()</code></td><td>完整的退出流程：审计留底 → 释放资源 → 写摘要</td></tr>
+  <tr><td><strong>清理（clear）</strong></td><td><code class="inline">LoggingMemory.clear()</code></td><td>单步操作：删除 JSON 文件（释放存储）</td></tr>
+  <tr><td><strong>审计留底</strong></td><td>shutdown 步骤 1 的 <code class="inline">memory.save()</code></td><td>先保存再删除，确保对话历史不丢失，事后可回溯</td></tr>
+  <tr><td><strong>摘要日志</strong></td><td>shutdown 步骤 3 的 <code class="inline">_log.txt</code> 写入</td><td>JSON 完整但臃肿，txt 精简便于快速查看</td></tr>
+  <tr><td><strong>资源泄漏</strong></td><td>未注销时 JSON 文件残留 → 磁盘占满</td><td>长期运行的 Agent 必须有注销机制</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段讲解（5 个代码块）</h2>
+
+<h3>块 1：LoggingMemory（第 32-51 行，和 03 篇的 PersistentJSONMemory 对照看）</h3>
+<pre>
+class LoggingMemory:
+    """支持写入日志文件的持久化记忆，注销时 clear() 删除 JSON 文件"""
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        self.memory_file = os.path.join(MEMORY_PATH, f"{session_id}.json")
+        self.logs = []                              # 运行时消息列表（注意：03 篇叫 self.messages）
+
+    def add_message(self, message: dict):
+        self.logs.append(message)
+
+    def get(self):
+        return self.logs
+
+    def save(self):
+        """把当前全部消息写入 JSON 文件"""
+        os.makedirs(MEMORY_PATH, exist_ok=True)
+        with open(self.memory_file, "w", encoding="utf-8") as f:
+            json.dump(self.logs, f, ensure_ascii=False, indent=2)
+
+    def clear(self):
+        """注销时删除 JSON 文件（释放存储资源）"""
+        if os.path.exists(self.memory_file):
+            os.remove(self.memory_file)
+</pre>
+<div class="card">
+  <div class="card-title">和 03 篇 PersistentJSONMemory 的两个区别</div>
+  <ul>
+    <li><strong>03 有 load()，04 没有</strong>：03 篇要"中断恢复"所以需要 load 读历史；04 篇是临时任务，不需要恢复</li>
+    <li><strong>04 有 clear()，03 没有</strong>：03 篇要持久化所以不该删；04 篇要注销所以必须删</li>
+  </ul>
+</div>
+
+<h3>块 2：工具注册（第 54-73 行）</h3>
+<pre>
+def handle_task(task: str) -> str:
+    return f"任务『{task}』已完成"
+
+tool_registry = {"handle_task": handle_task}
+
+tools = [
+    {"type": "function", "function": {
+        "name": "handle_task",
+        "description": "处理一个示例任务",
+        "parameters": {"type": "object", "properties": {
+            "task": {"type": "string", "description": "任务内容"}},
+            "required": ["task"]}}
+    }}
+]
+</pre>
+<p>和 02/03 篇带参工具完全相同的模式：函数体 + 说明书 + 注册表。这个工具演示的是"Agent 执行任务"（和 05 篇的"调外部 API"是两种不同的工具类型）。</p>
+
+<h3>块 3：agent_chat 循环（第 76-108 行）</h3>
+<pre>
+# 同 02/03/05 篇模式：while True + tool_calls 判断 + JSON 参数解析
+# 唯一差异：memory_obj.logs = memory  ← 把最新消息列表回写到 memory_obj
+</pre>
+
+<h3>块 4：ManagedAgent（第 111-145 行，注销机制的核心封装）</h3>
+<pre>
+class ManagedAgent:
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        self.memory = LoggingMemory(session_id)
+        self.config = {
+            "name": "CleanableAgent",
+            "model": "qwen-plus",
+            "temperature": 0.2,    # 低随机性，任务助手不要太跳
+            "max_tokens": 256,    # 短回答，节省 tokens
+            "system_message": SYSTEM_MESSAGE
+        }
+
+    def chat(self, user_input: str) -> str:
+        result = agent_chat(self.config, user_input, self.memory)
+        return result
+
+    def shutdown(self):
+        """注销流程：保存 → 清理 → 写摘要日志"""
+        print(">> 执行Agent注销流程...")
+
+        # 步骤 1：先保存 JSON（注销前留底，事后审计用）
+        self.memory.save()
+
+        # 步骤 2：删除 JSON 文件（释放存储资源）
+        self.memory.clear()
+
+        # 步骤 3：写精简的文本摘要日志（便于事后快速查看）
+        log_file = os.path.join(MEMORY_PATH, f"{self.session_id}_log.txt")
+        with open(log_file, "w", encoding="utf-8") as f:
+            for item in self.memory.logs:
+                ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                role = item.get("role", "unknown")
+                content_preview = (item.get("content", "") or "")[:50]
+                f.write(f"[{ts}] {role}: {content_preview}\n")
+
+        print(">> Agent已成功注销并释放资源")
+</pre>
+<div class="card">
+  <div class="card-title">shutdown 三步：为什么不是"直接删"？</div>
+  <p><strong>如果直接 clear()（删 JSON）</strong>：对话历史就没了，万一需要审计或复盘就追不回来。<br>
+  <strong>现在的三步</strong>：先 save() 留底 → 再 clear() 释放 → 最后写精简 txt 摘要。JSON 和 txt 不共存——clear() 已经删了 JSON，txt 是唯一残留，但它是精简的、只读的日志，不是完整对话记录。</p>
+</div>
+
+<h3>块 5：run_task_session（第 148-172 行）</h3>
+<pre>
+def run_task_session():
+    session_id = "temp_agent_001"
+
+    # 演示可重复运行：清旧残留
+    for suffix in [".json", "_log.txt"]:
+        f = os.path.join(MEMORY_PATH, f"{session_id}{suffix}")
+        if os.path.exists(f):
+            os.remove(f)
+
+    agent = ManagedAgent(session_id)
+
+    print(agent.chat("请帮我完成今天的日报任务"))
+    print(agent.chat("现在关闭智能体"))
+
+    agent.shutdown()
+
+    # 关键验证：注销后 JSON 已删、日志文件存在
+    json_path = os.path.join(MEMORY_PATH, f"{session_id}.json")
+    log_path = os.path.join(MEMORY_PATH, f"{session_id}_log.txt")
+    print(f"\n验证：JSON 文件存在={os.path.exists(json_path)}（应为 False）")
+    print(f"验证：  日志文件存在={os.path.exists(log_path)}（应为 True）")
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（已验证）</h2>
+<pre>
+>> 执行Agent注销流程...
+>> Agent已成功注销并释放资源
+
+验证：JSON 文件存在=False（应为 False）✅  ← clear() 删了
+验证：  日志文件存在=True（应为 True）✅  ← shutdown() 写了
+</pre>
+<p>查看 <code class="inline">./memory_cleanup/temp_agent_001_log.txt</code>，你能看到类似这样的精简日志：</p>
+<pre>
+[2026-10-10 15:30:00] system: 你是一位临时任务助手...
+[2026-10-10 15:30:01] user: 请帮我完成今天的日报任务
+[2026-10-10 15:30:02] tool: 任务『今天的日报任务』已完成
+[2026-10-10 15:30:02] assistant: 今天的日报任务已顺利完成！...
+[2026-10-10 15:30:05] user: 现在关闭智能体
+[2026-10-10 15:30:06] assistant: 已关闭智能体，所有资源已注销...
+</pre>
+
+<!-- ========== 七 ========== -->
+<h2>七、char02 五篇的完整生命周期递进</h2>
+<table>
+  <tr><th>维度</th><th>01 骨架</th><th>02 状态追踪</th><th>03 持久化</th><th><strong>04 注销清理</strong></th><th>05 外部 API</th></tr>
+  <tr><td><strong>Agent 能力</strong></td><td>能启动能说话</td><td>记住中间变量</td><td>重启不丢记忆</td><td><strong>用完能干净退出</strong></td><td>会联网办事</td></tr>
+  <tr><td><strong>记忆介质</strong></td><td>Python 变量</td><td>Python 变量 + state 字典</td><td>JSON 文件</td><td><strong>JSON 文件（注销后删除）</strong></td><td>Python 变量</td></tr>
+  <tr><td><strong>退出机制</strong></td><td>无</td><td>无</td><td>无</td><td><strong>save → clear → log</strong></td><td>无</td></tr>
+  <tr><td><strong>工具来源</strong></td><td>本地函数（零参）</td><td>本地函数（带参）</td><td>本地函数（带参）</td><td><strong>本地函数（带参）</strong></td><td>外部 Web API</td></tr>
+  <tr><td><strong>生产就绪度</strong></td><td>★☆☆☆☆</td><td>★★☆☆☆</td><td>★★★☆☆</td><td><strong>★★★★☆</strong></td><td>★★★☆☆</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、注销机制的生产级增强方向</h2>
+<table>
+  <tr><th>当前实现（教学版）</th><th>生产版增强</th><th>为什么</th></tr>
+  <tr><td>shutdown 手动调</td><td><strong>atexit / try-finally 自动调</strong></td><td>程序崩溃时也要释放资源，不能等用户手动</td></tr>
+  <tr><td>JSON 直接删</td><td><strong>移到回收目录 + TTL 过期清理</strong></td><td>误删可恢复，留 7 天缓冲期</td></tr>
+  <tr><td>单线程 agent_chat</td><td><strong>多 Agent 进程池 + 超时自动销毁</strong></td><td>多个 Agent 并发运行，不能等用户逐个调 shutdown</td></tr>
+  <tr><td>无异常保护</td><td><strong>shutdown 本身 try-except</strong></td><td>注销过程出错（如磁盘满）不能让主流程崩</td></tr>
+  <tr><td>无监控</td><td><strong>注销事件上报监控系统</strong></td><td>知道有多少 Agent 正常退出、多少异常退出</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<div class="card">
+  <ol>
+    <li><strong>手动验证注销效果</strong>：运行脚本 → 检查 JSON 文件不存在、log.txt 存在 → 用记事本打开 log.txt 看内容格式。</li>
+    <li><strong>破坏实验</strong>：删掉 shutdown() 里的 <code class="inline">self.memory.clear()</code>，连续运行两次——第二次会生成 JSON 文件残留，体会"资源泄漏"是什么样子。</li>
+    <li><strong>加异常保护</strong>：在 shutdown() 外面包一层 try-except，模拟 clear() 失败（如文件被占用）时主流程不崩。</li>
+    <li><strong>加 atexit 自动注销</strong>：查一下 Python 的 <code class="inline">atexit.register()</code>，让程序退出时自动调 shutdown()，不需要用户手动调。</li>
+    <li><strong>思考题</strong>：Agent 执行中崩溃了（比如 Python 进程被 kill），shutdown() 根本调不到——这种情况怎么清理残留文件？查一下"信号处理 / 僵尸进程清理"。</li>
+  </ol>
+</div>
+
+<p style="margin-top:2.5rem; color:#64748b; font-size:0.85rem; text-align:center;">04_具备注销机制 讲解 | char02 | 生成于 2026-10-10 | 配套验证：2 轮对话 + shutdown + 文件验证运行通过</p>
+</div>
+</body>
+</html>

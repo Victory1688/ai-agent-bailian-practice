@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02_自动追踪任务状态 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>02_自动追踪任务状态 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char02 | 教学主题：对话状态追踪（State Tracking） | 技术栈：dashscope function calling | 已验证可运行（4 轮对话全部正确）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>实现一个<strong>会议助手 Agent</strong>：用户用 4 轮自然语言对话，逐步把"会议主题 → 时间 → 与会人员"三项信息设置好，最后让 Agent 总结。代码要演示的核心概念是——</p>
+<div class="card">
+  <div class="card-title">对话状态追踪（State Tracking）</div>
+  <p>智能体在多轮交互中保持"记忆"和"逻辑"的机制：跟踪任务进度、存储中间变量，确保交互的连贯性。通俗类比：<strong>填一张登记表</strong>——用户每次说的信息，Agent 都要记到表里；用户最后问"填了啥"，Agent 照着表答。</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码的问题（为什么必须改写）</h2>
+<div class="warn">
+  <div class="warn-title">原代码使用的是虚构 API，无法运行</div>
+  <p>原文件导入的 <code class="inline">qwen_agent.Agent / Tool / ChatMessage / QwenLLM / SimpleMemory / CompletionConfig / BaseTool</code> 在真实的 qwen-agent 包里<strong>全部不存在</strong>（已实测 ImportError）。教材（或 AI 生成的教材）臆造了一套不存在的框架 API。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体流程图</h2>
+<pre>
+用户: "我要安排一个关于AI发展的会议"
+  │
+  ▼
+┌─────────────── Agent 循环（每轮对话都走一遍）───────────────┐
+│                                                            │
+│  memory（messages 列表）= system + 历史轮次 + 本轮 user      │
+│        │                                                   │
+│        ▼                                                   │
+│  dashscope.Generation.call(model, messages, tools)         │
+│        │                                                   │
+│        ├── 返回 tool_calls ──► 解析 arguments(JSON)          │
+│        │                        │                          │
+│        │                  fn(**args) 执行工具             │
+│        │                        │                          │
+│        │                  工具写入 task_state  ◄── 状态追踪！ │
+│        │                        │                          │
+│        │                  结果以 role=tool 回传 ──► 继续循环 │
+│        │                                                   │
+│        └── 无 tool_calls ──► 最终回答，更新 memory，返回     │
+└────────────────────────────────────────────────────────────┘
+  │
+  ▼
+下一轮对话带着更新后的 memory 继续（状态在轮间累积）
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>代码中的实现</th><th>作用</th></tr>
+  <tr><td><strong>任务状态（State）</strong></td><td><code class="inline">task_state = {"topic": None, "time": None, "attendees": None}</code></td><td>跨轮存储中间变量的字典，工具执行时写入</td></tr>
+  <tr><td><strong>对话记忆（Memory）</strong></td><td><code class="inline">memory</code> 消息列表，每轮 <code class="inline">agent_chat(..., memory)</code> 传入传出</td><td>让模型"记得"之前聊过什么（对话连贯性）</td></tr>
+  <tr><td><strong>工具说明书</strong></td><td><code class="inline">tools</code> 列表（type/name/description/parameters）</td><td>告诉模型有哪些工具可调、参数长什么样</td></tr>
+  <tr><td><strong>工具注册表</strong></td><td><code class="inline">tool_registry = {"set_topic": set_topic, ...}</code></td><td>函数名 → 执行体。模型只发"指令"，本地负责执行</td></tr>
+  <tr><td><strong>Agent 循环</strong></td><td><code class="inline">while True + tool_calls 判断</code></td><td>模型可以连续调工具，直到它认为信息足够才给最终回答</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段讲解</h2>
+
+<h3>5.1 状态字典（第 27-28 行附近）</h3>
+<pre>
+# 原写法用 SimpleMemory() 存状态；改写为显式的 task_state 字典——
+# 工具执行时把信息写进来，这就是状态追踪
+task_state = {"topic": None, "time": None, "attendees": None}
+</pre>
+<p>三个键对应会议登记表的三栏，初始都是 None。运行时你会看到它们被逐轮填充：<code class="inline">None → AI发展 → 5月3号上午10点 → 张三、李四、王五</code>。</p>
+
+<h3>5.2 三个工具（函数 + 说明书 + 注册表）</h3>
+<pre>
+def set_topic(topic: str) -> str:
+    """工具1执行体：设置会议主题，并写入任务状态"""
+    task_state["topic"] = topic          # 关键：执行的同时写状态
+    return f"会议主题已设置为：{topic}"    # 回传给模型的结果
+</pre>
+<p>注意与 char02/01 的差异：<strong>01 的工具无参数，本例的工具带参数</strong>。所以模型返回的 <code class="inline">arguments</code> 是一段 JSON 字符串，需要解析：</p>
+<pre>
+fn_args = json.loads(call['function'].get('arguments') or '{}')
+tool_result = fn(**fn_args)     # 例如 fn(topic='AI发展')
+</pre>
+<p><code class="inline">tools</code> 说明书里每个工具都声明了 <code class="inline">required: ["topic"]</code> 等必填项，模型据此知道传什么参数。</p>
+
+<h3>5.3 Agent 循环（本文件的灵魂）</h3>
+<pre>
+while True:
+    response = dashscope.Generation.call(model, messages=memory, tools=tools, ...)
+    message = response.output.choices[0].message
+    tool_calls = getattr(message, 'tool_calls', None)
+
+    if not tool_calls:                       # 模型不再要工具 → 给出最终回答
+        return message.content, memory + [...]
+
+    memory = memory + [message]              # 记住"模型想调工具"这一步
+    for call in tool_calls:
+        fn_name = call['function']['name']   # 注意：dashscope 返回 dict，用字典取值
+        fn_args = json.loads(call['function'].get('arguments') or '{}')
+        tool_result = fn(**fn_args)          # 本地执行
+        memory = memory + [{"role": "tool", "content": tool_result, ...}]   # 结果回传
+</pre>
+<div class="card">
+  <div class="card-title">为什么是 while True 而不是 if？</div>
+  <p>模型可能<strong>连续调用多个工具</strong>（比如一句话里同时给主题和时间）。循环让模型每次调完工具、看到结果后，自己决定"继续调"还是"回答"。这就是 Agent 与普通对话程序的本质区别：<strong>决策权在模型，执行权在本地</strong>。</p>
+</div>
+
+<h3>5.4 多轮对话的记忆传递</h3>
+<pre>
+reply, memory = agent_chat("我要安排一个关于AI发展的会议", memory)   # 首轮，memory=None
+reply, memory = agent_chat("会议时间定在5月3号上午10点", memory)      # 带上上一轮的 memory
+reply, memory = agent_chat("参加人包括张三、李四和王五", memory)
+reply, memory = agent_chat("请总结一下目前的会议信息", memory)
+</pre>
+<p>每一轮都把<strong>更新后的 memory 传给下一轮</strong>——第 4 轮模型能总结出全部信息，靠的就是前三轮的消息全在 memory 里。删掉这个参数传递，模型就会"失忆"。</p>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（已验证）</h2>
+<pre>
+[状态追踪] 用户输入: 我要安排一个关于AI发展的会议
+[状态追踪] 调用工具 set_topic({'topic': 'AI发展'}) -> 会议主题已设置为：AI发展
+[状态追踪] 当前任务状态: {'topic': 'AI发展', 'time': None, 'attendees': None}
+>> 好的，会议主题已设置为"AI发展"。接下来，请告诉我会议的具体时间以及与会人员名单...
+
+[状态追踪] 用户输入: 会议时间定在5月3号上午10点
+[状态追踪] 调用工具 set_time({'time': '5月3号上午10点'}) -> 会议时间已设置为：5月3号上午10点
+[状态追踪] 当前任务状态: {'topic': 'AI发展', 'time': '5月3号上午10点', 'attendees': None}
+>> 好的，会议时间已设置为"5月3号上午10点"...
+
+[状态追踪] 用户输入: 参加人包括张三、李四和王五
+[状态追踪] 调用工具 set_attendees({'attendees': '张三、李四、王五'}) -> 与会人员已设定为：张三、李四、王五
+[状态追踪] 当前任务状态: 三项全部就位
+>> 已为您完成会议安排...
+
+[状态追踪] 用户输入: 请总结一下目前的会议信息
+[状态追踪] 当前任务状态: {'topic': 'AI发展', 'time': '5月3号上午10点', 'attendees': '张三、李四、王五'}
+>> 当前会议信息总结如下：...（模型直接从记忆总结，无需再调工具）
+</pre>
+<div class="ok">
+  <div class="ok-title">观察三个关键现象</div>
+  <ul>
+    <li><strong>状态逐轮填充</strong>：task_state 从全 None 到三项就位，每轮打印可见</li>
+    <li><strong>模型自动提参数</strong>："5月3号上午10点" 这句自然语言被模型自动抽成 JSON 参数传给工具</li>
+    <li><strong>第 4 轮不调工具</strong>：模型判断信息已全，直接总结——Agent 循环的"自主决策"体现</li>
+  </ul>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>七、两个"记忆"的分工（新人最容易混淆）</h2>
+<table>
+  <tr><th>维度</th><th>memory（消息列表）</th><th>task_state（状态字典）</th></tr>
+  <tr><td>存什么</td><td>完整对话历史（system/user/assistant/tool 全部消息）</td><td>结构化的业务数据（主题/时间/人员）</td></tr>
+  <tr><td>给谁用</td><td>给<strong>模型</strong>看（作为上下文输入）</td><td>给<strong>程序逻辑</strong>用（可校验、可落库、可回显）</td></tr>
+  <tr><td>会膨胀吗</td><td>会，随轮次线性增长（长对话需裁剪/摘要）</td><td>不会，固定三个键</td></tr>
+  <tr><td>类比</td><td>聊天记录</td><td>登记表</td></tr>
+</table>
+<p>生产级 Agent 里，两者都存在：memory 管对话连贯，state 管业务进度（如订票系统的"已选出发地/目的地/日期"）。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、动手练习</h2>
+<div class="card">
+  <ol>
+    <li><strong>破坏实验</strong>：把 <code class="inline">agent_chat("会议时间定在...", memory)</code> 的 memory 参数删掉，看第 3、4 轮模型是否"失忆"——体会记忆注入的作用。</li>
+    <li><strong>加一个工具</strong>：新增 <code class="inline">set_location(location)</code> 工具（会议室地点），补全注册表和 tools 说明书，看模型能否自动用上。</li>
+    <li><strong>打印 messages</strong>：在第 4 轮前把整个 memory 打印出来，数一数共有多少条消息、各自 role 是什么。</li>
+    <li><strong>状态校验</strong>：增加一个 <code class="inline">confirm_meeting()</code> 工具，只有 task_state 三项都非 None 才返回成功，否则返回缺项提示——模拟真实业务的表单校验。</li>
+    <li><strong>思考题</strong>：如果对话有 50 轮，memory 会非常大。查一下"对话历史裁剪 / 滑动窗口 / 摘要压缩"，想想哪种适合本例。</li>
+  </ol>
+</div>
+
+<p style="margin-top:2.5rem; color:#64748b; font-size:0.85rem; text-align:center;">02_自动追踪任务状态 讲解 | char02 | 生成于 2026-10-10 | 配套验证：4 轮对话运行通过</p>
+</div>
+</body>
+</html>

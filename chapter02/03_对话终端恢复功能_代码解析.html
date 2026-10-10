@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03_对话终端恢复功能 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>03_对话终端恢复功能 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char02 | 教学主题：持久化记忆与中断恢复 | 技术栈：dashscope function calling + JSON 文件持久化 | 已验证可运行（4 轮对话 + 重建恢复全部正确）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>实现一个<strong>带"断点续聊"功能的机票预订 Agent</strong>：用户聊到一半程序崩了 / 关了，重新启动后还能从上次断点继续——之前说的"5 月 5 日去上海、早上 8 点"这些信息不会丢。</p>
+<div class="card">
+  <div class="card-title">核心教学点：持久化记忆（Persistent Memory）</div>
+  <p>char02 三篇的"记忆"逐层升级：<br>
+  <strong>01 → memory 是 Python 变量</strong>（程序一停就没了）<br>
+  <strong>02 → memory 还是变量 + 多轮传递</strong>（程序一停还是没了）<br>
+  <strong>03 → memory 写到磁盘 JSON 文件</strong>（程序重启、换终端、隔一天再来，记忆都在）</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码的问题</h2>
+<div class="warn">
+  <div class="warn-title">原代码有两类问题</div>
+  <p><strong>第 1 类：虚构 API</strong>（和 01/02 相同）：<code class="inline">qwen_agent.Agent / Tool / QwenLLM / BaseTool / CompletionConfig / BaseMemory</code> 全部不存在。</p>
+  <p><strong>第 2 类：好代码被框架绑死</strong>：<code class="inline">PersistentJSONMemory</code> 类的 load/save 逻辑本身是标准 Python（json 读写），完全正确——但它继承了虚构的 <code class="inline">BaseMemory</code>，导致整个类被"连坐"无法导入。改写时<strong>去掉继承、保留核心逻辑</strong>即可，这是三个文件里唯一"可救活"的组件。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体流程图（持久化机制全景）</h2>
+<pre>
+simulate_session() 启动
+  │
+  ├─ session_id = "user_20250501"   ← 同一用户同一 ID = 同一份记忆
+  │
+  ├─ build_agent(session_id)
+  │     │
+  │     └─ PersistentJSONMemory(session_id)
+  │           │
+  │           ├─ load() → 读 ./memory/user_20250501.json
+  │           │     （首次启动：文件不存在 → 返回 []）
+  │           │     （重启恢复：文件存在 → 返回历史消息列表）
+  │           │
+  │           └─ messages 属性 = 恢复出来的历史
+  │
+  ├─ 第 1-3 轮对话（正常进行）
+  │     │
+  │     └─ agent_chat 每轮结束 → memory_obj.save()
+  │           → 把当前全部 messages 写入 JSON 文件
+  │
+  ├─ 【模拟中断】── 程序退出，Python 变量全丢
+  │
+  ├─ build_agent(session_id)   ← 同一个 session_id！
+  │     │
+  │     └─ PersistentJSONMemory(session_id)
+  │           │
+  │           └─ load() → 读 JSON 文件
+  │                 （第 1-3 轮的消息全部恢复 ✅）
+  │
+  └─ 第 4 轮："现在继续，出发地是北京"
+        │
+        └─ 模型从恢复的记忆中拼出完整需求 → 返回北京→上海完整行程
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>代码中的实现</th><th>一句话解释</th></tr>
+  <tr><td><strong>持久化记忆</strong></td><td><code class="inline">PersistentJSONMemory</code> 类</td><td>把对话历史写到磁盘文件，程序重启后还能读回来</td></tr>
+  <tr><td><strong>session_id</strong></td><td><code class="inline">"user_20250501"</code></td><td>会话的唯一标识，决定读哪个 JSON 文件</td></tr>
+  <tr><td><strong>load()</strong></td><td>启动时调，读 JSON → messages 列表</td><td>中断恢复的"读"环节</td></tr>
+  <tr><td><strong>save()</strong></td><td>每轮对话结束调，messages → 写 JSON</td><td>持久化的"写"环节</td></tr>
+  <tr><td><strong>落盘时机</strong></td><td>每轮 <code class="inline">agent_chat</code> 结束统一 save 一次</td><td>不是每加一条消息就落盘（减少磁盘 IO）</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段讲解（5 个代码块）</h2>
+
+<h3>块 1：PersistentJSONMemory（第 27-48 行，本文件最值得保留的部分）</h3>
+<pre>
+class PersistentJSONMemory:
+    """自定义Memory：将上下文持久化至JSON文件，支持中断后恢复"""
+    def __init__(self, session_id: str, path: str = "./memory"):
+        os.makedirs(path, exist_ok=True)              # 目录不存在就建
+        self.session_id = session_id
+        self.memory_file = os.path.join(path, f"{session_id}.json")
+        self.messages = self.load()                   # 启动即恢复
+
+    def load(self):
+        if os.path.exists(self.memory_file):
+            with open(self.memory_file, "r", encoding="utf-8") as f:
+                return json.load(f)                  # 从 JSON 恢复列表
+        return []
+
+    def save(self):
+        with open(self.memory_file, "w", encoding="utf-8") as f:
+            json.dump(self.messages, f, ensure_ascii=False, indent=2)  # 中文不转义
+</pre>
+<div class="card">
+  <div class="card-title">改写亮点：去掉继承，保留核心</div>
+  <p>原代码 <code class="inline">class PersistentJSONMemory(BaseMemory)</code> 继承了虚构的 BaseMemory。改写后<strong>去掉继承</strong>，但 load/save/add_message/get 四个方法<strong>原样保留</strong>——因为它们本来就是标准 Python，和框架无关。这是三个文件里唯一"救活"的组件。</p>
+</div>
+
+<h3>块 2：工具注册（第 51-70 行）</h3>
+<pre>
+def log_user_input(content: str) -> str:
+    return f"记录完成：{content}"
+
+tool_registry = {"log_user_input": log_user_input}
+
+tools = [
+    {"type": "function", "function": {
+        "name": "log_user_input",
+        "description": "将用户输入写入交互日志",
+        "parameters": {"type": "object", "properties": {
+            "content": {"type": "string", "description": "用户内容"}},
+            "required": ["content"]}}
+    }}
+]
+</pre>
+<p>和 02 篇带参工具完全相同的模式：函数体 + 说明书 + 注册表。</p>
+
+<h3>块 3：build_agent（第 73-82 行）</h3>
+<pre>
+def build_agent(session_id: str):
+    config = {
+        "name": "SessionRecoveryAgent",
+        "model": "qwen-plus",
+        "temperature": 0.3,
+        "max_tokens": 512,
+        "system_message": SYSTEM_MESSAGE
+    }
+    memory = PersistentJSONMemory(session_id=session_id)   # 同 ID → 恢复同一份记忆
+    return config, memory
+</pre>
+<p>关键：<strong>同一个 session_id</strong> 两次调用 build_agent，拿到的 memory 对象指向同一个 JSON 文件。第二次 build 时 load() 自动恢复历史——这就是"中断恢复"的实现方式。</p>
+
+<h3>块 4：agent_chat 循环（第 85-120 行）</h3>
+<pre>
+def agent_chat(config, user_input, memory_obj):
+    # 从持久层取历史消息（中断恢复的入口）
+    memory = list(memory_obj.get())
+    if not memory:
+        memory = [{"role": "system", "content": config["system_message"]}]
+    memory = memory + [{"role": "user", "content": user_input}]
+
+    # while True Agent 循环（01/02 同模式）
+    while True:
+        response = dashscope.Generation.call(model=..., messages=memory, tools=tools, ...)
+        message = response.output.choices[0].message
+        tool_calls = getattr(message, 'tool_calls', None)
+
+        if not tool_calls:
+            memory = memory + [{"role": "assistant", "content": message.content}]
+            memory_obj.messages = memory    # ① 更新对象属性
+            memory_obj.save()               # ② 落盘持久化 ← 关键！
+            return message.content
+
+        # 工具调用分支（同 02 篇，带 JSON 参数解析）
+        ...
+</pre>
+<div class="card">
+  <div class="card-title">落盘时机：每轮对话结束统一 save 一次</div>
+  <p>原写法 <code class="inline">add_message</code> 每加一条消息就 save 一次（高频小 IO）。改写为每轮对话结束统一 save 一次（低频大 IO）。两种都正确，后者性能更好。生产环境可进一步改为"定时落盘 + 对话结束落盘"双保险。</p>
+</div>
+
+<h3>块 5：simulate_session（第 123-152 行，演示中断恢复）</h3>
+<pre>
+def simulate_session():
+    session_id = "user_20250501"
+
+    # 首次启动前先清旧文件（让演示可重复运行）
+    memory_file = os.path.join("./memory", f"{session_id}.json")
+    if os.path.exists(memory_file):
+        os.remove(memory_file)
+
+    agent_config, memory = build_agent(session_id)
+
+    print(agent_chat(agent_config, "我想订一张5月5日去上海的机票", memory))
+    print(agent_chat(agent_config, "时间大约是早上8点左右", memory))
+    print(agent_chat(agent_config, "帮我记录这个需求", memory))
+
+    print("\n模拟中断后重新启动...\n")
+
+    # 关键：同一个 session_id → load() 从磁盘恢复全部历史
+    agent_config2, memory2 = build_agent(session_id)
+
+    print(agent_chat(agent_config2, "现在继续，出发地是北京", memory2))
+</pre>
+<p>脚本开头 <code class="inline">os.remove(memory_file)</code> 是为了让演示每次都从干净状态开始，否则第二次运行会把上次的对话也带上——持久化本身是对的，只是演示需要可控的起点。</p>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（已验证）</h2>
+<pre>
+第1轮: 好的，已记录您的需求：5月5日出发前往上海...
+第2轮: 已补充记录：5月5日早上8点左右出发...
+第3轮: 已完整记录当前机票预订需求：
+       ✅ 出发日期：2024年5月5日
+       ✅ 出发时段：早上约8:00
+       ✅ 目的地：上海
+       ⚠️ 待补充：出发城市
+
+       模拟中断后重新启动...
+
+第4轮: ✅ 已确认完整需求：
+       北京 → 上海｜2024年5月5日上午约8:00起飞｜单程｜1位成人
+       ↑ 模型从恢复的记忆中拼出了完整需求！
+</pre>
+<p>查看 <code class="inline">./memory/user_20250501.json</code> 文件，你能看到完整的对话历史（含 system/user/assistant/tool 全部消息）。这个文件就是持久化的"证据"。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、char02 三篇的完整递进关系</h2>
+<table>
+  <tr><th>维度</th><th>01_智能启动过程展示</th><th>02_自动追踪任务状态</th><th>03_对话终端恢复功能</th></tr>
+  <tr><td><strong>教学重点</strong></td><td>智能体基本骨架</td><td>状态追踪</td><td>持久化记忆</td></tr>
+  <tr><td><strong>工具参数</strong></td><td>零参数</td><td>带参数（topic/time/attendees）</td><td>带参数（content）</td></tr>
+  <tr><td><strong>记忆介质</strong></td><td>Python 变量（程序停就没）</td><td>Python 变量（程序停就没）</td><td><strong>JSON 文件（程序重启还在）</strong></td></tr>
+  <tr><td><strong>中断恢复</strong></td><td>不支持</td><td>不支持</td><td><strong>支持（load/save + session_id）</strong></td></tr>
+  <tr><td><strong>落盘时机</strong></td><td>无</td><td>无</td><td>每轮对话结束统一 save</td></tr>
+  <tr><td><strong>代码复杂度</strong></td><td>★★☆☆☆</td><td>★★★☆☆</td><td>★★★☆☆</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、持久化 vs 非持久化：为什么需要落盘</h2>
+<table>
+  <tr><th>场景</th><th>非持久化（01/02）</th><th>持久化（03）</th></tr>
+  <tr><td>程序运行中多轮对话</td><td>OK（变量在）</td><td>OK</td></tr>
+  <tr><td>程序崩溃后重启</td><td><strong>失忆</strong></td><td><strong>恢复</strong></td></tr>
+  <tr><td>隔一天再来聊</td><td><strong>失忆</strong></td><td><strong>恢复</strong></td></tr>
+  <tr><td>换一台设备聊</td><td><strong>失忆</strong></td><td>需 JSON 文件同步到新设备</td></tr>
+  <tr><td>服务器重启</td><td><strong>失忆</strong></td><td><strong>恢复</strong></td></tr>
+</table>
+<p>生产级 Agent（如 ChatGPT、讯飞星火）都有持久化记忆——用户关掉浏览器第二天打开，还能看到之前的对话。03 篇就是这个能力的最小实现。</p>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<div class="card">
+  <ol>
+    <li><strong>手动验证持久化</strong>：运行脚本 → 去 <code class="inline">./memory/</code> 目录找到 JSON 文件 → 用记事本打开 → 能看到完整对话历史。</li>
+    <li><strong>破坏实验</strong>：删掉脚本开头的 <code class="inline">os.remove(memory_file)</code>，连续运行两次——第二次会把第一次的对话也带上，体会"持久化"的副作用（脏数据累积）。</li>
+    <li><strong>换 session_id 试试</strong>：把 <code class="inline">session_id = "user_20250501"</code> 改成 <code class="inline">session_id = "user_20250502"</code>，运行——这次会生成新的 JSON 文件，和旧的互不干扰。</li>
+    <li><strong>加一个带参工具</strong>：新增 <code class="inline">save_booking_details(departure, destination, date)</code> 工具，让模型能把完整机票信息记录到 state 字典 + JSON 文件。</li>
+    <li><strong>思考题</strong>：如果对话有 500 轮，JSON 文件会非常大。查一下"对话历史滑动窗口 / 摘要压缩"，想想哪种适合替换纯 JSON 持久化。</li>
+  </ol>
+</div>
+
+<p style="margin-top:2.5rem; color:#64748b; font-size:0.85rem; text-align:center;">03_对话终端恢复功能 讲解 | char02 | 生成于 2026-10-10 | 配套验证：4 轮对话 + 重建恢复运行通过</p>
+</div>
+</body>
+</html>

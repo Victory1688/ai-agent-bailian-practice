@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08_基于FastAPI的UI中间API接口系统 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>08_基于FastAPI的UI中间API接口系统 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char02 | 教学主题：把 Agent 封装成 HTTP 服务（UI 中间 API） | 技术栈：dashscope function calling + FastAPI / Pydantic / uvicorn | 已验证可运行（uvicorn 启动 + GET / + POST /chat 真实调用成功）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>把<strong>记账 Agent</strong> 从"命令行脚本"升级成<strong>HTTP 网络服务</strong>：用户说"刚刚买菜花了20元"，这个请求不再来自 <code class="inline">input()</code>，而是来自一条 HTTP POST 请求；Agent 的回答也不再 <code class="inline">print</code>，而是以 JSON 返回给调用方。从此<strong>任何能发 HTTP 请求的东西</strong>——网页、App、小程序、curl——都能调用这个智能体。"UI 中间 API"的含义就是：它是<strong>夹在前端界面和智能体之间的中间层</strong>。</p>
+<div class="card">
+  <div class="card-title">三段式架构：UI ↔ 中间 API ↔ 智能体</div>
+  <pre>
+前端 UI（网页/App）          中间 API 层（本文件）            智能体
+┌────────────┐   HTTP    ┌──────────────────┐   函数调用   ┌─────────────┐
+│ 聊天窗口/表单 │ ───────→ │ FastAPI 路由+校验  │ ─────────→ │ dashscope    │
+│ 显示回复     │ ←─────── │ Pydantic 模型+CORS │ ←───────── │ + add_record │
+└────────────┘   JSON    └──────────────────┘   返回文本   └─────────────┘
+</pre>
+  <p>为什么中间要垫一层 API，而不是前端直接调大模型？<strong>API Key 不能暴露在前端</strong>、业务逻辑（工具、数据库）在服务端、且前端换壳（网页换 App）时服务端不用改——这是真实项目的标准分层。</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码的问题</h2>
+<div class="warn">
+  <div class="warn-title">本篇是 char02 八篇里"改写量"最小的——因为大头早已练熟</div>
+  <p><strong>第 1 类：虚构 API</strong>：只有 Agent 拼装那一小段（<code class="inline">Agent / Tool / QwenLLM / CompletionConfig</code>）是虚构的。FastAPI、Pydantic、CORS 中间件部分<strong>完全正确、原样保留</strong>——它们本来就是标准第三方库的真实用法。</p>
+  <p><strong>第 2 类：Agent 部分换成练熟的模式</strong>：<code class="inline">AddRecordTool</code> 类 → <code class="inline">add_record</code> 函数 + 说明书 + 注册表；<code class="inline">agent_instance.chat(...)</code> 黑盒 → <code class="inline">agent_chat(config, ...)</code> 循环。和 01-07 篇完全同款，没有新花样。</p>
+  <p><strong>本篇真正的新知识</strong>在 FastAPI 侧：路由装饰器、Pydantic 请求/响应模型、CORS 中间件、uvicorn 启动方式——这些是<strong>原代码就写对的</strong>，教学重点是"读懂"而不是"改写"。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体流程图（一条 POST 请求的完整生命线）</h2>
+<pre>
+调用方（curl / 网页 fetch）
+  │  POST http://localhost:8080/chat
+  │  Body: {"session_id": "user123", "message": "刚刚买菜花了20元"}
+  ▼
+uvicorn（网络服务器，真正监听 8080 端口的那一层）
+  ▼
+FastAPI 路由匹配 @app.post("/chat") → 进入 chat_with_agent()
+  ▼
+Pydantic 校验：Body 自动解析成 ChatRequest 对象
+  │  （缺字段 / 类型不对 → 直接返回 422，函数根本不会执行）
+  ▼
+agent_chat(agent_config, req.message)          ← 01-07 篇练熟的循环
+  ├─ dashscope.Generation.call(messages=memory, tools=tools, ...)
+  ├─ 模型返回 tool_calls: add_record(category="买菜", amount="20元")
+  ├─ tool_registry 查到函数 → 本地执行 → "已记录消费：买菜 - 20元"
+  ├─ 以 role="tool" 回传 → 模型生成最终回答
+  ▼
+return ChatResponse(session_id="user123", reply="已成功记录：买菜 - 20元...")
+  ▼
+Pydantic 按 response_model 序列化 → JSON 响应（状态码 200）
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>代码中的实现</th><th>一句话解释</th></tr>
+  <tr><td><strong>FastAPI</strong></td><td><code class="inline">app = FastAPI()</code> + <code class="inline">@app.post("/chat")</code></td><td>Python 现代 Web 框架，用装饰器把函数变成接口</td></tr>
+  <tr><td><strong>uvicorn</strong></td><td><code class="inline">uvicorn 08_xxx:app --port 8080</code></td><td>ASGI 网络服务器，<strong>真正监听端口的是它</strong>（FastAPI 只是应用）</td></tr>
+  <tr><td><strong>Pydantic 模型</strong></td><td><code class="inline">class ChatRequest(BaseModel)</code></td><td>声明式定义请求/响应结构，自动完成<strong>类型校验</strong>和解析</td></tr>
+  <tr><td><strong>GET vs POST</strong></td><td><code class="inline">@app.get("/")</code> / <code class="inline">@app.post("/chat")</code></td><td>GET 取数据（健康检查），POST 交数据（聊天内容放请求体）</td></tr>
+  <tr><td><strong>response_model</strong></td><td><code class="inline">@app.post("/chat", response_model=ChatResponse)</code></td><td>按模型序列化响应，多余字段自动过滤，输出结构有保障</td></tr>
+  <tr><td><strong>CORS</strong></td><td><code class="inline">CORSMiddleware, allow_origins=["*"]</code></td><td>浏览器的跨域安全机制；"*" 表示允许任何来源的网页调用</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段讲解（4 个代码块）</h2>
+
+<h3>块 1：Pydantic 请求/响应模型（API 的"合同"）</h3>
+<pre>
+class ChatRequest(BaseModel):      # 前端必须按这个格式发请求
+    session_id: str                # 会话标识（本篇预留，暂未使用——见下文）
+    message: str                   # 用户说的一句话
+
+class ChatResponse(BaseModel):     # 服务端承诺按这个格式回响应
+    session_id: str
+    reply: str                     # Agent 的最终回答
+</pre>
+<div class="card">
+  <div class="card-title">类型校验的价值：把错误挡在业务逻辑之前</div>
+  <p>如果调用方漏发 message 或把 message 发成数字，Pydantic 在进函数前就返回 422 错误并附明细——<code class="inline">chat_with_agent</code> 里<strong>一行校验代码都不用写</strong>。前端同学拿到这份模型定义，就知道该怎么对接，这就是"合同"。</p>
+</div>
+
+<h3>块 2：add_record 工具（唯一的新工具，逻辑最简单）</h3>
+<pre>
+def add_record(category: str, amount: str) -> str:
+    """工具执行体：记录一笔消费信息（原 AddRecordTool.run 逻辑全部保留）"""
+    return f"已记录消费：{category} - {amount}元"
+
+tool_registry = {"add_record": add_record}
+tools = [{"type": "function", "function": {
+    "name": "add_record",
+    "description": "记录一笔消费信息",
+    "parameters": {"type": "object", "properties": {
+        "category": {"type": "string", "description": "消费类别"},
+        "amount": {"type": "string", "description": "金额（单位：元）"}
+    }, "required": ["category", "amount"]}
+}}]
+</pre>
+<p>注意模型干了什么：用户输入"刚刚买菜花了20元"是<strong>一句自由文本</strong>，模型自己抽出 category="买菜"、amount="20元" 填进参数。真实业务里这里会接 06 篇的 sqlite3 写库——本篇用字符串返回保持教学聚焦。</p>
+
+<h3>块 3：FastAPI 应用 + CORS 中间件</h3>
+<pre>
+app = FastAPI()
+agent_config = build_agent()       # 原写法 agent_instance = build_agent()
+
+# CORS 允许跨域（用于网页调用）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],           # 任何网站都可以调（教学方便；生产要收紧）
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+</pre>
+<p>CORS 解决什么问题？浏览器默认禁止"网页 A 的 JS 去请求网站 B 的接口"（同源策略）。没有这段中间件，本地 HTML 页面里的 <code class="inline">fetch("http://localhost:8080/chat")</code> 会被浏览器拦下。加了它，网页前端才能直连这个 API。</p>
+
+<h3>块 4：两个路由 + Agent 接线</h3>
+<pre>
+@app.get("/")
+def index():
+    return {"message": "Agent API 运行中"}        # 健康检查接口
+
+@app.post("/chat", response_model=ChatResponse)
+def chat_with_agent(req: ChatRequest):
+    # 原写法：reply = agent_instance.chat(req.message)   ← 虚构框架黑盒
+    # 改写：调 agent_chat 循环（返回的 memory 本篇暂不使用）
+    reply, _memory = agent_chat(agent_config, req.message)
+    return ChatResponse(session_id=req.session_id, reply=reply)
+</pre>
+<div class="warn">
+  <div class="warn-title">教学留白：session_id 收了却没用</div>
+  <p>请求里带着 <code class="inline">session_id</code>，但原代码（和改写版）都没用它做记忆——<strong>每次 POST 都是一次全新对话</strong>，Agent 不记得这个 session 上一句说过什么。这是无状态服务的典型样子，也是教材故意留的练习：怎么结合 03 篇的 PersistentJSONMemory 让同一 session_id 的多轮请求共享记忆？（见第九节练习 1）</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（已验证）</h2>
+<h3>启动服务</h3>
+<pre>
+& d:\MyCode\.venv\Scripts\python.exe -m uvicorn "08_基于FastAPI的UI中间API接口系统:app" --port 8080
+
+INFO:     Started server process [15512]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+</pre>
+<h3>请求根接口（健康检查）</h3>
+<pre>
+GET http://localhost:8080/  →  200
+{'message': 'Agent API 运行中'}
+</pre>
+<h3>请求聊天接口（真实调用 dashscope，模型自动调用记账工具）</h3>
+<pre>
+POST http://localhost:8080/chat
+Body: {"session_id": "user123", "message": "刚刚买菜花了20元"}
+  →  200
+{'session_id': 'user123',
+ 'reply': '已成功记录：买菜 - 20元。如需继续记账或查询，随时告诉我！'}
+
+服务端日志：
+INFO:     127.0.0.1:55360 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57911 - "POST /chat HTTP/1.1" 200 OK
+</pre>
+<div class="ok">
+  <div class="ok-title">验证要点</div>
+  <p>回复内容"已成功记录：买菜 - 20元"来自 add_record 工具的返回值——证明<strong>模型真的触发了工具调用</strong>，而不是自己编了一句；响应结构与 ChatResponse 模型完全一致，证明 Pydantic 序列化生效。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>七、char02 八篇完整能力矩阵</h2>
+<table>
+  <tr><th>篇</th><th>主题</th><th>新增能力</th><th>交互入口</th><th>外部副作用</th></tr>
+  <tr><td>01</td><td>智能启动过程</td><td>Agent 骨架 + 零参工具</td><td>命令行</td><td>无</td></tr>
+  <tr><td>02</td><td>任务状态追踪</td><td>带参工具 + 状态字典</td><td>命令行</td><td>无（内存）</td></tr>
+  <tr><td>03</td><td>对话中断恢复</td><td>JSON 持久化记忆</td><td>命令行</td><td>写 JSON</td></tr>
+  <tr><td>04</td><td>注销机制</td><td>save → clear → 日志 三步清理</td><td>命令行</td><td>写后删 JSON</td></tr>
+  <tr><td>05</td><td>外部天气 API</td><td>真实 HTTP 调用 + 四层防御</td><td>命令行</td><td>网络请求</td></tr>
+  <tr><td>06</td><td>数据库读写</td><td>SQLite 参数化 SQL</td><td>命令行</td><td>写数据库</td></tr>
+  <tr><td>07</td><td>文件 + 代码执行</td><td>本地文件读写 + exec 动态执行</td><td>命令行</td><td>写任意文件 + 跑任意代码</td></tr>
+  <tr><td><strong>08</strong></td><td><strong>UI 中间 API</strong></td><td><strong>FastAPI 服务封装</strong></td><td><strong>HTTP 接口（任何前端可调）</strong></td><td><strong>对外暴露网络端口</strong></td></tr>
+</table>
+<p>08 篇本身没有新增"Agent 能力"，它新增的是<strong>交付形态</strong>：前七篇的智能体只能在自己进程里被调用，本篇之后，智能体成了网络上一个"随叫随到的服务"。真实 AI 产品的前端（聊天网页、App、小程序、企业微信机器人）都是通过这一层接入的。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、工程化方向：从"能跑的演示"到"能上的服务"还差四件事</h2>
+<div class="card">
+  <ul>
+    <li><strong>1. 会话记忆</strong>：session_id 收了没用，每次请求都是失忆的。生产做法：服务端维护 <code class="inline">dict[session_id, memory]</code>（或落盘成 03 篇的 JSON 文件），同一会话的多轮请求共享上下文，并加过期清理防止内存膨胀。</li>
+    <li><strong>2. 收紧 CORS</strong>：<code class="inline">allow_origins=["*"]</code> 等于大门全开。生产改成具体域名白名单（如 <code class="inline">["https://myapp.example.com"]</code>）。</li>
+    <li><strong>3. 鉴权与限流</strong>：现在任何知道地址的人都能白嫖你的大模型额度。生产要加 API Key / 登录态校验 + 请求频率限制（如每 session 每分钟 N 次）。</li>
+    <li><strong>4. 部署形态</strong>：<code class="inline">--reload</code> 只用于开发；生产用 <code class="inline">--workers 4</code> 多进程、Nginx 反向代理 + HTTPS、容器化部署；DASHSCOPE_API_KEY 通过环境变量注入（本篇已做到，不要写死在代码里）。</li>
+  </ul>
+</div>
+<div class="ok">
+  <div class="ok-title">隐藏福利：自动生成的交互式 API 文档</div>
+  <p>FastAPI 会根据 Pydantic 模型<strong>自动生成两套文档</strong>：服务运行时打开 <code class="inline">http://localhost:8080/docs</code>（Swagger UI）或 <code class="inline">/redoc</code>，可以直接在网页上填参数、发请求、看响应——不用写任何文档代码。这就是"Pydantic 是合同"的另一半价值：合同同时生成了说明书。</p>
+</div>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>补上会话记忆</strong>：加一个模块级 <code class="inline">session_memories = {}</code>，chat_with_agent 里按 session_id 取存 memory 并传给 agent_chat——重启服务会失忆，想一想为什么？（提示：dict 在内存里）</li>
+  <li><strong>记账落地</strong>：结合 06 篇，把 add_record 改成写入 SQLite 的 records 表，并新增 <code class="inline">GET /records</code> 接口返回全部记录。</li>
+  <li><strong>收紧 CORS</strong>：把 allow_origins 改成 <code class="inline">["http://localhost:5500"]</code>，再用带不同 Origin 头的请求对比响应头 <code class="inline">Access-Control-Allow-Origin</code> 的变化。</li>
+  <li><strong>体验自动文档</strong>：启动服务后打开 <code class="inline">http://localhost:8080/docs</code>，在 Swagger UI 页面上直接发一次 /chat 请求，观察请求和响应的结构。</li>
+</ol>
+
+</div>
+</body>
+</html>

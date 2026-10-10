@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06_sqlLite数据库的读写操作 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>06_sqlLite数据库的读写操作 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char02 | 教学主题：与数据库系统的读写操作 | 技术栈：dashscope function calling + sqlite3 标准库 | 已验证可运行（3 轮对话：添加 → 查询单人 → 查全部）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>实现一个<strong>人事数据库 Agent</strong>：用户用自然语言说"添加一名员工，姓名王小明，部门技术部，职务高级工程师"，模型自动决定调用 add_employee 工具——工具执行体里打开 sqlite3 连接、执行 INSERT 语句、提交事务、关闭连接——数据<strong>真的写入了磁盘上的 employee.db 文件</strong>。后续查询时数据还在。</p>
+<div class="card">
+  <div class="card-title">char02 六篇的"数据持久性"递进</div>
+  <ul>
+    <li><strong>01-02</strong>：数据只在 Python 变量里（程序停就没了）</li>
+    <li><strong>03</strong>：数据写到 JSON 文件（消息历史持久化）</li>
+    <li><strong>04</strong>：数据先写 JSON 再删（注销清理）</li>
+    <li><strong>05</strong>：数据来自外部 HTTP 服务（不存本地）</li>
+    <li><strong>06（本篇）</strong>：数据写入 SQLite 数据库（<strong>真正的结构化持久化</strong>）</li>
+  </ul>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码的问题</h2>
+<div class="warn">
+  <div class="warn-title">两类问题（同 char02 前 5 篇）</div>
+  <p><strong>第 1 类：虚构 API</strong>：<code class="inline">qwen_agent.Agent / QwenLLM / BaseTool / CompletionConfig</code> 全部不存在。</p>
+  <p><strong>第 2 类：好代码被框架绑死</strong>：<code class="inline">init_db()</code> 的建表逻辑 + <code class="inline">AddEmployeeTool.run()</code> 和 <code class="inline">QueryEmployeeTool.run()</code> 里的 sqlite3 操作逻辑<strong>完全正确</strong>——Python 标准库 + 标准 SQL，和框架无关。改写时<strong>把 run() 的函数体原样搬到普通函数里</strong>，一个字符都没改。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体流程图（一次添加 + 两次查询的数据流）</h2>
+<pre>
+run_demo() 启动
+  │
+  ├─ 清旧数据库 employee.db（演示可重复）
+  ├─ init_db() → CREATE TABLE IF NOT EXISTS employees (id, name, dept, title)
+  │
+  ├─ 第 1 轮: "请添加一名员工，姓名是王小明..."
+  │     │
+  │     ├─ 模型返回 tool_calls: add_employee(name="王小明", department="技术部", title="高级工程师")
+  │     │
+  │     └─ add_employee() 执行:
+  │           sqlite3.connect("employee.db")
+  │           INSERT INTO employees VALUES (NULL, "王小明", "技术部", "高级工程师")
+  │           conn.commit()    ← 数据真的写进磁盘了！
+  │           conn.close()
+  │
+  ├─ 第 2 轮: "请查询王小明的详细信息"
+  │     │
+  │     └─ query_employee(name="王小明") 执行:
+  │           SELECT name, department, title FROM employees WHERE name = "王小明"
+  │           → 返回 "王小明 | 技术部 | 高级工程师"
+  │
+  └─ 第 3 轮: "我想看看所有员工列表"
+        │
+        └─ query_employee(name="") 执行:
+              SELECT ... FROM employees   ← 不传参数时查全部
+              → 返回 "王小明 | 技术部 | 高级工程师"
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>代码中的实现</th><th>一句话解释</th></tr>
+  <tr><td><strong>SQLite</strong></td><td><code class="true">import sqlite3</code>（Python 标准库）</td><td>轻量级嵌入式数据库，单文件 .db，无需单独安装服务</td></tr>
+  <tr><td><strong>INSERT 写入</strong></td><td><code class="inline">INSERT INTO employees (name, department, title) VALUES (?, ?, ?)</code></td><td>向表中插入一行记录</td></tr>
+  <tr><td><strong>SELECT 查询</strong></td><td><code class="inline">SELECT ... FROM employees WHERE name = ?</code></td><td>按条件查询，name 为空则查全部</td></tr>
+  <tr><td><strong>? 参数化占位符</strong></td><td><code class="true">(name, department, title)</code> 元组传参</td><td><strong>防 SQL 注入的标准写法</strong>（绝不能用字符串拼接 SQL）</td></tr>
+  <tr><td><strong>事务提交</strong></td><td><code class="inline">conn.commit()</code></td><td>INSERT/UPDATE/DELETE 后必须 commit，否则数据不真正落盘</td></tr>
+  <tr><td><strong>资源关闭</strong></td><td>try/finally 里的 <code class="inline">conn.close()</code></td><td>数据库连接用完必须关，否则长期运行会耗尽连接池</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段讲解（4 个代码块）</h2>
+
+<h3>块 1：init_db + add_employee + query_employee（本文件的教学核心）</h3>
+<pre>
+def add_employee(name: str, department: str = "", title: str = "") -> str:
+    try:
+        conn = sqlite3.connect(DB_PATH)      # ① 打开连接
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO employees (name, department, title) VALUES (?, ?, ?)",
+            (name, department, title)        # ② 元组传参（防注入！）
+        )
+        conn.commit()                        # ③ 提交事务（必须！）
+        conn.close()                         # ④ 关闭连接
+        return f"员工{name}添加成功"
+    except Exception as e:
+        return f"添加失败：{str(e)}"          # 错误也返回字符串，不抛异常
+
+def query_employee(name: str = "") -> str:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        if name:
+            cursor.execute("SELECT ... WHERE name = ?", (name,))
+        else:
+            cursor.execute("SELECT ... FROM employees")   # 不传参数 → 查全部
+        rows = cursor.fetchall()              # 取出所有结果行（list of tuple）
+        conn.close()
+        ...
+</pre>
+<div class="card">
+  <div class="card-title">数据库操作的"四步标准模板"</div>
+  <ol>
+    <li><strong>打开连接</strong>：<code class="inline">conn = sqlite3.connect(path)</code></li>
+    <li><strong>执行 SQL</strong>：<code class="true">cursor.execute(sql, params)</code>（参数化占位符 + 元组传参）</li>
+    <li><strong>提交/获取结果</strong>：写入操作要 <code class="inline">commit()</code>；查询操作要 <code class="inline">fetchall()</code></li>
+    <li><strong>关闭连接</strong>：<code class="inline">conn.close()</code>（finally 里最安全）</li>
+  </ol>
+</div>
+
+<h3>块 2：SQL 注入防护（新人最容易忽略的安全点）</h3>
+<pre>
+# ✅ 正确写法（参数化，数据库驱动自动转义）
+cursor.execute("INSERT INTO employees VALUES (?, ?, ?)", (name, dept, title))
+
+# ❌ 危险写法（字符串拼接，用户输入会直接拼进 SQL）
+cursor.execute(f"INSERT INTO employees VALUES ('{name}', '{dept}', '{title}')")
+# 如果用户输入 name = "王小明'); DROP TABLE employees; --"
+# 拼出来就是：INSERT ... VALUES ('王小明'); DROP TABLE employees; --', ...)
+# 表直接被删！
+</pre>
+<div class="warn">
+  <div class="warn-title">为什么用 ? 占位符 + 元组传参？</div>
+  <p>SQL 注入是 OWASP Top 10 安全风险第 3 名。<strong>参数化查询</strong>是唯一可靠的防护方式——数据库驱动会把元组里的值当成纯数据，不会解释成 SQL 关键字。这是每个写数据库代码的人必须牢记的习惯。</p>
+</div>
+
+<h3>块 3：工具注册（同 char02 带参工具模式）</h3>
+<pre>
+tools = [
+    {"type": "function", "function": {
+        "name": "add_employee",
+        "description": "添加一名员工信息，需要姓名、可选部门和职务",
+        "parameters": {"type": "object", "properties": {
+            "name": {"type": "string", "description": "员工姓名"},        # required
+            "department": {"type": "string", "description": "所属部门"},  # 可选
+            "title": {"type": "string", "description": "职务"}
+        }, "required": ["name"]}}                                        # 只有 name 必填
+    }},
+    {"type": "function", "function": {
+        "name": "query_employee",
+        "description": "查询员工信息，可按姓名精确查询；不传姓名则返回全部员工",
+        "parameters": {"type": "object", "properties": {
+            "name": {"type": "string", "description": "员工姓名（可选）"}  # 全可选
+        }}}
+    }},
+]
+</pre>
+<p>注意 <code class="inline">required</code> 字段的设计：add_employee 只有 name 必填，department 和 title 可选——模型在用户只说"添加王小明"时也能正确调用（后两个参数用默认空字符串）。query_employee 的 name 全可选——模型在用户说"看所有员工"时会自动传空字符串或不传。</p>
+
+<h3>块 4：agent_chat 循环（同 02-05 篇 while True 模式）</h3>
+<p>无新知识点。和 05 篇的唯一差异：工具执行体是 sqlite3 操作（同步、无需超时），不是 requests.get（异步、需要超时兜底）。</p>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（已验证）</h2>
+<pre>
+>> 员工王小明已成功添加至数据库，所属部门为技术部，职务为高级工程师。
+
+>> 王小明的详细信息如下：
+   - 姓名：王小明
+   - 部门：技术部
+   - 职务：高级工程师
+
+>> 当前员工列表如下：
+   - 王小明 | 技术部 | 高级工程师
+</pre>
+<p>用 DB Browser for SQLite 或 Python 验证数据真的写入了：</p>
+<pre>
+import sqlite3
+conn = sqlite3.connect("./employee.db")
+for row in conn.cursor().execute("SELECT * FROM employees"):
+    print(row)
+# (1, '王小明', '技术部', '高级工程师')
+</pre>
+
+<!-- ========== 七 ========== -->
+<h2>七、char02 六篇完整能力矩阵（收官总表）</h2>
+<table>
+  <tr><th>维度</th><th>01 骨架</th><th>02 状态</th><th>03 持久化</th><th>04 注销</th><th>05 外部API</th><th><strong>06 数据库</strong></th></tr>
+  <tr><td><strong>数据持久性</strong></td><td>变量</td><td>变量+state字典</td><td>JSON文件</td><td>JSON(注销删除)</td><td>外部HTTP返回</td><td><strong>SQLite持久化</strong></td></tr>
+  <tr><td><strong>数据类型</strong></td><td>固定字符串</td><td>写Python字典</td><td>消息历史</td><td>消息历史</td><td>外部JSON</td><td><strong>结构化增删查改</strong></td></tr>
+  <tr><td><strong>工具参数</strong></td><td>零参</td><td>带参</td><td>带参</td><td>带参</td><td>带参</td><td><strong>带参(两工具)</strong></td></tr>
+  <tr><td><strong>真实副作用</strong></td><td>无</td><td>无</td><td>写文件</td><td>写/删文件</td><td>调外部服务</td><td><strong>改数据库</strong></td></tr>
+  <tr><td><strong>安全关注点</strong></td><td>无</td><td>无</td><td>无</td><td>文件泄漏</td><td>超时/异常</td><td><strong>SQL注入</strong></td></tr>
+  <tr><td><strong>生产就绪度</strong></td><td>★☆</td><td>★★</td><td>★★★</td><td>★★★★</td><td>★★★★</td><td><strong>★★★★★</strong></td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、SQLite vs 其他数据库：什么时候用什么</h2>
+<table>
+  <tr><th>数据库</th><th>适用场景</th><th>不适用场景</th></tr>
+  <tr><td><strong>SQLite（本篇）</strong></td><td>单机小数据、桌面应用、嵌入式、原型开发、离线数据</td><td>多用户并发、大数据量（>几GB）、写操作密集</td></tr>
+  <tr><td>MySQL / PostgreSQL</td><td>Web 应用、多用户并发、中等数据量</td><td>单机离线、嵌入式</td></tr>
+  <tr><td>Redis</td><td>缓存、会话、排行榜</td><td>结构化数据持久化</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<div class="card">
+  <ol>
+    <li><strong>破坏实验（SQL 注入）</strong>：把 add_employee 里的参数化改成字符串拼接，然后尝试输入 <code class="true">name="王小明'); DROP TABLE employees; --"</code>，观察表是否被删——体会为什么必须用 ? 占位符。<em class="ok" style="color:#34d399">（正确写法下完全安全，注入字符串会被当成纯数据存入）</em></li>
+    <li><strong>加一个工具：update_employee</strong>：实现"修改某员工的部门/职务"功能，注意需要更新现有记录（WHERE id = ?）而不是新增。</li>
+    <li><strong>加一个工具：delete_employee</strong>：实现"删除某员工"，注意用参数化占位符防注入。</li>
+    <li><strong>加一个工具：list_all_departments</strong>：实现"列出所有部门"，SQL 用 <code class="true">SELECT DISTINCT department FROM employees</code>。</li>
+    <li><strong>思考题</strong>：如果数据库连接失败（employee.db 在只读目录），当前 try/except 会返回错误字符串给模型——模型会向用户解释吗？试试看。</li>
+  </ol>
+</div>
+
+<p style="margin-top:2.5rem; color:#64748b; font-size:0.85rem; text-align:center;">06_sqlLite数据库的读写操作 讲解 | char02 收官 | 生成于 2026-10-10 | 配套验证：3 轮数据库操作运行通过</p>
+</div>
+</body>
+</html>

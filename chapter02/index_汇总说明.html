@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char02 智能体系统组成与运行机制 - 汇总说明</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>char02 汇总说明：一个智能体的完整成长史</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char02 | 共 9 个 py 文件（8 篇教学主文件 + 1 个启动副本） | 全部已改写为阿里百炼 dashscope 真实调用并运行验证 | 本文从大模型开发架构角度统领 8 篇，配合各篇"_代码解析.html"食用</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这组代码到底想表达什么</h2>
+<p>char02 的教学主题是<strong>"智能体系统的组成结构与运行机制"</strong>。8 篇代码合起来回答一个问题：<strong>一个只会生成文字的大模型，是怎么一步步变成"能听懂任务、会调用工具、能记住历史、敢操作真实世界、最终作为一个服务被前端调用"的智能体的？</strong></p>
+<div class="card">
+  <div class="card-title">一句话概括每篇</div>
+  <ul>
+    <li><strong>01 启动</strong>：把大模型 + 工具 + 系统提示词拼成最小可用 Agent（骨架）</li>
+    <li><strong>02 状态</strong>：工具执行的结果不止"说出口"，还要落到结构化状态字典里（会办事）</li>
+    <li><strong>03 恢复</strong>：对话历史写进 JSON 文件，程序重启后接着聊（会记忆）</li>
+    <li><strong>04 注销</strong>：任务结束时把资源干干净净释放掉（会收尾）</li>
+    <li><strong>05 联网</strong>：工具执行体里发起真实 HTTP 请求，突破模型知识边界（会联网）</li>
+    <li><strong>06 落库</strong>：工具执行体里读写 SQLite，数据结构化持久（会改数据库）</li>
+    <li><strong>07 本地世界</strong>：读写任意文件 + 动态执行 Python 代码（能力最强、风险最高）</li>
+    <li><strong>08 服务化</strong>：套上 FastAPI，智能体变成任何前端都能调的 HTTP 接口（交付形态）</li>
+  </ul>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、大模型应用开发架构总图（8 篇文件各自落在哪一层）</h2>
+<p>任何一个生产级大模型应用，都可以拆成下面六层。char02 的 8 篇正好<strong>由内向外逐层点亮</strong>这张图：</p>
+<pre>
+┌─────────────────────────────────────────────────────────────────┐
+│  交互交付层  08: FastAPI HTTP 接口 ← 网页/App/小程序/curl 都从这里进来  │
+├─────────────────────────────────────────────────────────────────┤
+│  编排决策层  01/02: agent_chat 循环 —— 模型决定"调哪个工具、传什么参"   │
+│             决策权在模型，执行权在本地（Function Calling 核心）         │
+├─────────────────────────────────────────────────────────────────┤
+│  记忆状态层  02: 状态字典 │ 03: JSON 持久化 │ 04: 注销清理              │
+├─────────────────────────────────────────────────────────────────┤
+│  能力工具层  工具执行体（每篇的"变"量所在）：                          │
+│             01 自检/时间 → 05 HTTP API → 06 SQLite → 07 文件/exec      │
+├─────────────────────────────────────────────────────────────────┤
+│  模型服务层  dashscope.Generation.call（阿里百炼 qwen-plus）           │
+│             所有篇共用，API Key 走环境变量                              │
+├─────────────────────────────────────────────────────────────────┤
+│  存储介质层  Python 变量 → JSON 文件 → SQLite 数据库 → 任意本地文件     │
+└─────────────────────────────────────────────────────────────────┘
+</pre>
+<p><strong>读图要点</strong>：模型服务层从头到尾没变过（都是同一个 dashscope 调用）；变的是能力工具层（每篇换一种"手"）和记忆状态层（每篇加一层"记性"），最后用交互交付层把这一切暴露给外部世界。这就是大模型应用开发的<strong>分层本质：模型是稳定的内核，能力是可插拔的外设，服务是交付的出口</strong>。</p>
+
+<!-- ========== 三 ========== -->
+<h2>三、8 篇教学主文件速查表</h2>
+<table>
+  <tr><th>文件</th><th>例号 / 主题</th><th>新增能力</th><th>关键技术</th><th>工具数</th><th>验证</th></tr>
+  <tr><td>01_智能启动过程展示.py</td><td>【例2-1】智能体启动与初始化</td><td>Agent 骨架：系统提示词 + 工具注册 + 循环调度</td><td>dashscope function calling 最小闭环</td><td>2（零参）</td><td>通过</td></tr>
+  <tr><td>02_自动追踪任务状态.py</td><td>【例2-2】多轮状态追踪</td><td>工具结果写入结构化状态字典 + memory 跨轮传递</td><td>带参工具、状态与对话分离</td><td>1</td><td>通过</td></tr>
+  <tr><td>03_对话终端恢复功能.py</td><td>【例2-3】中断恢复与持久化上下文</td><td>JSON 文件持久化，重启后恢复对话</td><td>PersistentJSONMemory load/save</td><td>1</td><td>通过</td></tr>
+  <tr><td>04_具备注销机制.py</td><td>【例2-4】注销与资源释放</td><td>保存留底 → 删除文件 → 写摘要日志三步清理</td><td>LoggingMemory、ManagedAgent.shutdown</td><td>1</td><td>通过</td></tr>
+  <tr><td>05_查询外部天气API.py</td><td>【例2-5】调用 Web API 与插件机制</td><td>真实 HTTP 请求 + 四层防御</td><td>requests、参数校验、timeout、异常兜底</td><td>1</td><td>通过</td></tr>
+  <tr><td>06_sqlLite数据库的读写操作.py</td><td>【例2-6】与数据库系统读写</td><td>SQLite 建表 / 插入 / 查询</td><td>sqlite3、? 参数化防注入、commit</td><td>2</td><td>通过</td></tr>
+  <tr><td>07_读写本地文件.py</td><td>【例2-7】文件系统与代码执行环境</td><td>读写任意本地文件 + 动态执行 Python 代码</td><td>open/encoding、exec、traceback 截取</td><td>3</td><td>通过</td></tr>
+  <tr><td>08_基于FastAPI的UI中间API接口系统.py</td><td>【例2-8】UI 中间 API 接口系统</td><td>智能体封装为 HTTP 服务，供任何前端调用</td><td>FastAPI、Pydantic、CORS、uvicorn</td><td>1</td><td>通过</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">第 9 个文件：agent_ui_api.py（非教学新内容）</div>
+  <p>与 08 内容完全相同的<strong>副本</strong>（仅多一行启动命令注释）。教材原例文件名就是 agent_ui_api.py，保留副本是为了教材里的启动命令 <code class="inline">uvicorn agent_ui_api:app --reload --port 8080</code> 可以直接照抄运行。新人读 08 那份即可。</p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>四、统一代码骨架：8 篇"变与不变"的架构秘密</h2>
+<p>把 8 个文件叠在一起看，会发现<strong>80% 的代码一模一样</strong>。这不是巧合，而是本组课件最想传递的架构思想：</p>
+<div class="card">
+  <div class="card-title">不变的骨架（每篇都有，照抄即可）</div>
+  <pre>
+# 1. 环境配置：API Key 永远走环境变量，不写死在代码里
+api_key = os.environ.get('DASHSCOPE_API_KEY')
+dashscope.api_key = api_key
+
+# 2. 工具三件套：执行体 + 注册表 + 说明书
+def some_tool(arg: str) -> str: ...          # 执行体：普通函数，永不抛异常
+tool_registry = {"some_tool": some_tool}     # 注册表：函数名 → 函数对象
+tools = [{"type": "function", "function": {  # 说明书：给模型看的"合同"
+    "name": ..., "description": ..., "parameters": {...}}}]
+
+# 3. Agent 循环（编排核心，决策权在模型）
+while True:
+    response = dashscope.Generation.call(model=..., messages=memory,
+        tools=tools, temperature=..., max_tokens=..., result_format='message')
+    message = response.output.choices[0].message
+    tool_calls = getattr(message, 'tool_calls', None)
+    if not tool_calls:                       # 模型不再要工具 → 最终回答
+        return message.content, memory
+    memory = memory + [message]              # 记下"模型要调工具"这件事
+    for call in tool_calls:                  # 本地执行 → role="tool" 回传
+        fn = tool_registry[call['function']['name']]
+        result = fn(**json.loads(call['function']['arguments']))
+        memory = memory + [{"role": "tool", "content": result, ...}]
+</pre>
+</div>
+<div class="ok">
+  <div class="card-title" style="margin-bottom:0.5rem">变的只有一处：工具执行体（以及记忆怎么存）</div>
+  <ul>
+    <li><strong>02</strong>：执行体更新一个 task_state 字典</li>
+    <li><strong>05</strong>：执行体发 HTTP 请求</li>
+    <li><strong>06</strong>：执行体跑 SQL</li>
+    <li><strong>07</strong>：执行体操作文件 / 跑 exec</li>
+    <li><strong>03/04</strong>：不动工具，改"记忆怎么存怎么删"</li>
+    <li><strong>08</strong>：不动 Agent，改"从哪进从哪出"（input/print → HTTP）</li>
+  </ul>
+  <p style="margin-top:0.6rem"><strong>结论（新人请记住这句话）</strong>：大模型应用开发 = 一套固定编排骨架 + 一批可插拔的工具执行体。学会骨架只需要一遍，之后的全部工作是把业务能力封装成"永不抛异常、返回字符串"的工具函数。</p>
+</div>
+
+<!-- ========== 五 ========== -->
+<h2>五、能力成长主线（建议按此顺序理解）</h2>
+<pre>
+[01 骨架] ──→ [02 会办事] ──→ [03 会记忆] ──→ [04 会收尾]
+    │                                              │
+    │        命令行内的完整智能体生命线               │
+    ▼                                              ▼
+[08 服务化] ←── [07 操作本地世界] ←── [06 落库] ←── [05 联网]
+ (对外交付)      (能力最强/风险最高)   (结构化)    (突破知识边界)
+
+一维记忆：01-04 解决"聊得下去"（状态/持久化/清理）
+一手真本事：05-07 解决"办得了真事"（网络/数据库/文件与代码）
+一个出口：08 解决"用得起来"（服务化，前端才接得上）
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>六、新人核心概念清单（学完应能逐条自述）</h2>
+<table>
+  <tr><th>分组</th><th>概念</th><th>出自</th><th>自测问题</th></tr>
+  <tr><td rowspan="4">编排与调用</td><td>Function Calling</td><td>01</td><td>模型"调用"工具时，代码真的执行了吗？谁执行的？</td></tr>
+  <tr><td>tools 说明书 / tool_registry 注册表</td><td>01</td><td>说明书给谁看？注册表给谁用？为什么两个都要？</td></tr>
+  <tr><td>Agent 循环（while True + tool_calls）</td><td>01</td><td>循环什么时候退出？</td></tr>
+  <tr><td>tool_calls 是 dict 列表，arguments 是 JSON 字符串</td><td>01</td><td>为什么参数要先 json.loads 再传？</td></tr>
+  <tr><td rowspan="3">记忆与状态</td><td>memory = messages 消息列表</td><td>01/02</td><td>多轮对话模型怎么"记得"上文？</td></tr>
+  <tr><td>持久化（JSON load/save）</td><td>03</td><td>程序重启后记忆从哪来？</td></tr>
+  <tr><td>注销清理（save → clear → 日志）</td><td>04</td><td>为什么先留底再删除？</td></tr>
+  <tr><td rowspan="3">工具工程化</td><td>工具函数永不抛异常</td><td>全部</td><td>工具报错为什么要"返回字符串"而不是 raise？</td></tr>
+  <tr><td>外部 API 四层防御</td><td>05</td><td>参数校验 / timeout / 状态码 / 异常兜底各挡什么？</td></tr>
+  <tr><td>SQL ? 参数化防注入</td><td>06</td><td>字符串拼接 SQL 危险在哪？</td></tr>
+  <tr><td rowspan="2">安全边界</td><td>exec 任意代码执行风险</td><td>07</td><td>"仅限受控环境"靠什么机制保证？</td></tr>
+  <tr><td>CORS / 鉴权 / API Key 环境变量</td><td>08</td><td>为什么 API Key 绝不能放进前端？</td></tr>
+  <tr><td>服务化交付</td><td>Pydantic 校验 / 路由 / uvicorn</td><td>08</td><td>真正监听端口的是 FastAPI 还是 uvicorn？</td></tr>
+</table>
+
+<!-- ========== 七 ========== -->
+<h2>七、教学简化 vs 生产差距（诚实的风险地图）</h2>
+<div class="warn">
+  <div class="warn-title">这套教学代码离生产还差的距离</div>
+  <ul>
+    <li><strong>无鉴权限流</strong>（08）：接口全开放，任何人可消耗你的大模型额度</li>
+    <li><strong>CORS 全开</strong>（08）：allow_origins=["*"] 仅限教学</li>
+    <li><strong>exec 无沙箱</strong>（07）：任意代码执行必须换成子进程/容器隔离 + AST 白名单</li>
+    <li><strong>文件路径未限制</strong>（07）：应限制在工作目录内，防目录穿越</li>
+    <li><strong>会话记忆在内存</strong>（08）：服务重启即失忆，多 worker 部署时 dict 不共享</li>
+    <li><strong>无重试与限流保护</strong>：dashscope 调用没有处理 429/超时重试</li>
+    <li><strong>记账工具是假的</strong>（08）：返回字符串而已，应接 06 的 SQLite</li>
+  </ul>
+</div>
+<div class="ok">
+  <div class="ok-title">但骨架是生产级的</div>
+  <p>上述差距全部是<strong>"工具执行体"和"服务配置"层面的缺口</strong>，编排骨架（Agent 循环 / 三件套 / 记忆机制）本身就是真实项目的标准形态。从教学到产品，补的是外围工程，不是推翻重学。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、新人学习路径建议</h2>
+<ol>
+  <li><strong>第 1 步（读懂骨架）</strong>：精读 01，对照"_代码解析.html"把 agent_chat 循环每一行讲给自己听。自测：能白板写出"模型返回 tool_calls 之后发生了什么"。</li>
+  <li><strong>第 2 步（动手换工具）</strong>：跑通 02 和 05，然后自己写一个新工具（如"查询现在星期几"）加入注册表。自测：理解说明书、注册表、执行体三者关系。</li>
+  <li><strong>第 3 步（加上记忆）</strong>：跑通 03 / 04，观察 memory 目录下 JSON 文件的生成与删除。自测：说清"内存记忆、持久记忆、注销清理"三种状态。</li>
+  <li><strong>第 4 步（接真实世界）</strong>：跑通 06 / 07，体会"工具的副作用"越来越大，同时理解参数化 SQL 和 exec 风险两处安全设计。自测：能列出 07 的四条生产升级路。</li>
+  <li><strong>第 5 步（交付成服务）</strong>：启动 08，用浏览器打开 /docs 发请求，再用练习补上 session_id 会话记忆。自测：画出"前端 → FastAPI → Agent → 工具 → 响应"全链路图。</li>
+  <li><strong>第 6 步（综合验收）</strong>：完成 08 的练习 2——把 add_record 接上 SQLite 并新增 GET /records 接口。做完这一题，等于把 01-08 串成了一个真实的小产品。</li>
+</ol>
+
+<!-- ========== 九 ========== -->
+<h2>九、配套讲解文档索引（每篇一个 HTML）</h2>
+<table>
+  <tr><th>篇</th><th>py 文件</th><th>讲解文档</th><th>讲解重点</th></tr>
+  <tr><td>01</td><td>01_智能启动过程展示.py</td><td>01_智能启动过程展示_代码解析.html</td><td>Agent 骨架、工具三件套、启动全流程</td></tr>
+  <tr><td>02</td><td>02_自动追踪任务状态.py</td><td>02_自动追踪任务状态.html</td><td>带参工具、状态字典、memory 传递</td></tr>
+  <tr><td>03</td><td>03_对话终端恢复功能.py</td><td>03_对话终端恢复功能_代码解析.html</td><td>JSON 持久化、同 session_id 恢复</td></tr>
+  <tr><td>04</td><td>04_具备注销机制.py</td><td>04_具备注销机制_代码解析.html</td><td>注销三步、注销 vs 清理的区别</td></tr>
+  <tr><td>05</td><td>05_查询外部天气API.py</td><td>05_查询外部天气API_代码解析.html</td><td>wttr.in 真实调用、四层防御</td></tr>
+  <tr><td>06</td><td>06_sqlLite数据库的读写操作.py</td><td>06_sqlLite数据库的读写操作_代码解析.html</td><td>四步数据库模板、SQL 注入防护</td></tr>
+  <tr><td>07</td><td>07_读写本地文件.py</td><td>07_读写本地文件_代码解析.html</td><td>exec 机制、任意代码执行的安全警示</td></tr>
+  <tr><td>08</td><td>08_基于FastAPI的UI中间API接口系统.py</td><td>08_基于FastAPI的UI中间API接口系统.html</td><td>三段式架构、请求生命线、服务化门槛</td></tr>
+</table>
+<p>运行环境备忘：虚拟环境 <code class="inline">d:/MyCode/.venv/Scripts/python.exe</code>；需先设置环境变量 <code class="inline">DASHSCOPE_API_KEY</code>（阿里百炼平台）；08 的启动命令为 <code class="inline">uvicorn 08_基于FastAPI的UI中间API接口系统:app --port 8080</code>（或用副本名 agent_ui_api:app）。</p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char01 提示词工程与任务建模 - 汇总说明</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>char01 汇总说明：把大模型当"函数"用</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char01 | 共 6 个 py 文件 | 全部已改写为阿里百炼 dashscope 真实调用 | 教学主线：提示词设计与大模型任务建模——在引入 Agent 之前，先学会"跟模型把一件事说清楚" | 姊妹篇：char02/index_汇总说明.html（智能体系统组成）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这组代码到底想表达什么</h2>
+<p>char01 回答大模型应用开发的<strong>第一个问题</strong>：抛开所有框架和智能体概念，<strong>调用一个大模型最本质的形态是什么？</strong>答案就一行代码——输入一个 messages 列表，返回一段文本。<code class="inline">大模型 = 一个输入提示词、输出文本的函数</code>。而全部 6 篇都在回答这个"函数"怎么用好：<strong>提示词怎么设计（01）、要不要用框架管理（02）、不同类型的任务怎么建模（03/04）、接口长什么样（05）、怎么用上下文引导多步任务（06）</strong>。</p>
+<div class="card">
+  <div class="card-title">一句话概括每篇</div>
+  <ul>
+    <li><strong>01 文本摘要</strong>：提示词三要素（角色 / 任务 / 约束）+ 占位符模板 + dashscope 最小调用</li>
+    <li><strong>02 提示词驱动的 Agent</strong>：引入 LangChain——PromptTemplate 变量化管理 + LCEL 管道 <code class="inline">template | llm | parser</code></li>
+    <li><strong>03 生成 SQL</strong>：<strong>生成类任务</strong>建模——自然语言转 SQL，约定 JSON 输出（sql + explanation）</li>
+    <li><strong>04 文本抽取</strong>：<strong>抽取类任务</strong>建模——从文本抽企业名和地址，用输出格式样例锚定 JSON 结构</li>
+    <li><strong>05 接口模式设计</strong>：标准对话接口契约——system/user 消息角色 + temperature / max_tokens 生成参数</li>
+    <li><strong>06 上下文引导</strong>：把"已完成步骤 / 当前阶段"写进提示词，引导模型分阶段推进多步任务</li>
+  </ul>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、大模型应用架构总图（char01 照亮的是最内圈）</h2>
+<p>把 char01 和 char02 放在同一张分层架构图上，位置一目了然——<strong>char01 专注最核心的"模型调用内圈"，char02 从这个内圈向外扩张成完整智能体</strong>：</p>
+<pre>
+┌──────────────────────────────────────────────────────────────────┐
+│  交互交付层（HTTP 服务）        ← char02-08                        │
+├──────────────────────────────────────────────────────────────────┤
+│  编排决策层（Agent 循环 / 工具调度）← char02-01/02                 │
+├──────────────────────────────────────────────────────────────────┤
+│  记忆状态层（消息列表 / 持久化）  ← char02-02/03/04                │
+├──────────────────────────────────────────────────────────────────┤
+│ ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  │
+│ ┃  模型调用内圈（char01 全部 6 篇的活动范围）                    ┃  │
+│ ┃                                                              ┃  │
+│ ┃   提示词设计 ──→ 任务建模 ──→ 输出约定 ──→ 上下文引导           ┃  │
+│ ┃   (01)        (03/04)     (03/04)      (06)                  ┃  │
+│ ┃        ↘ 框架化管理（02 LangChain） ↙  接口契约（05）           ┃  │
+│ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛  │
+├──────────────────────────────────────────────────────────────────┤
+│  能力工具层（HTTP API / SQLite / 文件 / exec）← char02-05/06/07   │
+└──────────────────────────────────────────────────────────────────┘
+</pre>
+<p><strong>读图要点</strong>：char01 的 6 篇全部不碰工具、不碰存储、不碰服务——它们练的是<strong>"和模型对话本身"的基本功</strong>。这个内圈没练好，外层的 Agent 只是空壳：模型连你的任务都听不懂，给它再多工具也没用。</p>
+
+<!-- ========== 三 ========== -->
+<h2>三、6 篇文件速查表</h2>
+<table>
+  <tr><th>文件</th><th>任务类型</th><th>核心技术</th><th>教学要点</th><th>验证</th></tr>
+  <tr><td>01_文本摘要_textSummarization.py</td><td>生成（摘要）</td><td>dashscope.Generation.call 直调</td><td>提示词三要素 + {} 占位符 + 最小调用闭环</td><td>通过</td></tr>
+  <tr><td>02_提示词驱动的Agent.py</td><td>问答（知识图谱）</td><td>LangChain PromptTemplate + ChatTongyi + LCEL</td><td>模板变量化、管道编排、组件解耦</td><td>通过</td></tr>
+  <tr><td>03_生成SQL语句的任务建模.py</td><td>生成（NL2SQL）</td><td>f-string 模板 + 结构化输出约定</td><td>把"人话→SQL"拆成角色+要求+输出格式</td><td>通过</td></tr>
+  <tr><td>04_文本抽取任务建模.py</td><td>抽取（NER）</td><td>输出格式样例锚定</td><td>JSON 样例让输出可被程序直接解析</td><td>通过</td></tr>
+  <tr><td>05_接口模式设计.py</td><td>问答（对比表格）</td><td>system+user 消息序列、temperature/max_tokens</td><td>标准接口契约与生成参数调控</td><td>通过</td></tr>
+  <tr><td>06_通过上下文的行为引导LLM.py</td><td>多步任务推理</td><td>上下文注入（已完成步骤+当前阶段）</td><td>用状态化上下文引导模型分阶段行动</td><td>通过</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">改写说明（原教材的三类问题，均已按注释保留原码）</div>
+  <ul>
+    <li><strong>路径断裂</strong>（02）：<code class="inline">langchain.prompts / langchain.llms.OpenAI / LLMChain</code> 在 LangChain 1.x 中已迁移或弃用 → 改用 <code class="inline">langchain_core.prompts</code> + <code class="inline">ChatTongyi</code>（百炼官方封装，底层走 dashscope）+ LCEL 管道</li>
+    <li><strong>无法调用</strong>（03/05）：<code class="inline">OpenAI()</code> 未配置 api_key 和 base_url → dashscope 直调（参数 temperature/max_tokens 保留对照）</li>
+    <li><strong>变量未定义</strong>（04/06）：直接使用未导入未定义的 <code class="inline">llm</code>，运行报 NameError → 统一封装 get_response()</li>
+  </ul>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>四、6 篇"变与不变"：一个调用壳，六种提示词</h2>
+<p>和 char02 的"固定骨架 + 可插拔工具"呼应，char01 的结构是<strong>"固定调用壳 + 可变提示词建模"</strong>：</p>
+<div class="card">
+  <div class="card-title">不变的调用壳（01/03/04/05/06 五篇共用）</div>
+  <pre>
+# 1. 环境配置：API Key 永远走环境变量
+api_key = os.environ.get('DASHSCOPE_API_KEY')
+dashscope.api_key = api_key
+
+# 2. 封装模型响应函数：所有篇的统一出入口
+def get_response(messages):
+    response = dashscope.Generation.call(
+        model='qwen-plus',
+        messages=messages,
+        result_format='message'      # 统一 message 格式，取值路径一致
+    )
+    return response
+
+# 3. 组装 messages → 调用 → 取 content
+messages = [{"role": "user", "content": prompt}]
+response = get_response(messages)
+print(response.output.choices[0].message.content)
+</pre>
+</div>
+<div class="ok">
+  <div class="card-title" style="margin-bottom:0.5rem">变的只有提示词的"建模方式"</div>
+  <ul>
+    <li><strong>01</strong>：角色 + 任务 + 约束 + {} 占位符（模板化）</li>
+    <li><strong>02</strong>：交给框架管理（PromptTemplate 的 input_variables）</li>
+    <li><strong>03</strong>：生成类建模——任务要求逐条列出（表名/字段/语法/输出格式）</li>
+    <li><strong>04</strong>：抽取类建模——给出输出 JSON 样例，让模型"照葫芦画瓢"</li>
+    <li><strong>05</strong>：消息结构建模——system 定角色边界，user 放具体请求</li>
+    <li><strong>06</strong>：上下文建模——把任务进度注入提示词，单次调用模拟多步推进</li>
+  </ul>
+  <p style="margin-top:0.6rem"><strong>结论（新人请记住这句话）</strong>：提示词工程不是"会聊天"，而是<strong>把业务任务翻译成模型能精确执行的结构化指令</strong>。调用代码千篇一律，提示词建模才是真功夫。</p>
+</div>
+
+<!-- ========== 五 ========== -->
+<h2>五、任务建模方法论（本组代码的核心技能）</h2>
+<p>03 和 04 两篇看似只是换了场景，实际是在教<strong>两类典型任务的标准建模套路</strong>——几乎所有大模型应用需求都能归入这两类：</p>
+<table>
+  <tr><th>维度</th><th>生成类任务（03：NL2SQL）</th><th>抽取类任务（04：NER）</th></tr>
+  <tr><td>输入</td><td>自然语言指令 + 表结构约束</td><td>待处理原文 + 字段清单</td></tr>
+  <tr><td>提示词骨架</td><td>角色（数据库专家）→ 要求逐条编号 → 指令注入</td><td>任务说明 → 输出 JSON 样例 → 原文注入</td></tr>
+  <tr><td>输出约定</td><td>JSON：{"sql": "...", "explanation": "..."}</td><td>JSON：{"company": "...", "address": "..."}</td></tr>
+  <tr><td>为什么约定 JSON</td><td>sql 字段要被下游程序拿去<strong>真的执行</strong></td><td>字段要被下游程序<strong>入库/展示</strong></td></tr>
+  <tr><td>随机性控制</td><td>需要低随机（temperature 越低越稳）</td><td>同样需要确定性（抽取没有发挥空间）</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">结构化输出：从"能聊"到"能用"的分水岭</div>
+  <p>01 篇的摘要输出给人看，print 完就结束；03/04 篇的 JSON 输出给<strong>程序</strong>看——下游代码要 <code class="inline">json.loads</code> 它、拿字段值去执行 SQL、写数据库。一旦模型输出需要被代码消费，"输出格式约定"就从建议变成了契约。这是大模型应用和聊天机器人的本质区别。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、新人核心概念清单（学完应能逐条自述）</h2>
+<table>
+  <tr><th>分组</th><th>概念</th><th>出自</th><th>自测问题</th></tr>
+  <tr><td rowspan="3">提示词设计</td><td>提示词三要素：角色 / 任务 / 约束</td><td>01</td><td>"你是一位..." 这句话起什么作用？</td></tr>
+  <tr><td>占位符模板与变量注入</td><td>01/02</td><td>str.format 的 {} 和 PromptTemplate 的 {question} 有何异同？</td></tr>
+  <tr><td>输出格式约定（JSON 样例）</td><td>03/04</td><td>为什么给"样例"比给"描述"更有效？</td></tr>
+  <tr><td rowspan="3">接口与调用</td><td>messages 消息结构与三种角色</td><td>05</td><td>system 和 user 各自承担什么？</td></tr>
+  <tr><td>temperature / max_tokens</td><td>05</td><td>什么任务要把 temperature 调低？</td></tr>
+  <tr><td>result_format='message' 与响应取值</td><td>全部</td><td>为什么统一 message 格式？取 content 的完整路径？</td></tr>
+  <tr><td rowspan="2">框架化</td><td>PromptTemplate 变量管理</td><td>02</td><td>模板和普通 f-string 相比好在哪？</td></tr>
+  <tr><td>LCEL 管道：template | llm | parser</td><td>02</td><td>管道写法替代了弃用的 LLMChain.run，组件解耦体现在哪？</td></tr>
+  <tr><td rowspan="2">上下文工程</td><td>上下文注入引导分阶段任务</td><td>06</td><td>"已完成步骤/当前阶段"为什么能让模型接得上？</td></tr>
+  <tr><td>上下文 → 对话记忆的演进</td><td>06→char02</td><td>06 的"写进 prompt"和 char02 的"messages 列表"是什么关系？</td></tr>
+</table>
+
+<!-- ========== 七 ========== -->
+<h2>七、教学简化 vs 生产差距</h2>
+<div class="warn">
+  <div class="warn-title">这套教学代码离生产还差的距离</div>
+  <ul>
+    <li><strong>输出未校验</strong>：03/04 的 JSON 输出直接 print，生产必须 <code class="inline">json.loads</code> + 异常处理 + 格式不符时的重试</li>
+    <li><strong>无错误处理</strong>：网络超时、限流（429）、内容审查拦截都没有处理分支</li>
+    <li><strong>模型名写死</strong>：<code class="inline">model='qwen-plus'</code> 硬编码，生产应放进配置</li>
+    <li><strong>无流式输出</strong>：生产级对话产品用 streaming 逐字返回，体验差异巨大</li>
+    <li><strong>单轮调用为主</strong>：只有 06 触及上下文，真正的多轮对话管理在 char02 完成</li>
+    <li><strong>02 的组件较旧</strong>：ChatTongyi 属于 langchain_community，1.x 官方更推荐 langchain_openai 兼容层（base_url 指向百炼兼容端点）——教学取它"零新增依赖"的优势</li>
+  </ul>
+</div>
+<div class="ok">
+  <div class="ok-title">但建模思想是通用的</div>
+  <p>上面缺的全是"工程外围"；<strong>提示词三要素、任务建模四步、输出契约、上下文引导</strong>这些方法论不随框架版本变化——换任何模型、任何 SDK 都成立。这也是为什么本组代码把调用壳压缩到最简：让注意力全部留在提示词上。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、新人学习路径建议</h2>
+<ol>
+  <li><strong>第 1 步（最小闭环）</strong>：精读 01，亲手把 prompt 里的角色/任务/约束三段拆出来看。自测：不看书写出"从调用到打印"的完整 10 行代码。</li>
+  <li><strong>第 2 步（接口契约）</strong>：读 05，给同一段 messages 分别加/去掉 system 角色，对比输出差异。自测：说清三种消息角色和两个生成参数的作用。</li>
+  <li><strong>第 3 步（两类建模）</strong>：跑通 03 / 04，然后模仿着做一道新题（如"从订单文本抽取商品名和金额"）。自测：能独立写出"要求逐条 + JSON 样例"式提示词。</li>
+  <li><strong>第 4 步（框架化）</strong>：读 02，把 01 的手拼模板改写成 PromptTemplate + LCEL 管道。自测：说清 f-string、PromptTemplate、LLMChain、LCEL 四者的演进关系。</li>
+  <li><strong>第 5 步（上下文引导）</strong>：读 06，自己再造一个三步任务（如订机票：查航班→选座→付款），把进度状态写进上下文。自测：解释为什么这已经是"Agent 的雏形"。</li>
+  <li><strong>第 6 步（进入 char02）</strong>：带着 06 的疑问读 char02-01——当模型自己决定"下一步做什么"时，提示词引导就升级成了 Function Calling。两章连起来才是完整拼图。</li>
+</ol>
+
+<!-- ========== 九 ========== -->
+<h2>九、char01 → char02 的知识衔接图（两章合体才是全貌）</h2>
+<pre>
+char01（本目录）：模型调用内圈              char02：智能体外圈
+─────────────────────────────            ─────────────────────────────
+01 提示词模板   ────模板思想延续────→      char02-01 tools 工具说明书
+05 消息角色 system/user ──记忆延续──→      char02-01/02/03 messages 列表
+06 上下文引导"下一步" ──决策权升级─→      char02-01 Function Calling 循环
+03 生成 SQL（只输出不执行）──能力落地─→    char02-06 工具里真的执行 SQL
+04 JSON 输出约定 ────结构化延续───→       char02-08 Pydantic 接口契约
+02 LangChain 框架编排 ──对照参考──→       char02 全篇 dashscope 原生
+</pre>
+<p><strong>一句话总结两章关系</strong>：char01 教会你<strong>"对模型说什么"</strong>（提示词与任务建模），char02 教会你<strong>"让模型做什么"</strong>（工具、记忆与服务化）。只学 char01 是聊天机器人，只学 char02 是空壳 Agent——两者合体，才是一个能落地的 AI 应用。</p>
+<div class="card">
+  <div class="card-title">运行环境备忘</div>
+  <ul>
+    <li>虚拟环境：<code class="inline">d:/MyCode/.venv/Scripts/python.exe</code></li>
+    <li>环境变量：<code class="inline">DASHSCOPE_API_KEY</code>（阿里百炼平台），全部 6 篇共用同一读取方式</li>
+    <li>02 篇额外依赖：langchain-core / langchain-community（ChatTongyi 底层复用已安装的 dashscope 包）</li>
+    <li>char02 目录另有 index_汇总说明.html，覆盖智能体系统（01-08 共 8 篇），建议先读本篇再读彼篇</li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>

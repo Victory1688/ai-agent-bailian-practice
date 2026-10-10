@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05_查询外部天气API - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>05_查询外部天气API - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char02 | 教学主题：调用 Web API 与插件机制 | 技术栈：dashscope function calling + wttr.in 免费天气 API | 已验证可运行（3 轮真实天气查询全部通过）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>实现一个<strong>天气查询 Agent</strong>：用户问"北京现在天气怎样"，模型自动决定调用 get_weather 工具，工具执行体里发起<strong>真实的 HTTP 请求</strong>访问 wttr.in 免费天气服务，拿到实时数据后回传给模型，模型再组织成自然语言回答。</p>
+<div class="card">
+  <div class="card-title">char02 五篇收官篇：能力边界的突破</div>
+  <p>01-04 篇的工具都是<strong>本地函数</strong>（返回固定字符串或简单拼接），模型只是在"自导自演"。<br>
+  <strong>05 篇是唯一一个工具执行体里有真实 HTTP 请求的</strong>——<code class="inline">requests.get("https://wttr.in/{city}?format=j1")</code> 访问的是互联网上的真实服务，返回的是<strong>实时天气数据</strong>。<br>
+  这正是本篇标题"调用 Web API 与插件机制"的含义：<strong>智能体从"单一对话"跨越到"执行任务"</strong>。</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码的问题</h2>
+<div class="warn">
+  <div class="warn-title">两类问题（同 char02 前 4 篇）</div>
+  <p><strong>第 1 类：虚构 API</strong>：<code class="inline">qwen_agent.Agent / QwenLLM / BaseTool / CompletionConfig</code> 全部不存在。</p>
+  <p><strong>第 2 类：好代码被框架绑死</strong>：<code class="inline">WeatherAPITool.run()</strong> 里的 requests.get 调用逻辑完全正确（wttr.in 真实可用），但类继承了虚构的 BaseTool。改写时<strong>把 run() 的函数体原样搬到普通函数里</strong>，一个字符都没改。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体流程图（一次完整查询的数据流）</h2>
+<pre>
+用户: "请告诉我北京现在的天气"
+  │
+  ▼
+┌──── Agent 循环（第 1 次）────────────────────────────────┐
+│  dashscope.Generation.call(messages, tools)              │
+│       │                                                  │
+│       ▼                                                  │
+│  模型返回 tool_calls: [{name: "get_weather",              │
+│                         arguments: '{"city": "北京"}'}]   │  ← 模型从自然语言抽出参数
+│       │                                                  │
+│       ▼                                                  │
+│  本地执行 get_weather("北京")                              │
+│       │                                                  │
+│       ├─ requests.get("https://wttr.in/北京?format=j1")   │  ← 真实 HTTP 请求！
+│       │     wttr.in 服务器返回 JSON:                      │
+│       │     {"current_condition": [{                     │
+│       │        "temp_C": "27", "humidity": "23",         │
+│       │        "weatherDesc": [{"value": "Sunny"}]}]}    │
+│       │                                                  │
+│       └─ 格式化: "北京当前天气：Sunny，温度：27℃，湿度：23%" │
+│                                                          │
+│  结果以 role=tool 追加到 memory → 继续循环                │
+└──────────────────────────────────────────────────────────┘
+  │
+  ▼
+┌──── Agent 循环（第 2 次）────────────────────────────────┐
+│  模型看到 tool 结果 → 这次不调工具 → 生成自然语言回答      │
+│  "北京当前天气为晴朗（Sunny），气温27℃，湿度23%..."        │
+└──────────────────────────────────────────────────────────┘
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>代码中的实现</th><th>一句话解释</th></tr>
+  <tr><td><strong>Web API 调用</strong></td><td><code class="inline">requests.get("https://wttr.in/{city}?format=j1")</code></td><td>工具执行体访问互联网上的真实服务</td></tr>
+  <tr><td><strong>插件机制</strong></td><td>tools 说明书 + tool_registry 注册表</td><td>新增能力 = 新增一个函数 + 一段说明书，即插即用</td></tr>
+  <tr><td><strong>wttr.in</strong></td><td>免费天气 API，无需注册 Key</td><td>教学友好的真实外部服务（生产环境可用高德/和风）</td></tr>
+  <tr><td><strong>参数抽取</strong></td><td><code class="inline">arguments: '{"city": "北京"}'</code></td><td>模型把"北京现在的天气"自动抽成 JSON 参数</td></tr>
+  <tr><td><strong>超时与异常兜底</strong></td><td><code class="inline">timeout=5</code> + try/except</td><td>外部服务不可靠，必须设超时和兜底返回</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段讲解（4 个代码块）</h2>
+
+<h3>块 1：get_weather 工具函数（第 27-55 行，本文件的灵魂）</h3>
+<pre>
+def get_weather(city: str) -> str:
+    """工具执行体：调用 wttr.in 接口获取城市天气"""
+    city = city.strip()                    # 防御：去掉首尾空格
+    if not city:
+        return "请输入有效的城市名"          # 防御：空参数校验
+    try:
+        url = f"https://wttr.in/{city}?format=j1"
+        resp = requests.get(url, timeout=5)     # timeout=5：外部服务必须设超时！
+        if resp.status_code != 200:
+            return f"查询失败，状态码：{resp.status_code}"   # HTTP 层错误兜底
+        data = resp.json()
+        current = data["current_condition"][0]
+        temp = current["temp_C"]                # 温度（字符串 "27"）
+        humidity = current["humidity"]          # 湿度
+        desc = current["weatherDesc"][0]["value"]   # 天气描述
+        return f"{city}当前天气：{desc}，温度：{temp}℃，湿度：{humidity}%"
+    except Exception as e:
+        return f"调用天气API出错：{str(e)}"       # 网络层异常兜底
+</pre>
+<div class="card">
+  <div class="card-title">这段函数是"生产级工具函数"的模板（四层防御）</div>
+  <ul>
+    <li><strong>参数校验</strong>：strip + 空值判断（模型抽的参数不一定靠谱）</li>
+    <li><strong>超时控制</strong>：timeout=5（外部服务可能挂起，不设超时会卡死整个 Agent）</li>
+    <li><strong>HTTP 错误兜底</strong>：status_code != 200 时返回明确错误信息（而不是崩掉）</li>
+    <li><strong>异常兜底</strong>：try/except 兜住网络超时、JSON 解析失败等一切异常</li>
+  </ul>
+  <p>注意：错误也以<strong>字符串形式返回</strong>给模型（而不是抛异常），让模型能向用户解释"查询失败"——工具函数永不抛异常，是 Agent 工程的重要约定。</p>
+</div>
+
+<h3>块 2：工具注册（第 58-72 行）</h3>
+<pre>
+tool_registry = {"get_weather": get_weather}
+
+tools = [
+    {"type": "function", "function": {
+        "name": "get_weather",
+        "description": "获取指定城市的实时天气信息",
+        "parameters": {"type": "object", "properties": {
+            "city": {"type": "string", "description": "城市名称"}},
+            "required": ["city"]}}
+    }}
+]
+</pre>
+<p>description 写得好坏直接影响模型会不会用这个工具——"获取指定城市的实时天气信息"比"查天气"信息量大，模型对何时调用、传什么参数的判断会更准。</p>
+
+<h3>块 3：agent_chat 循环（第 75-106 行）</h3>
+<p>同 02/03/04 篇的 while True 模式，无新知识点。唯一的差异是<strong>没有持久化</strong>——天气查询是无状态任务，不需要记住历史，每轮独立。</p>
+
+<h3>块 4：run_weather_query（第 109-126 行）</h3>
+<pre>
+def run_weather_query():
+    config = build_weather_agent()
+    memory = None
+
+    reply, memory = agent_chat(config, "请告诉我北京现在的天气", memory)
+    print(">>", reply)
+    reply, memory = agent_chat(config, "上海的天气怎么样？", memory)
+    print(">>", reply)
+    reply, memory = agent_chat(config, "请查询一下东京的当前温度和湿度", memory)
+    print(">>", reply)
+</pre>
+<p>三轮查询覆盖三种问法：完整句 / 口语化短句 / 明确要两个字段——模型都能正确抽取 city 参数并发起调用。</p>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（已验证）</h2>
+<pre>
+>> 北京当前天气为烟雾霾（Smoky haze），气温为27℃，相对湿度为23%。
+   空气较为干燥，建议注意补水，并关注空气质量，减少户外长时间活动。
+
+>> 上海当前天气为局部有雨（Patchy rain nearby），气温25℃，相对湿度60%。
+   建议外出携带雨具，注意道路湿滑...
+
+>> 东京当前天气晴朗（Sunny），气温为26℃，相对湿度为34%。
+   空气较为干燥，阳光充足，适宜户外活动...
+</pre>
+<div class="ok">
+  <div class="ok-title">观察两个关键现象</div>
+  <ul>
+    <li><strong>数据是实时的</strong>：温度湿度是 wttr.in 当时返回的真实值，不是模型编的（模型的训练数据里不可能有"今天的北京天气"）</li>
+    <li><strong>模型会"加戏"</strong>：工具只返回了天气数据，但模型的回答里多了"建议补水""携带雨具"等建议——这是 LLM 在工具结果之上的增值，也是 Agent 比 API 强的地方</li>
+  </ul>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>七、char02 五篇完整生命周期对照（收官总表）</h2>
+<table>
+  <tr><th>维度</th><th>01 骨架</th><th>02 状态</th><th>03 持久化</th><th>04 注销</th><th><strong>05 外部 API</strong></th></tr>
+  <tr><td><strong>Agent 能力</strong></td><td>能启动能说话</td><td>记住中间变量</td><td>重启不丢记忆</td><td>用完干净退出</td><td><strong>会联网办事</strong></td></tr>
+  <tr><td><strong>工具执行体</strong></td><td>本地固定字符串</td><td>本地写状态</td><td>本地记录</td><td>本地任务</td><td><strong>真实 HTTP 请求</strong></td></tr>
+  <tr><td><strong>数据真实性</strong></td><td>模拟</td><td>模拟</td><td>模拟</td><td>模拟</td><td><strong>实时真实数据</strong></td></tr>
+  <tr><td><strong>异常处理</strong></td><td>无</td><td>无</td><td>无</td><td>无</td><td><strong>四层防御</strong></td></tr>
+  <tr><td><strong>离线可跑</strong></td><td>是</td><td>是</td><td>是</td><td>是</td><td><strong>否（需联网）</strong></td></tr>
+  <tr><td><strong>生产就绪度</strong></td><td>★☆☆☆☆</td><td>★★☆☆☆</td><td>★★★☆☆</td><td>★★★★☆</td><td><strong>★★★★☆</strong></td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、外部 API 工具的工程化增强方向</h2>
+<table>
+  <tr><th>当前实现（教学版）</th><th>生产版增强</th><th>为什么</th></tr>
+  <tr><td>同步 requests.get</td><td><strong>异步 aiohttp / 连接池复用</strong></td><td>多用户并发查询时同步会阻塞</td></tr>
+  <tr><td>无重试</td><td><strong>失败自动重试 2-3 次（指数退避）</strong></td><td>网络抖动是常态，一次失败就放弃体验差</td></tr>
+  <tr><td>无缓存</td><td><strong>同一城市 10 分钟内结果缓存</strong></td><td>天气变化慢，重复查询浪费配额</td></tr>
+  <tr><td>wttr.in 免费服务</td><td><strong>商业 API（高德/和风）+ Key 管理</strong></td><td>免费服务无限流保证，生产必须用 SLA 服务</td></tr>
+  <tr><td>无结果校验</td><td><strong>pydantic 校验返回结构</strong></td><td>外部 API 字段可能变，解析前先校验</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<div class="card">
+  <ol>
+    <li><strong>换城市试试</strong>：把三轮查询的城市换成广州、深圳、成都，观察模型抽参和 API 返回。</li>
+    <li><strong>破坏实验（超时）</strong>：把 timeout=5 改成 timeout=0.001，运行——几乎所有请求都超时，观察 try/except 兜底如何让 Agent 优雅报错而不是崩掉。</li>
+    <li><strong>破坏实验（断网）</strong>：断开网络运行，观察 ConnectionError 被兜底成"调用天气API出错：..."返回给模型，模型向用户解释。</li>
+    <li><strong>加第二个工具</strong>：新增 <code class="inline">get_time(city)</code> 工具（用 wttr.in 返回里的 localObsDateTime 字段），看模型能否根据用户问题在两个工具间正确选择。</li>
+    <li><strong>思考题</strong>：如果用户问"北京和上海哪个更热"，模型需要调几次工具？为什么？（提示：get_weather 一次只查一个城市，模型需要两次调用后对比——这正是 while True 循环的价值）</li>
+  </ol>
+</div>
+
+<p style="margin-top:2.5rem; color:#64748b; font-size:0.85rem; text-align:center;">05_查询外部天气API 讲解 | char02 收官 | 生成于 2026-10-10 | 配套验证：3 轮真实天气查询运行通过</p>
+</div>
+</body>
+</html>

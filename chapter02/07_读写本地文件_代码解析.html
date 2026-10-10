@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07_读写本地文件 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>07_读写本地文件 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char02 | 教学主题：接入文件系统与代码执行环境 | 技术栈：dashscope function calling + os / traceback 标准库 | 已验证可运行（3 轮对话：写文件 → 读文件 → 执行代码）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>实现一个<strong>文件与代码执行 Agent</strong>：用户用自然语言说"把这段话写进 test.txt"，模型自动调用 write_file 工具——工具执行体里用 <code class="inline">open(path, "w", encoding="utf-8")</code> 把内容<strong>真的写到磁盘上</strong>；说"读取 test.txt"，模型调用 read_file 把文件内容读回来；说"运行 a = 5、b = 3、c = a * b"，模型调用 exec_code 工具，<code class="inline">exec()</code> 动态执行这段代码并把变量结果返回。智能体第一次拥有了<strong>直接操作本地世界（文件 + 代码）的双手</strong>。</p>
+<div class="card">
+  <div class="card-title">char02 七篇的"能力边界"递进（本篇是终点，也是分水岭）</div>
+  <ul>
+    <li><strong>01-02</strong>：Agent 会说话、会填表（数据在 Python 变量里）</li>
+    <li><strong>03-04</strong>：会持久化、会清理（JSON 文件读写）</li>
+    <li><strong>05</strong>：会联网（外部 HTTP API）</li>
+    <li><strong>06</strong>：会改数据库（SQLite 结构化存储）</li>
+    <li><strong>07（本篇）</strong>：会操作<strong>任意本地文件</strong> + 会<strong>动态执行任意代码</strong>——能力最广，风险也最高（详见第八节）</li>
+  </ul>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码的问题</h2>
+<div class="warn">
+  <div class="warn-title">两类问题（同 char02 前 6 篇）</div>
+  <p><strong>第 1 类：虚构 API</strong>：<code class="inline">qwen_agent.Agent / Tool / QwenLLM / BaseTool / CompletionConfig</code> 全部不存在，运行第一行 import 就报 ImportError。</p>
+  <p><strong>第 2 类：好代码被框架绑死</strong>：三个工具类 run() 方法里的核心逻辑——文件存在性检查（<code class="inline">os.path.exists</code>）、带编码的文件读写（<code class="inline">open(..., encoding="utf-8")</code>）、动态执行与异常截取（<code class="inline">exec(code, {}, local_vars)</code> + <code class="inline">traceback.format_exc(limit=2)</code>）——<strong>完全正确</strong>，都是 Python 标准库的标准用法，和任何框架无关。改写时把 run() 函数体<strong>原样搬进普通函数</strong>，一个字符都没改。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体流程图（写文件 → 读文件 → 执行代码）</h2>
+<pre>
+run_demo() 启动
+  │
+  ├─ 清掉上次的 test.txt（演示可重复）
+  │
+  ├─ 第 1 轮: "请将以下内容写入文件test.txt：你好，这是智能体写入的内容"
+  │     │
+  │     └─ 模型返回 tool_calls: write_file(filepath="test.txt", content="你好，这是智能体写入的内容")
+  │           open("test.txt", "w", encoding="utf-8")   ← 文件真的创建到磁盘上了
+  │           f.write(content) → 返回 "内容已成功写入文件：test.txt"
+  │
+  ├─ 第 2 轮: "读取文件test.txt中的内容"
+  │     │
+  │     └─ read_file(filepath="test.txt") 执行:
+  │           os.path.exists → True
+  │           open("test.txt", "r", encoding="utf-8") → f.read()
+  │           → 返回文件内容，模型据此生成回答
+  │
+  └─ 第 3 轮: "请运行如下代码：a = 5\nb = 3\nc = a * b"
+        │
+        └─ exec_code(code="a = 5\nb = 3\nc = a * b") 执行:
+              exec(code, {}, local_vars)   ← 逐行执行字符串里的代码
+              → local_vars = {'a': 5, 'b': 3, 'c': 15}
+              → 模型回答 c = a * b = 15
+</pre>
+<div class="card">
+  <div class="card-title">第 3 轮隐藏的难点：参数抽取</div>
+  <p>注意用户消息是<strong>自然语言 + 多行代码混在一起</strong>的。模型必须自己从句子里"剥离"出纯代码部分（去掉"请运行如下代码："前缀），再以 JSON 字符串形式填进 <code class="inline">arguments</code>。这就是 function calling 的参数抽取能力——也是为什么要给工具写清晰的 description 和 parameters 说明。</p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>代码中的实现</th><th>一句话解释</th></tr>
+  <tr><td><strong>写文件</strong></td><td><code class="inline">open(path, "w", encoding="utf-8")</code></td><td>"w" 模式：文件不存在则创建，存在则<strong>整个覆盖</strong></td></tr>
+  <tr><td><strong>读文件</strong></td><td><code class="inline">open(path, "r", encoding="utf-8")</code> + <code class="inline">f.read()</code></td><td>一次读出全部内容为字符串</td></tr>
+  <tr><td><strong>存在性检查</strong></td><td><code class="inline">os.path.exists(path)</code></td><td>读之前先检查，不存在的文件直接返回友好提示而非报错</td></tr>
+  <tr><td><strong>显式编码</strong></td><td><code class="inline">encoding="utf-8"</code></td><td><strong>Windows 教学重点</strong>：不写的话默认 GBK，中文读写可能乱码</td></tr>
+  <tr><td><strong>动态执行</strong></td><td><code class="inline">exec(code, {}, local_vars)</code></td><td>把字符串当代码跑；第 2、3 个参数决定变量被收集到哪个字典</td></tr>
+  <tr><td><strong>异常截取</strong></td><td><code class="inline">traceback.format_exc(limit=2)</code></td><td>只取堆栈最后 2 层，错误信息精简地返回给模型（不抛出、不刷屏）</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段讲解（4 个代码块）</h2>
+
+<h3>块 1：三个工具函数（本文件的教学核心）</h3>
+<pre>
+def read_file(filepath: str) -> str:
+    if not os.path.exists(filepath):        # 先检查再读，给模型友好提示
+        return f"文件不存在：{filepath}"
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            return f.read()                 # 读到的内容整个返回给模型
+    except Exception as e:
+        return f"读取失败：{str(e)}"         # 错误也返回字符串，不抛异常
+
+def write_file(filepath: str, content: str) -> str:
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)                # 内容真的落盘
+        return f"内容已成功写入文件：{filepath}"
+    except Exception as e:
+        return f"写入失败：{str(e)}"
+
+def exec_code(code: str) -> str:
+    try:
+        local_vars = {}
+        exec(code, {}, local_vars)          # 动态执行，变量收集到 local_vars
+        return "执行成功，输出变量：" + str(local_vars)
+    except Exception:
+        return "执行出错：" + traceback.format_exc(limit=2)
+</pre>
+<div class="ok">
+  <div class="ok-title">延续系列原则：工具函数永不抛异常</div>
+  <p>三个工具全部用 try/except 把错误<strong>转成字符串返回</strong>。模型收到"读取失败：xxx"这样的文字后，可以自己决定向用户解释或换个方式重试。如果工具直接抛异常，Agent 循环会整个崩掉，模型就失去了"纠错机会"。</p>
+</div>
+
+<h3>块 2：exec 的工作机制（为什么变量出现在 local_vars 里）</h3>
+<pre>
+local_vars = {}
+exec(code, {}, local_vars)
+# exec 的三个参数：
+#   第 1 个：要执行的代码字符串，如 "a = 5\nb = 3\nc = a * b"
+#   第 2 个：globals 字典（这里传空 dict）
+#   第 3 个：locals 字典（这里传 local_vars）
+# exec 执行赋值语句时，变量 a、b、c 会写进第 3 个参数的字典：
+#   local_vars == {'a': 5, 'b': 3, 'c': 15}
+# 把 local_vars 转成字符串返回 → 模型"看得见"代码算出了什么
+</pre>
+<p>这是"给模型开一只眼睛"的经典手法：代码在本地真实执行，执行产生的<strong>可观察结果</strong>以文本形式回流给模型，模型再组织成人类能读的回答。</p>
+
+<h3>块 3：工具说明书 tools + 注册表 tool_registry（三工具版）</h3>
+<pre>
+tool_registry = {
+    "read_file": read_file,
+    "write_file": write_file,
+    "exec_code": exec_code,
+}
+
+tools = [
+    {"type": "function", "function": {
+        "name": "read_file",
+        "description": "读取指定文件内容",
+        "parameters": {"type": "object", "properties": {
+            "filepath": {"type": "string", "description": "文件路径"}
+        }, "required": ["filepath"]}
+    }},
+    # write_file：required 含 filepath 和 content 两项
+    # exec_code：required 只含 code 一项
+]
+</pre>
+<div class="card">
+  <div class="card-title">从单工具到多工具，模型多了"选哪个"的决策</div>
+  <p>01 篇只有 2 个零参工具、06 篇 2 个数据库工具，本篇 3 个工具且职责完全不同（读/写/执行）。模型每轮要独立判断<strong>该调哪个工具、传什么参数</strong>——这就是"决策权在模型，执行权在本地"的完整形态。registry 里"函数名 → 函数对象"的映射保证模型选中的名字能找到真正的执行体。</p>
+</div>
+
+<h3>块 4：agent_chat 循环 + run_demo 演示流程</h3>
+<pre>
+def agent_chat(config, user_input, memory=None):
+    if memory is None:                          # 首轮注入 system 提示词
+        memory = [{"role": "system", "content": config["system_message"]}]
+    memory = memory + [{"role": "user", "content": user_input}]
+    while True:                                 # 工具调用可能多轮，循环到模型给出最终回答
+        response = dashscope.Generation.call(
+            model=config["model"], messages=memory, tools=tools,
+            temperature=config["temperature"], max_tokens=config["max_tokens"],
+            result_format='message')
+        message = response.output.choices[0].message
+        tool_calls = getattr(message, 'tool_calls', None)
+        if not tool_calls:                      # 无工具调用 → 最终回答
+            ...
+        # 有工具调用 → 查 registry 执行 → role="tool" 回传 → 继续循环
+
+def run_demo():
+    if os.path.exists("test.txt"):              # 演示可重复：先删掉上次的文件
+        os.remove("test.txt")
+    config = build_agent()
+    memory = None
+    reply, memory = agent_chat(config, "请将以下内容写入文件test.txt：你好，这是智能体写入的内容", memory)
+    print(">>", reply)
+    reply, memory = agent_chat(config, "读取文件test.txt中的内容", memory)      # memory 跨轮传递
+    print(">>", reply)
+    reply, memory = agent_chat(config, "请运行如下代码：a = 5\nb = 3\nc = a * b", memory)
+    print(">>", reply)
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（已验证）</h2>
+<pre>
+&gt;&gt; 文件 `test.txt` 已成功写入内容："你好，这是智能体写入的内容"。如需进一步操作
+   （例如读取该文件、修改内容或执行其他任务），请随时告诉我！
+&gt;&gt; 文件 `test.txt` 中的内容为：
+
+   你好，这是智能体写入的内容
+
+   如需对该内容进行处理（例如修改、分析、保存为其他格式等），请告诉我！
+&gt;&gt; 代码执行成功，结果如下：
+   - a = 5
+   - b = 3
+   - c = a * b = 15
+   变量值已计算并输出：{'a': 5, 'b': 3, 'c': 15}
+</pre>
+<div class="ok">
+  <div class="ok-title">验证要点</div>
+  <p>运行后 char02 目录下<strong>真实生成了 test.txt</strong>（可打开查看内容）；第 2 轮模型读到的内容与第 1 轮写入的完全一致（读的就是磁盘文件，不是模型记忆）；第 3 轮 exec 真实算出 c=15 并回流给模型。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>七、char02 七篇完整能力矩阵（收官总表）</h2>
+<table>
+  <tr><th>篇</th><th>主题</th><th>新增能力</th><th>工具数</th><th>外部副作用</th><th>生产就绪度</th></tr>
+  <tr><td>01</td><td>智能启动过程</td><td>Agent 骨架 + 零参工具</td><td>2</td><td>无</td><td>基本可用</td></tr>
+  <tr><td>02</td><td>任务状态追踪</td><td>带参工具 + 状态字典</td><td>1</td><td>无（内存）</td><td>基本可用</td></tr>
+  <tr><td>03</td><td>对话中断恢复</td><td>JSON 持久化记忆</td><td>1</td><td>写 JSON</td><td>良好</td></tr>
+  <tr><td>04</td><td>注销机制</td><td>save → clear → 日志 三步清理</td><td>1</td><td>写后删 JSON</td><td>良好</td></tr>
+  <tr><td>05</td><td>外部天气 API</td><td>真实 HTTP 调用 + 四层防御</td><td>1</td><td>网络请求</td><td>接近生产</td></tr>
+  <tr><td>06</td><td>数据库读写</td><td>SQLite 参数化 SQL</td><td>2</td><td>写数据库</td><td>接近生产</td></tr>
+  <tr><td><strong>07</strong></td><td><strong>文件 + 代码执行</strong></td><td><strong>本地文件读写 + exec 动态执行</strong></td><td><strong>3</strong></td><td><strong>写任意文件 + 跑任意代码</strong></td><td><strong>教学可用，生产必须加沙箱</strong></td></tr>
+</table>
+<p>七篇连起来就是一条完整的 Agent 能力成长线：<strong>能说话 → 会办事 → 会记忆 → 会清理 → 会联网 → 会改数据 → 会操作本地世界</strong>。07 篇能力最强，但也是唯一一个"生产可用性"反而要打折的——因为它把最危险的权力（任意文件 + 任意代码）交给了模型，第八节专门讲这件事。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、安全警示：exec 是"最危险的工具"</h2>
+<div class="warn">
+  <div class="warn-title">为什么这么说</div>
+  <p><code class="inline">exec()</code> 可以执行<strong>任意 Python 代码</strong>——包括删文件、读敏感信息、发起网络请求。假如模型被提示词注入（用户诱导它"帮我清理磁盘"），它可能生成并执行 <code class="inline">os.system('rd /s /q D:\\')</code> 这样的代码。原教材在工具描述里写了"仅限受控环境"，就是在提醒这一点——但"受控"二字在真实工程里要靠机制保证，不能靠自觉。</p>
+</div>
+<div class="card">
+  <div class="card-title">生产环境的正确姿势（教学版 exec 的四条升级路）</div>
+  <ul>
+    <li><strong>沙箱隔离</strong>：把 exec 换成"子进程 + 资源限制"（超时杀进程、限内存、限网络），最彻底的是跑在 Docker 容器里——炸了也只炸容器</li>
+    <li><strong>代码白名单检查</strong>：执行前用 <code class="inline">ast.parse</code> 解析代码，禁止 import 危险模块（os / sys / subprocess / socket）</li>
+    <li><strong>文件路径白名单</strong>：read/write 工具应限制只能操作指定工作目录内的文件，防止模型读写 <code class="inline">C:\Users\...\</code> 等敏感路径（目录穿越攻击）</li>
+    <li><strong>最小权限</strong>：Agent 进程用低权限账号运行，天然读不到高权限文件</li>
+  </ul>
+  <p><strong>类比</strong>：05 篇的天气工具像"只准递纸条给前台"；06 篇像"只准往一个抽屉里放纸"；本篇 exec 像"把整栋楼的万能钥匙交给访客"——方便，但得先装门禁（沙箱）。</p>
+</div>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>防覆盖写入</strong>：给 write_file 增加保护——若文件已存在则不写入，返回"文件已存在，请先确认"。提示：用 <code class="inline">os.path.exists</code>（参考 read_file 的写法）。</li>
+  <li><strong>新增 list_files 工具</strong>：列出指定目录下所有 .txt 文件名。提示：<code class="inline">os.listdir(path)</code> + <code class="inline">endswith(".txt")</code>，记得加进 tool_registry 和 tools 说明书。</li>
+  <li><strong>给 exec_code 加黑名单</strong>：如果 code 字符串里包含 <code class="inline">import os</code>、<code class="inline">open(</code>、<code class="inline">exec(</code> 就拒绝执行并返回提示——体会第八节"白名单检查"的雏形。</li>
+  <li><strong>进阶：多工具协作</strong>：把第 3 轮改成"请计算 1 到 100 的和，并把结果写入 result.txt"，观察模型如何把一个任务<strong>自动拆成 exec_code + write_file 两次工具调用</strong>——这就是真实 Agent 的工作方式。</li>
+</ol>
+
+</div>
+</body>
+</html>

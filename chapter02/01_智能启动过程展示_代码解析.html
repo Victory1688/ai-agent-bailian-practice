@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01_智能启动过程展示 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  .arrow { color: #fbbf24; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>01_智能启动过程展示 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char02 | 教学主题：智能体系统组成结构与运行机制 | 技术栈：dashscope function calling | 已验证可运行（2 轮工具调用全部正确）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>实现一个<strong>系统智能体的"开机自检"场景</strong>：模拟 Agent 启动时需要完成的一系列初始化动作，并通过两轮用户对话演示智能体如何<strong>自主决定调用哪个工具</strong>。这是整个 char02 章节的"入门篇"——02 篇讲状态追踪，01 篇讲智能体的"基本骨架"。</p>
+<div class="card">
+  <div class="card-title">五个教学目标（全部在代码中实现）</div>
+  <ul>
+    <li><strong>模型加载</strong>：配置 API Key + 指定模型名（qwen-plus）</li>
+    <li><strong>工具注册</strong>：把两个函数（取时间 / 系统检查）注册成可被模型调用的工具</li>
+    <li><strong>系统提示词配置</strong>：告诉模型"你是谁、该做什么"</li>
+    <li><strong>初始化记忆注入</strong>：首轮对话时把 system 提示词塞进 messages</li>
+    <li><strong>多轮日志追踪 + 函数调用工具调度</strong>：Agent 循环 + logging</li>
+  </ul>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码的问题</h2>
+<div class="warn">
+  <div class="warn-title">原代码使用的是虚构 API，无法运行</div>
+  <p>原文件导入的 <code class="inline">qwen_agent.Agent / Tool / ChatMessage / QwenLLM / CompletionConfig / BaseTool</code> 在真实的 qwen-agent 包里<strong>全部不存在</strong>（已实测 ImportError）。这是 char02 两篇的共同问题——教材臆造了一套不存在的框架 API。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体流程图</h2>
+<pre>
+run_startup_sequence() 启动
+  │
+  ├─ build_agent() 构建 config（模型名 / temperature / max_tokens / system_message）
+  │
+  ├─ 第1轮：agent_chat(config, "请执行一次系统检查", memory=None)
+  │     │
+  │     ├─ memory 初始化为 [system_message] + [user_input]
+  │     │
+  │     └─ while True 循环（Agent 循环的核心！）
+  │           │
+  │           ├─ dashscope.Generation.call(..., tools=tools)
+  │           │     │
+  │           │     ├─ 返回 tool_calls（模型说："我要调 startup_check"）
+  │           │     │     │
+  │           │     │     ├─ tool_registry["startup_check"]()  ← 本地执行
+  │           │     │     │     返回 "系统初始化检查通过：..."
+  │           │     │     │
+  │           │     │     └─ 结果以 role=tool 追加到 memory → 继续循环
+  │           │     │
+  │           │     └─ 再调用一次模型 → 这次无 tool_calls → 返回最终回答
+  │           │
+  │           └─ 返回 (回复, 更新后的 memory)
+  │
+  ├─ 第2轮：agent_chat(config, "请告诉我现在几点", memory=上轮结果)
+  │     │
+  │     └─ 模型自主选择 get_current_time() 工具 → 执行 → 返回时间
+  │
+  └─ 打印两轮结果 + 查 agent_startup.log 看完整日志
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>代码中的实现</th><th>一句话解释</th></tr>
+  <tr><td><strong>工具注册表</strong></td><td><code class="inline">tool_registry = {"get_current_time": fn, ...}</code></td><td>函数名 → 执行体的字典。模型只发指令，Python 负责执行</td></tr>
+  <tr><td><strong>工具说明书</strong></td><td><code class="inline">tools = [{"type":"function", "function":{...}}, ...]</code></td><td>给模型看的"工具目录"：有哪些工具、参数长什么样、干啥用</td></tr>
+  <tr><td><strong>Agent 循环</strong></td><td><code class="inline">while True + tool_calls 判断</code></td><td>模型可以连续调多个工具，直到它认为信息够了才给最终回答</td></tr>
+  <tr><td><strong>初始化记忆注入</strong></td><td><code class="inline">memory = [{"role": "system", "content": system_message}]</code></td><td>首轮对话时把 system 提示词塞进 messages 列表</td></tr>
+  <tr><td><strong>多轮记忆传递</strong></td><td>每轮 agent_chat 返回更新后的 memory，下一轮传入</td><td>让模型"记得"之前聊过什么</td></tr>
+  <tr><td><strong>函数调用（Function Calling）</strong></td><td>dashscope.Generation.call(tools=tools) → response.output.choices[0].message.tool_calls</td><td>模型不直接执行工具，只返回"调用指令"，本地解析后执行</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段讲解（6 个代码块）</h2>
+
+<h3>块 1：导入 + API Key（第 18-27 行）</h3>
+<pre>
+import logging    # 日志追踪（原写法保留）
+import datetime   # get_current_time 要用
+import os
+import dashscope
+
+# 等价于原写法的"模型加载"环节
+api_key = os.environ.get('DASHSCOPE_API_KEY')
+dashscope.api_key = api_key
+</pre>
+<p>原写法用虚构的 <code class="inline">QwenLLM(model="qwen-plus")</code> 一行搞定"加载模型"；改写后拆成两步：先设 api_key，再每次 <code class="inline">Generation.call(model=...)</code> 时传入模型名——<strong>dashscope 的模型是无状态的</strong>，不像某些框架需要先实例化 LLM 对象。</p>
+
+<h3>块 2：日志配置（第 29-34 行）</h3>
+<pre>
+logging.basicConfig(
+    filename='agent_startup.log',   # 输出到文件
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+</pre>
+<p>这是唯一原代码完全保留的部分——因为 logging 是标准库，和框架无关。运行后会生成 <code class="inline">agent_startup.log</code>，里面能看到每轮用户输入、模型请求调用哪个工具、工具返回了什么、模型最终说了什么。</p>
+
+<h3>块 3：工具注册（第 36-74 行，本文件最核心的改写）</h3>
+<pre>
+# 可执行函数（本地 Python 负责"做事"）
+def get_current_time() -> str:
+    now = datetime.datetime.now()
+    return now.strftime("当前时间是：%Y年%m月%d日 %H:%M:%S")
+
+def startup_check() -> str:
+    checks = ["模型加载完成", "工具已注册", "Memory注入成功", "上下文初始化完成"]
+    return "系统初始化检查通过：" + "，".join(checks)
+
+# 注册表：模型只发工具名，Python 查这里执行
+tool_registry = {"get_current_time": get_current_time, "startup_check": startup_check}
+
+# 说明书：给模型看的"工具目录"
+tools = [
+    {"type": "function", "function": {
+        "name": "get_current_time",
+        "description": "获取当前系统时间",
+        "parameters": {"type": "object", "properties": {}}    # 空参数，因为这两个工具都不需要输入
+    }},
+    {"type": "function", "function": {
+        "name": "startup_check", "description": "执行Agent启动时的系统检查任务",
+        "parameters": {"type": "object", "properties": {}}
+    }}
+]
+</pre>
+<div class="card">
+  <div class="card-title">工具注册 = 两部分（新人最容易只做一半）</div>
+  <p><strong>函数体</strong>（Python 执行）+ <strong>说明书</strong>（模型理解），缺一不可。原写法把两部分合并在一个 <code class="inline">BaseTool</code> 子类里（run 是函数体，description/parameters 是说明书）；改写后拆成独立的函数 + tools 列表 + tool_registry 字典——<strong>更清晰</strong>，学生能看到"注册"到底做了什么。</p>
+</div>
+
+<h3>块 4：build_agent（第 76-89 行）</h3>
+<pre>
+def build_agent():
+    logging.info("启动Agent构建流程")
+    config = {
+        "name": "SystemStartupAgent",
+        "model": "qwen-plus",           # 模型加载
+        "temperature": 0.3,             # 低随机性，启动仪式感不要太跳
+        "max_tokens": 512,
+        "system_message": "你是一位系统智能体助手，负责初始化流程、工具检查与运行日志监控。"
+    }
+    logging.info("Agent构建完成")
+    return config
+</pre>
+<p>原写法用虚构的 <code class="inline">Agent(name=..., llm=..., tools=..., system_message=...)</code> 拼装；改写后用 <code class="inline">config</code> 字典承接——<strong>因为 agent_chat 函数本身已经是"智能体对象"</strong>，config 只是它的参数，不需要再包一层。</p>
+
+<h3>块 5：agent_chat 循环（第 91-143 行，本文件的灵魂）</h3>
+<pre>
+def agent_chat(config, user_input, memory=None):
+    # 1. 初始化记忆注入
+    if memory is None:
+        memory = [{"role": "system", "content": config["system_message"]}]
+    memory = memory + [{"role": "user", "content": user_input}]
+
+    # 2. Agent 循环：while True + tool_calls 判断
+    while True:
+        response = dashscope.Generation.call(
+            model=config["model"], messages=memory, tools=tools,
+            temperature=config["temperature"], max_tokens=config["max_tokens"],
+            result_format='message'
+        )
+        message = response.output.choices[0].message
+        tool_calls = getattr(message, 'tool_calls', None)
+
+        # 3a. 无工具调用 → 返回最终回答
+        if not tool_calls:
+            reply = message.content
+            memory = memory + [{"role": "assistant", "content": reply}]
+            return reply, memory
+
+        # 3b. 有工具调用 → 本地执行，结果回传给模型继续循环
+        memory = memory + [message]
+        for call in tool_calls:
+            fn_name = call['function']['name']       # 注意：dashscope 返回 dict
+            fn = tool_registry.get(fn_name)
+            tool_result = fn() if fn else f"未注册: {fn_name}"
+            memory = memory + [{"role": "tool", "content": tool_result, ...}]
+</pre>
+<div class="card">
+  <div class="card-title">三、新人必须理解的 while True 循环逻辑</div>
+  <p>这是智能体和普通对话程序的<strong>本质区别</strong>。普通对话：<code class="inline">if 要调工具 → 调一次 → 结束</code>。智能体：<code class="inline">while True → 模型说调就调，调完再问模型要不要继续 → 直到模型说"不用了，我直接回答"</code>。<strong>决策权在模型，执行权在本地</strong>。</p>
+</div>
+
+<h3>块 6：启动测试（第 145-161 行）</h3>
+<pre>
+def run_startup_sequence():
+    config = build_agent()
+    memory = None  # 首轮传 None → agent_chat 内部注入 system_message
+
+    res1, memory = agent_chat(config, "请执行一次系统检查", memory)
+    print(">> 系统检查响应：", res1)
+
+    res2, memory = agent_chat(config, "请告诉我现在几点", memory)
+    print(">> 当前时间响应：", res2)
+</pre>
+<p>两轮对话，每轮都把更新后的 memory 传给下一轮——<strong>多轮记忆的实现方式</strong>。第一轮 memory=None（首轮），第二轮 memory=第一轮结束后的列表（含 system + user1 + tool_call + tool_result + assistant1）。</p>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（已验证）</h2>
+<pre>
+>> 系统检查响应： 系统检查已完成，所有模块均正常运行：模型加载成功、
+   工具已注册、Memory注入成功、上下文初始化完成。Agent已就绪，可以开始服务。
+>> 当前时间响应： 当前时间是：2026年10月10日 13:35:16（星期五）
+   ↑ 真实的工具返回值，不是模型编的
+</pre>
+<p>日志文件 <code class="inline">agent_startup.log</code> 里能看到完整链路：用户输入 → 模型请求调哪个工具 → 工具返回什么 → 模型最终回复什么。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、char02 两篇的分工与递进关系</h2>
+<table>
+  <tr><th>维度</th><th>01_智能启动过程展示</th><th>02_自动追踪任务状态</th></tr>
+  <tr><td>教学重点</td><td>智能体基本骨架：模型 + 工具 + Agent 循环</td><td>状态追踪：多轮对话中信息怎么"记住"</td></tr>
+  <tr><td>工具参数</td><td>零参数（get_current_time / startup_check 都不用输入）</td><td>带参数（topic / time / attendees）</td></tr>
+  <tr><td>状态追踪</td><td>演示级（仅 memory）</td><td>完整级（memory + task_state 字典）</td></tr>
+  <tr><td>代码复杂度</td><td>★★☆☆☆</td><td>★★★☆☆</td></tr>
+  <tr><td>阅读建议</td><td>先读，搞懂 Agent 循环的基本骨架</td><td>再读，理解"带参工具 + 状态字典"的进阶组合</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、动手练习</h2>
+<div class="card">
+  <ol>
+    <li><strong>加一个零参工具</strong>：新增 <code class="inline">list_registered_tools()</code> 工具，返回"已注册的工具列表"，补全注册表和 tools 说明书，看模型能否自动发现并用上。</li>
+    <li><strong>加一个带参工具</strong>：新增 <code class="inline">echo_text(text: str)</code>，让模型能回显用户输入——对照 02 篇学习带参工具的 JSON 解析。</li>
+    <li><strong>破坏实验</strong>：把 while True 改成 if，看会发生什么——体会为什么 Agent 必须循环（模型可能连续调多个工具）。</li>
+    <li><strong>查日志</strong>：运行后打开 agent_startup.log，数一数每轮对话共有多少条日志记录、各自是什么级别。</li>
+    <li><strong>思考题</strong>：如果有 10 个工具，tools 列表会很长、每次请求都带上——会不会影响模型判断？查一下"动态工具选择 / 工具路由"是什么思路。</li>
+  </ol>
+</div>
+
+<p style="margin-top:2.5rem; color:#64748b; font-size:0.85rem; text-align:center;">01_智能启动过程展示 讲解 | char02 | 生成于 2026-10-10 | 配套验证：2 轮工具调用运行通过</p>
+</div>
+</body>
+</html>
