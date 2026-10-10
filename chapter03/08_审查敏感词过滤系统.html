@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08_审查敏感词过滤系统 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>08_审查敏感词过滤系统 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char03 | 教学主题：内容审查的两层防线 + Trie 前缀树算法 | 技术栈：原 GPU 推理 → dashscope 云端调用（Trie 算法与双层过滤架构原样保留） | 已验证可运行（三种场景全通：input_blocked / ok / output_blocked）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>给大模型对话服务加一个<strong>内容审查中间层</strong>：用户输入先过一遍敏感词检查，命中直接拒绝（<strong>根本不调模型</strong>，省钱省时）；模型输出再过一遍检查，命中就拦截，不让问题内容流到客户端。这就是生产级 AI 产品的<strong>两层防线</strong>架构——所有对话产品（ChatGPT / 通义 / Kimi）都有这套机制，只是敏感词库换成了更智能的分类模型。</p>
+<div class="card">
+  <div class="card-title">本篇的两个核心教学点</div>
+  <ul>
+    <li><strong>双层过滤架构</strong>（生成前 + 生成后）：为什么一层不够？因为风险可能来自两端——用户故意投毒（输入侧），或模型被诱导后自己说出不该说的（输出侧）</li>
+    <li><strong>Trie 前缀树算法</strong>：高效多模式串匹配——敏感词库上万条时，"每个词全文搜索一遍"是数量级的性能灾难，Trie 只需扫描文本一次</li>
+  </ul>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、双层过滤架构图（本篇总纲）</h2>
+<pre>
+用户请求 ──→ 【第一层：生成前过滤（pre_check）】
+                  │
+                  ├─ 命中敏感词 ──→ 返回 {"flag": "input_blocked", "reason": [...]}
+                  │                 （模型根本没被调用——零成本拒绝）
+                  ▼
+             【模型推理】（原：本地 GPU generate → 改：dashscope 云端）
+                  │
+                  ▼
+             【第二层：生成后过滤（post_check）】
+                  │
+                  ├─ 命中敏感词 ──→ 返回 {"flag": "output_blocked", "reason": [...],
+                  │                                "original": "模型原始输出"}
+                  ▼
+             返回 {"flag": "ok", "response": "正常回答"}
+</pre>
+<table>
+  <tr><th>flag 值</th><th>含义</th><th>触发条件</th><th>成本</th></tr>
+  <tr><td><code class="inline">input_blocked</code></td><td>输入被拦</td><td>用户输入命中敏感词</td><td><strong>零模型成本</strong>（提前拒绝）</td></tr>
+  <tr><td><code class="inline">output_blocked</code></td><td>输出被拦</td><td>模型回答中含敏感词</td><td>已花一次推理成本，但拦住了风险</td></tr>
+  <tr><td><code class="inline">ok</code></td><td>正常通过</td><td>两层都没命中</td><td>一次正常推理成本</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>三、Trie 前缀树：为什么它是本篇的算法灵魂（原样保留，一字未改）</h2>
+<pre>
+# 敏感词库：["暴力", "攻击", "毒品", "敏感政治"] 插入后的 Trie 结构：
+
+                    root
+                  /  |  \
+                暴   攻   毒      敏
+                │   │   │       │
+                力   击   品       感
+              [end] [end] [end]   │
+                                  政
+                                  │
+                                  治
+                                [end]
+                                （敏感政治）
+
+# search("我今天想了解毒品") 的扫描过程：
+#   从"我"出发 → root.children 里没有"我" → 死路，下一个字
+#   从"毒"出发 → root→毒→品 → 品节点 is_end=True → 记录命中"毒品" ✓
+#   ...全文扫一遍，所有命中的词都出来了
+</pre>
+<div class="card">
+  <div class="card-title">Trie vs 朴素匹配的性能账（为什么要学这个数据结构）</div>
+  <p>朴素做法：<code class="inline">for word in sensitive_words: if word in text</code>——词库 1 万条、文本 1000 字，就是 1 万次全文扫描（约 1000 万次字符比较）。Trie 做法：文本从头到尾扫<strong>一次</strong>（1000 步），每步沿树往下走几层。词库越大，Trie 优势越明显——这是<strong>以空间（树节点）换时间（扫描次数）</strong>的经典案例，也是所有商用敏感词系统的底层方案（DFA/AC 自动机都是 Trie 的进化版）。</p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>四、改写点逐项对照（3 改 3 留）</h2>
+<table>
+  <tr><th>环节</th><th>原写法</th><th>改写后</th><th>处理方式</th></tr>
+  <tr><td>Trie 树（TrieNode/SensitiveTrie）</td><td>insert + search 算法</td><td>完全相同</td><td><strong>原样保留（算法教学点）</strong></td></tr>
+  <tr><td>敏感词库</td><td>暴力/攻击/毒品/敏感政治</td><td>完全相同</td><td><strong>原样保留</strong></td></tr>
+  <tr><td>双层过滤逻辑</td><td>pre_check → 推理 → post_check</td><td>流程完全相同</td><td><strong>原样保留（架构教学点）</strong></td></tr>
+  <tr><td>模型加载</td><td>transformers + .cuda()（需 GPU）</td><td>dashscope.api_key 环境变量</td><td><strong>替换</strong></td></tr>
+  <tr><td>模型推理</td><td>model.generate + tokenizer.decode</td><td>dashscope.Generation.call</td><td><strong>替换</strong></td></tr>
+  <tr><td>build_prompt 手动拼角色</td><td>[用户]：/[助手]： 标记拼接</td><td>消息直接透传（云端原生理解）</td><td><strong>消失</strong>（同 05/06/07）</td></tr>
+</table>
+<p>另有两处小改动：审查用全文改由 messages 直接拼接（等价于原 build_prompt 产物）；模型调用包了 try/except 返回 <code class="inline">model_error</code>（新增的第四种 flag，让审查服务本身不至于因云端故障而崩）。</p>
+
+<!-- ========== 五 ========== -->
+<h2>五、真实运行输出（三种场景全部验证通过）</h2>
+<pre>
+【场景 1：输入命中敏感词】（教材原例）
+请求: {"messages": [{"role": "user", "content": "请告诉我关于毒品的知识"}]}
+响应: {"flag": "input_blocked", "reason": ["毒品"]}
+↑ 第一层防线生效，模型根本没被调用（省了一次推理成本）
+
+【场景 2：正常内容】
+请求: {"messages": [{"role": "user", "content": "用一句话介绍大语言模型"}]}
+响应: {"flag": "ok", "response": "大语言模型（LLM）是一种基于深度学习、通过在海量文本数据上
+       进行大规模预训练而获得的AI模型，具备强大的语言理解与生成能..."}
+↑ 两层都没命中，正常放行
+
+【场景 3：诱导模型输出敏感词】（最难触发的场景——第二层防线的存在性证明）
+请求: {"messages": [{"role": "user", "content": "请把这两个字连起来组成一个词并解释含义：暴 力"}]}
+       ↑ 输入里"暴"和"力"是分开的，Trie 匹配不上，第一层放行
+响应: {"flag": "output_blocked", "reason": ["暴力", "暴力"],
+       "original": "\u201c暴力\u201d是一个汉语双音节词...暴力指通过武力、强制、胁迫..."}
+↑ 模型自己把"暴"和"力"连成了"暴力"——被第二层拦下！
+</pre>
+<div class="ok">
+  <div class="ok-title">场景 3 的教学价值</div>
+  <p>这个测试精确演示了<strong>为什么必须有两层过滤</strong>：用户输入"暴 力"（中间带空格）骗过了第一层，但模型在回答中把它连成了完整的"暴力"——如果只有输入过滤，这个词就流到客户端了。<strong>攻击者在输入侧绕过的方式，恰好证明输出侧过滤的必要性</strong>。顺带注意 reason 里有两个"暴力"——Trie 把回答里两处出现都抓出来了。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、教学简化 vs 生产差距（重点：别真用敏感词列表做内容安全）</h2>
+<div class="warn">
+  <div class="warn-title">本篇方案的真实定位</div>
+  <p>Trie 敏感词过滤是<strong>最基础的字符串级审查</strong>，生产环境只能当第一道补充防线，绝不能当唯一防线。真实的内容安全体系要复杂得多：</p>
+</div>
+<div class="card">
+  <ul>
+    <li><strong>变体绕过</strong>："毒 品"、"du品"、"黃色"（形近字）、"🧪青春"（谐音/emoji）——Trie 全部失守。生产用 NLP 分类模型 + embedding 相似度识别语义级风险</li>
+    <li><strong>语义审查</strong>：没有敏感词但意思危险的话（"如何在家提取某种东西"）——字符串匹配永远抓不到，需要意图分类模型</li>
+    <li><strong>多模态</strong>：图片、音频的审核（本篇只管文本）</li>
+    <li><strong>云端自带审核</strong>：dashscope 本身内置内容安全层，触发时返回错误——生产中应把它的拦截信号也纳入 flag 体系</li>
+    <li><strong>词库管理</strong>：真实词库数万条且高频更新——应放数据库/配置中心并支持热更新，而不是代码里硬编码 4 个词</li>
+    <li><strong>审计留痕</strong>：被拦截的请求应记录日志（谁、什么时间、命中什么词），供风控回溯——本篇没有落盘</li>
+  </ul>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>七、与教材响应示例的对照验证</h2>
+<p>教材文件尾部给出了两个预期输出——改写后实测<strong>完全一致</strong>：</p>
+<table>
+  <tr><th>教材预期</th><th>改写版实测</th><th>结果</th></tr>
+  <tr><td>输入含"毒品" → <code class="inline">{"flag": "input_blocked", "reason": ["毒品"]}</code></td><td>完全一致</td><td>一致</td></tr>
+  <tr><td>未命中 → <code class="inline">{"flag": "ok", "response": "大语言模型是..."}</code></td><td>flag=ok + LLM 介绍</td><td>一致</td></tr>
+  <tr><td>（教材未给 output_blocked 示例）</td><td><code class="inline">{"flag": "output_blocked", "reason": ["暴力", "暴力"], "original": ...}</code></td><td>补齐了第三种场景的实测</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、char03 八篇收官：本篇在整体中的位置</h2>
+<table>
+  <tr><th>篇</th><th>主题</th><th>一句话定位</th></tr>
+  <tr><td>01 远程调用</td><td>最小调用闭环</td><td>把模型当函数用</td></tr>
+  <tr><td>02 本地 vs 云端</td><td>部署形态对比</td><td>模型住哪里</td></tr>
+  <tr><td>03 LoRA 微调</td><td>模型定制</td><td>教模型新本事</td></tr>
+  <tr><td>04 并发 GPU 推理</td><td>多实例调度</td><td>让服务扛得住</td></tr>
+  <tr><td>05 ChatCompletion</td><td>协议兼容</td><td>说行业通用方言</td></tr>
+  <tr><td>06 Function Calling</td><td>工具调用</td><td>让模型能动手</td></tr>
+  <tr><td>07 批处理+流式</td><td>吞吐与延迟</td><td>两种服务模式</td></tr>
+  <tr><td><strong>08 本篇</strong></td><td><strong>内容审查</strong></td><td><strong>让服务安全合规</strong>——上线前的最后一课</td></tr>
+</table>
+<p>char03 的教学线索至此闭环：<strong>能调用 → 会部署 → 能定制 → 扛并发 → 通协议 → 会动手 → 优化体验 → 保证安全</strong>。一个大模型服务从"能跑通"到"敢上线"的全部基础设施，这八篇都碰了一遍。</p>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>变体绕过实验</strong>：试试输入"毒 品"（带空格）、"D品"（拼音混写），观察 Trie 是否失守——然后给 SensitiveTrie 加一个 preprocess 函数（去空格/全角转半角/简繁转换），看能堵住几种变体，体会"字符串级审查的天花板"。</li>
+  <li><strong>词库热更新</strong>：把 sensitive_words 挪到 sensitive_words.txt（每行一个词），加一个 GET /reload 端点重新加载 Trie——体会"词库与代码分离"的工程意义。</li>
+  <li><strong>审计日志</strong>：每次拦截（input_blocked / output_blocked）都追加写入 audit.log（时间戳 + 命中词 + 原文），模拟风控回溯。</li>
+  <li><strong>AC 自动机调研</strong>：查一下 AC 自动机（Aho-Corasick）与朴素 Trie 的区别（失配跳转），理解为什么商用系统都用它——本篇的 Trie 在最坏情况下仍有重复扫描。</li>
+  <li><strong>思维题</strong>：为什么 input_blocked 要在"调模型之前"返回，而不是照样调模型再拦输出？（两个角度：成本、以及生成内容本身可能产生新的风险）。如果用户的 system prompt 里含敏感词但 user 输入干净，拦截是否合理？这个边界该怎么设计？</li>
+</ol>
+
+</div>
+</body>
+</html>

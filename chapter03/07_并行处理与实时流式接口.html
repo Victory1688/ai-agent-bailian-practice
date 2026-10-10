@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07_并行处理与实时流式接口 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>07_并行处理与实时流式接口 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char03 | 教学主题：批处理（Batch）与流式传输（Streaming）两种推理服务模式 | 技术栈：原 GPU batch + 假流式 → 改写为 ThreadPoolExecutor 并发批处理 + dashscope 真流式 | 已验证可运行（批处理 2 路并发 4.29秒；流式首块 0.43秒到达，25 个 SSE 块 + [DONE]）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>一个 FastAPI 服务暴露<strong>两个端点</strong>，演示推理服务的两种经典优化模式：</p>
+<table>
+  <tr><th>端点</th><th>模式</th><th>核心思想</th><th>适用场景</th></tr>
+  <tr><td><code class="inline">POST /v1/chat/batch</code></td><td><strong>批处理</strong>（Batch）</td><td>多个独立请求<strong>并行处理</strong>，全部完成后一次性返回——追求<strong>吞吐量</strong></td><td>离线任务、大规模数据处理（如批量标注、批量摘要）</td></tr>
+  <tr><td><code class="inline">POST /v1/chat/stream</code></td><td><strong>流式传输</strong>（Streaming）</td><td>模型<strong>每生成一段就立即推送</strong>——追求<strong>低感知延迟</strong></td><td>实时聊天、AI 助手（用户看着字一个个蹦出来）</td></tr>
+</table>
+<p>改写前：批处理依赖本地 GPU 的 batch generate（一次前向算多组输入），流式是"假流式"（整段生成完再切片模拟）。改写后：批处理变为<strong>线程池并发调用</strong>，流式升级为<strong>真流式</strong>——两个模式的核心教学思想全部保留。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、批处理 vs 流式的本质区别（本篇总纲）</h2>
+<pre>
+【批处理 Batch】——"一堆活一起干，干完一起交"
+  请求A ──┐
+  请求B ──┼─→ [并行推理] ─→ 全部完成 ─→ 一次性返回 [结果A, 结果B]
+  请求C ──┘
+  关注指标：总吞吐量（每秒处理多少请求）
+  用户体验：慢（要等最慢的那个），但单位时间处理量大
+
+【流式 Streaming】——"干一点交一点"
+  请求 ──→ [推理中] ─→ chunk1 ─→ chunk2 ─→ chunk3 ─→ ... ─→ [DONE]
+                        ↓        ↓        ↓
+                      客户端实时渲染（打字机效果）
+  关注指标：首字延迟（TTFT, Time To First Token）
+  用户体验：快（0.43 秒就看到第一个字），总时间不变但"感觉"快得多
+</pre>
+<div class="card">
+  <div class="card-title">一句话记住两者的分工</div>
+  <p><strong>批处理优化的是"机器的效率"，流式优化的是"人的感受"</strong>。同样是 3 秒生成完的回答：批处理让用户干等 3 秒；流式让用户 0.4 秒就开始看到内容——总时间一样，但后者的体验碾压前者。这就是为什么所有聊天产品（ChatGPT / 通义 / Kimi）全是流式输出。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、逐段讲解（5 个代码块）</h2>
+
+<h3>块 1：两种请求的数据结构（原样保留）</h3>
+<pre>
+class BatchRequest(BaseModel):
+    model: str
+    messages_list: list[list[ChatItem]]   # 注意：两层嵌套 = 多组对话（"批"批在这里）
+    max_tokens: int = 128
+
+class StreamRequest(BaseModel):
+    model: str
+    messages: list[ChatItem]              # 一层 = 单组对话
+    max_tokens: int = 128
+    temperature: float = 0.7
+</pre>
+<p><code class="inline">list[list[ChatItem]]</code> 的两层嵌套是批处理协议的关键——每组对话独立完整，组与组之间没有依赖（这是能并行的前提）。</p>
+
+<h3>块 2：build_prompt 的消失（同 char03-05/06）</h3>
+<pre>
+# 原写法：裸基座模型不认识 messages，手动拼角色标记
+def build_prompt(messages):
+    prompt = ""
+    for msg in messages:
+        if msg.role == "user":      prompt += f"[用户]：{msg.content}\n"
+        ...
+    prompt += "[助手]："
+    return prompt
+
+# 改写：云端 Chat 模型原生理解 messages，一行转换即可
+all_messages = [[{"role": m.role, "content": m.content} for m in group]
+                for group in req.messages_list]
+</pre>
+
+<h3>块 3：批处理端点（GPU batch → 线程池并发）</h3>
+<pre>
+# 原写法：GPU batch——多组输入 padding 对齐后一次 forward 算完
+input_ids = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).input_ids.cuda()
+output_ids = model.generate(input_ids, max_new_tokens=req.max_tokens)
+decoded = tokenizer.batch_decode(output_ids, ...)
+
+# 改写：线程池并发——多组请求同时发给云端
+_executor = ThreadPoolExecutor(max_workers=8)    # 模块级线程池，复用线程
+
+@app.post("/v1/chat/batch")
+async def batch_chat(req: BatchRequest):
+    all_messages = [...]
+    # submit 立即返回 Future（不阻塞），所有请求同时发出
+    futures = [_executor.submit(infer_one, msgs, req.max_tokens) for msgs in all_messages]
+    # f.result() 阻塞等每个完成，全部收齐后组装结果
+    results = [f.result() for f in futures]
+    return {"results": results}
+</pre>
+<div class="card">
+  <div class="card-title">GPU batch 和线程池并发的区别与联系</div>
+  <ul>
+    <li><strong>GPU batch</strong>：一次前向计算同时算多组输入——计算层面的并行，吃 GPU 的矩阵运算能力</li>
+    <li><strong>线程池并发</strong>：多个 HTTP 请求同时在飞——IO 层面的并行，吃网络等待的重叠</li>
+    <li><strong>共同思想</strong>：多个独立请求不排队，一起处理——这就是"并行处理"的教学本质</li>
+    <li><strong>云端 API 没有 batch 接口</strong>（单次调用单组输入），所以改写版用 IO 并发模拟同样的吞吐效果</li>
+  </ul>
+</div>
+
+<h3>块 4：假流式 → 真流式（同 char03-05 的升级）</h3>
+<pre>
+# 原写法（假流式）：先整段生成完，再切成 8 字符一片 + sleep 模拟
+def stream_generator(prompt, max_tokens, temperature):
+    output_ids = model.generate(...)                       # 客户端干等整段生成
+    output_text = tokenizer.decode(...).split("[助手]：")[-1].strip()
+    for i in range(0, len(output_text), 8):
+        yield json.dumps({"choices": [{"delta": {"content": output_text[i:i+8]}}]}) + "\n"
+        time.sleep(0.05)                                   # 人为放慢装作在生成
+
+# 改写（真流式）：模型每生成一段就实时推送
+def stream_generator(messages_list_of_dicts, max_tokens, temperature):
+    responses = dashscope.Generation.call(
+        ..., stream=True, incremental_output=True)         # 增量流式
+    for response in responses:
+        chunk = response.output.choices[0].message.content or ""
+        if chunk:
+            yield f"data: {json.dumps({'choices': [{'delta': {'content': chunk}}]}, ensure_ascii=False)}\n\n"
+    yield "data: [DONE]\n\n"
+</pre>
+
+<h3>块 5：启动修复（同 char03-05/06）</h3>
+<pre>
+# 原写法：uvicorn.run("filename:app", ...) 占位符直接运行报 ImportError
+# 改写：uvicorn.run(app, host="0.0.0.0", port=8000)
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、真实运行输出（已验证，数据很有说服力）</h2>
+<pre>
+【测试 1：批处理】POST /v1/chat/batch
+请求：messages_list = [
+    [{"role": "user", "content": "介绍一下LangChain"}],
+    [{"role": "user", "content": "什么是LoRA技术？"}]
+]
+状态码: 200 | 总耗时: 4.29 秒
+结果1: LangChain 是一个开源的、用于构建**基于大语言模型（LLM）的应用程序**的框架...
+结果2: LoRA（Low-Rank Adaptation，低秩自适应）是一种**高效、轻量级的大型语言模型...
+↑ 两个请求并行发出，总耗时 ≈ 单次请求耗时（4.29秒），而不是串行的 2 倍（约 7-8 秒）
+
+【测试 2：流式】POST /v1/chat/stream
+请求：messages = [{"role": "user", "content": "请解释一下大语言模型的上下文窗口"}]
+data: {"choices": [{"delta": {"content": "大"}}]}
+data: {"choices": [{"delta": {"content": "语言模型（"}}]}
+data: {"choices": [{"delta": {"content": "LLM）"}}]}
+...（共 25 个数据块持续推送）
+data: [DONE]
+SSE 数据行: 25 | 首块到达: 0.43 秒 | 总耗时: 2.65 秒
+↑ 首块 0.43 秒到达——假流式下用户要干等约 2.5 秒才看到第一个字
+</pre>
+<div class="ok">
+  <div class="ok-title">两组数字的教学价值</div>
+  <ul>
+    <li><strong>批处理 4.29 秒</strong>：2 路请求并行，总耗时 ≈ 单次耗时——证明并发批处理确实提升吞吐</li>
+    <li><strong>流式首块 0.43 秒</strong>：用户几乎瞬间看到回复开始——证明真流式把"感知延迟"从"整段生成时间"压缩到"第一个 token 的时间"</li>
+  </ul>
+</div>
+
+<!-- ========== 五 ========== -->
+<h2>五、假流式 vs 真流式的时间线对比</h2>
+<pre>
+【假流式（原代码）】用户视角
+  0s          2.5s                    3.5s
+  ├───────────┼───────────────────────┤
+  干等...干等...│ 整段生成完才开始切片推送 │ 切片放完
+  ↑ 用户看到第一个字要等 2.5 秒（= 整段生成时间）
+
+【真流式（改写后）】用户视角
+  0s    0.43s            2.65s
+  ├─────┼────────────────┤
+  发出请求│ 第一个字出现      │ 生成完毕
+         ↑ 用户 0.43 秒就看到内容，边生成边看
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>六、什么时候用批处理，什么时候用流式</h2>
+<table>
+  <tr><th>决策因素</th><th>选批处理</th><th>选流式</th></tr>
+  <tr><td>请求来源</td><td>程序/系统（无人盯着屏幕）</td><td>真人用户（在等回复）</td></tr>
+  <tr><td>数量级</td><td>成百上千条（批量摘要/标注/翻译）</td><td>一次一条（对话）</td></tr>
+  <tr><td>时效要求</td><td>几小时后要结果也行</td><td>秒级必须开始响应</td></tr>
+  <tr><td>成本敏感度</td><td>高（吞吐大 → 单位成本低）</td><td>低（单次请求为主）</td></tr>
+  <tr><td>典型产品</td><td>数据清洗管道、知识库预处理的 Embedding 批量生成</td><td>ChatGPT 类聊天界面、客服机器人</td></tr>
+</table>
+<p>生产系统常常<strong>两者都要</strong>：用户对话走流式接口，后台知识库构建走批处理——本篇把它们放进同一个服务，正是这个思路的雏形。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、教学简化 vs 生产差距</h2>
+<div class="card">
+  <ul>
+    <li><strong>批处理无失败隔离</strong>：某个请求失败会通过 f.result() 抛异常毁掉整批。生产应逐个 try/except，失败的槽位返回错误标记（参考 char03-01 的"永不抛异常"原则）</li>
+    <li><strong>无批大小与限流控制</strong>：客户端传 1000 组对话就会打爆线程池和 RPM 限额。生产应限制单批最大组数 + 分片提交</li>
+    <li><strong>流式无心跳与断线处理</strong>：客户端中途断开，服务端生成器会收到 GeneratorExit（dashscope 侧请求也应取消，避免白烧 token）</li>
+    <li><strong>流式无 usage 统计</strong>：OpenAI 流式协议最后一块可带 usage 字段，本服务未实现——计费需要它</li>
+    <li><strong>线程池 vs 协程</strong>：8 worker 的线程池并发上限低；生产高并发场景用 asyncio + httpx.AsyncClient 更轻量（同 char03-04 的练习方向）</li>
+  </ul>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、char03 七篇的收束：本篇教了什么新东西</h2>
+<table>
+  <tr><th>篇</th><th>主题</th><th>与批处理/流式的关系</th></tr>
+  <tr><td>01 远程调用</td><td>最小调用闭环 + temperature/max_tokens</td><td>—</td></tr>
+  <tr><td>02 本地 vs 云端</td><td>两种部署形态对比</td><td>—</td></tr>
+  <tr><td>03 LoRA 微调</td><td>模型定制</td><td>—</td></tr>
+  <tr><td>04 并发 GPU 推理</td><td>多实例 + 多线程调度</td><td><strong>批处理的前身</strong>（并发思想相同）</td></tr>
+  <tr><td>05 ChatCompletion 接口</td><td>OpenAI 协议兼容 + SSE</td><td><strong>流式的协议基础</strong>（data: 前缀 / [DONE]）</td></tr>
+  <tr><td>06 Function Calling</td><td>工具调用标准结构</td><td>—</td></tr>
+  <tr><td><strong>07 本篇</strong></td><td><strong>批处理 + 流式双模式</strong></td><td><strong>收束 04 的并发思想 + 05 的流式协议</strong>，组成完整的推理服务优化方案</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>批大小压测</strong>：把 messages_list 扩到 5 组 / 10 组对话，观察总耗时变化（是否仍 ≈ 单次耗时？什么时候开始排队？线程池 8 个 worker 的上限在哪？）。</li>
+  <li><strong>失败隔离</strong>：在 infer_one 里加一个"指定内容抛异常"的模拟（如 content 含 "boom" 就失败），再给 batch_chat 加逐个 try/except——验证一批里某条失败不影响其他条。</li>
+  <li><strong>前端打字机</strong>：写一个 20 行的 HTML 页面，用 fetch + ReadableStream 读取 /v1/chat/stream 的 SSE，实时渲染到页面上——亲眼看到打字机效果（这是所有聊天产品前端的原理）。</li>
+  <li><strong>asyncio 版</strong>：把批处理端点改写为 async def + asyncio.gather + httpx.AsyncClient，对比线程池版的代码结构和并发能力。</li>
+  <li><strong>思维题</strong>：一个"批量翻译 1 万条商品标题"的任务和一个"客服机器人"产品，分别该用本篇哪个端点？如果批处理任务跑到一半某条请求 429 限流了，重试策略该怎么设计（全批重试 vs 单条重试）？</li>
+</ol>
+
+</div>
+</body>
+</html>

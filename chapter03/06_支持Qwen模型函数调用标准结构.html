@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06_支持Qwen模型函数调用标准结构 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>06_支持Qwen模型函数调用标准结构 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char03 | 教学主题：Function Calling 协议的服务化实现 | 技术栈：原 FastAPI + 假关键词匹配 → 改写为 FastAPI + 真 dashscope Function Calling 循环 | 已验证可运行（3 种场景：模型自主调天气 / 自主调求和 / 自主决定不调函数）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>用 FastAPI 搭一个<strong>支持 Function Calling 的对话服务</strong>——客户端把消息和可用工具发过来，模型<strong>自主决策</strong>要不要调函数、调哪个、参数填什么。改写前原代码的 FastAPI 骨架、function_registry、dispatch_function 都是好教材，但<strong>"函数调用提取"是假的</strong>——用关键词匹配（"调用函数" / "get_weather"）硬编码返回固定结构，模型根本没看到工具说明书，换个输入就对不上。改写的核心动作是<strong>补齐真正的 Function Calling 循环</strong>：tools 说明书 → 模型自主决策 → 本地 dispatch → 结果回传。</p>
+<div class="card">
+  <div class="card-title">本篇在 char03 的定位</div>
+  <p>char03 前 5 篇教了"远程调用推理 / 本地 vs 云端 / LoRA 微调 / 并发调度 / ChatCompletion 协议"——全是<strong>模型本身</strong>的事。本篇首次引入 Function Calling，把模型从"只会说话"升级到"能调用外部工具"——<strong>这是 char02 Agent 能力的源头</strong>。如果你理解了本篇的 Function Calling 循环，char02 的 8 篇代码（骨架→状态→持久化→注销→API→数据库→文件→服务化）就全通了。</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、假 Function Calling vs 真 Function Calling（改写的本质）</h2>
+<table>
+  <tr><th>对比维度</th><th>原代码（假的）</th><th>改写后（真的）</th></tr>
+  <tr><td><strong>模型看到了什么</strong></td><td>只有 prompt 文本，<strong>完全没看到工具说明书</strong></td><td>messages + tools（完整的 JSON Schema 格式说明书）</td></tr>
+  <tr><td><strong>谁决定调哪个函数</strong></td><td>硬编码 if/elif：输出含"北京"就返回 get_weather</td><td><strong>模型自主决策</strong>：看说明书 → 判断用户意图 → 选最合适的工具</td></tr>
+  <tr><td><strong>参数从哪来</strong></td><td>硬编码：<code class="inline">{"city": "北京", "a": "8", "b": "12"}</code></td><td><strong>模型根据用户输入自主提取</strong>：用户说"上海"就填 city="上海"</td></tr>
+  <tr><td><strong>容错能力</strong></td><td>换个输入就崩：用户说"帮我查深圳天气"→ 硬编码只认"北京"</td><td>自适应：不管用户说"深圳""广州""成都"，模型都能正确填参数</td></tr>
+  <tr><td><strong>不调函数怎么办</strong></td><td>硬编码最后 return {"response": output_text}</td><td>模型自主判断："这个问题不需要工具"→ 直接返回自然语言</td></tr>
+  <tr><td><strong>技术本质</strong></td><td><strong>prompt 工程 + 正则匹配</strong>（模型只是文案生成器）</td><td><strong>Function Calling 协议</strong>（模型是决策者，有工具使用能力）</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>三、一次 Function Calling 请求的完整生命线</h2>
+<pre>
+客户端 POST /v1/chat/function_call
+  {"model": "qwen-plus",
+   "messages": [{"role": "system", "content": "你可以调用函数获取天气或进行加法"},
+                {"role": "user", "content": "请告诉我北京的天气"}]}
+  │
+  ▼
+run_function_call(messages_list)
+  │
+  ├─ 第 1 轮：dashscope.Generation.call(..., tools=tools)   ← 原代码完全没有 tools 参数！
+  │    │                                                     模型看说明书 → 自主决策
+  │    ├─ 模型决定"不需要工具" → 直接返回自然语言 response（tool_calls 为空）
+  │    │
+  │    └─ 模型决定"调 get_weather(city='北京')"
+  │         │
+  │         ├─ dispatch：tool_registry["get_weather"]("北京")
+  │         │  → "北京的当前天气是晴，气温25°C"
+  │         │
+  │         ├─ 把 tool 结果加进 messages：
+  │         │  {"role": "tool", "content": "北京的当前天气是晴...",
+  │         │   "name": "get_weather", "tool_call_id": "..."}
+  │         │
+  │         └─ 第 2 轮：dashscope.Generation.call(..., messages=历史+tool结果)
+  │              模型拿到工具输出 → 生成最终自然语言回答
+  │              "北京当前天气是晴，气温25°C。需要我帮您查看其他信息吗？"
+  │
+  ▼
+返回 {"response": "...", "tool_calls": [{"name": "get_weather", "arguments": {"city": "北京"}, ...}]}
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、逐段讲解（4 个代码块）</h2>
+
+<h3>块 1：tools 说明书（改写的关键——原代码完全没有）</h3>
+<pre>
+# 原代码的 function_registry（只有描述和参数名，不是真正的 JSON Schema）：
+function_registry = {
+    "get_weather": {"description": "获取城市天气", "parameters": ["city"]},
+    "calculate_sum": {"description": "计算两个数字的和", "parameters": ["a", "b"]}
+}
+
+# 改写：完整的 OpenAI Function Calling 协议格式
+tools = [
+    {"type": "function", "function": {
+        "name": "get_weather",
+        "description": "获取指定城市的当前天气",
+        "parameters": {"type": "object", "properties": {
+            "city": {"type": "string", "description": "城市名称，如 北京、上海、深圳"}
+        }, "required": ["city"]}
+    }},
+    {"type": "function", "function": {
+        "name": "calculate_sum",
+        "description": "计算两个数字的和",
+        "parameters": {"type": "object", "properties": {
+            "a": {"type": "number", "description": "第一个数字"},
+            "b": {"type": "number", "description": "第二个数字"}
+        }, "required": ["a", "b"]}
+    }},
+]
+</pre>
+<div class="card">
+  <div class="card-title">为什么 JSON Schema 格式如此重要？</div>
+  <p>模型不是"看懂"这份说明书的文字——它是<strong>结构化地解析</strong>这份 JSON Schema。<code class="inline">"type": "string"</code> 告诉模型 city 参数必须是字符串，<code class="inline">"required": ["city"]</code> 告诉模型这个参数不能缺。如果说明书格式不对，模型可能填错类型或漏参数——这就是为什么改写版必须把原代码的简陋格式换成完整 JSON Schema。</p>
+</div>
+
+<h3>块 2：Function Calling 循环（本篇核心，char02 的 Agent 循环就是这个）</h3>
+<pre>
+def run_function_call(messages_list):
+    # 第 1 轮：让模型看 tools，自主决策
+    response = dashscope.Generation.call(
+        model='qwen-plus', messages=messages_list,
+        tools=tools,                                     # ← 原代码没有！
+        temperature=0.3, max_tokens=512, result_format='message')
+    message = response.output.choices[0].message
+    tool_calls = getattr(message, 'tool_calls', None)
+
+    # 模型决定不调函数 → 直接返回自然语言回答
+    if not tool_calls:
+        return {"response": message.content, "tool_calls": []}
+
+    # 模型决定调函数 → 本地执行 + 结果回传 + 第 2 轮让模型生成最终回答
+    messages_list = messages_list + [message]
+    for call in tool_calls:
+        fn_name = call['function']['name']
+        fn_args = json.loads(call['function'].get('arguments') or '{}')
+        fn = tool_registry.get(fn_name)
+        tool_result = fn(**fn_args) if fn else f"未注册的函数: {fn_name}"
+        messages_list = messages_list + [{
+            "role": "tool", "content": tool_result,
+            "name": fn_name, "tool_call_id": call.get('id', fn_name)
+        }]
+
+    # 第 2 轮：模型拿到工具输出，生成最终自然语言回答
+    final_response = dashscope.Generation.call(...)
+    return {"response": final_response.output.choices[0].message.content,
+            "tool_calls": executed_calls}
+</pre>
+
+<h3>块 3：dispatch_function 的升级（if/elif → 字典查表）</h3>
+<pre>
+# 原写法：if/elif 链（加新函数必须改这个函数）
+def dispatch_function(name, args):
+    if name == "get_weather":       return get_weather(args["city"])
+    if name == "calculate_sum":     return calculate_sum(args["a"], args["b"])
+    return "未知函数"
+
+# 改写：字典查表（加新函数只需在 tool_registry 里加一行，不用改 dispatch）
+tool_registry = {"get_weather": get_weather, "calculate_sum": calculate_sum}
+fn = tool_registry.get(fn_name)
+tool_result = fn(**fn_args) if fn else f"未注册的函数: {fn_name}"
+</pre>
+<p>字典查表比 if/elif 更"开放"——新增函数只需在 tool_registry 里加一行，不需要改 dispatch 逻辑。这是"开闭原则"（对扩展开放，对修改关闭）的体现。</p>
+
+<h3>块 4：本地模型加载 → 云端配置（同 char03-01~05）</h3>
+<pre>
+# 原写法：transformers + .cuda() （需要 GPU）
+# 改写：dashscope.api_key = os.environ.get('DASHSCOPE_API_KEY') （零硬件门槛）
+</pre>
+
+<!-- ========== 五 ========== -->
+<h2>五、真实运行输出（3 种场景全通）</h2>
+<pre>
+【测试 1：用户说"请告诉我北京的天气"】
+POST /v1/chat/function_call
+响应: {
+  "response": "北京当前天气是晴，气温为25°C。需要我帮您查看其他信息吗？",
+  "tool_calls": [{"name": "get_weather", "arguments": {"city": "北京"}, ...}]
+}
+↑ 模型自主决策：看说明书 → 判断用户意图是查天气 → 选 get_weather → 从用户输入填 city="北京"
+
+【测试 2：用户说"帮我算一下 8 加 12 等于多少"】
+响应: {
+  "response": "8 加 12 等于 20。",
+  "tool_calls": [{"name": "calculate_sum", "arguments": {"a": 8, "b": 12}, ...}]
+}
+↑ 模型自主决策：判断用户意图是算术 → 选 calculate_sum → 从用户输入提取 a=8, b=12
+
+【测试 3：用户说"你好，今天心情不错"】
+响应: {
+  "response": "很高兴听到你今天心情不错！😊 如果你需要查询天气、计算数字，...",
+  "tool_calls": []
+}
+↑ 模型自主决策：这个问题不需要任何工具 → 直接返回自然语言，tool_calls 为空数组
+</pre>
+<div class="ok">
+  <div class="ok-title">3 个测试的教学价值</div>
+  <p>这 3 个场景完美证明了真 Function Calling 和假关键词匹配的本质区别：原代码遇到"帮我算 8 加 12"会硬编码返回 a="8", b="12"——但如果用户说"帮我算 88 加 112"，硬编码就对不上了；而改写版的模型能正确提取 a=88, b=112，因为<strong>是模型在理解用户输入，不是 if/elif 在匹配关键词</strong>。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、与 char02 Function Calling 的关系</h2>
+<table>
+  <tr><th>对比项</th><th>char02 各篇的 Function Calling</th><th>char03-06（本篇）</th></tr>
+  <tr><td><strong>运行形态</strong></td><td>Python 脚本里 <code class="true">agent_chat()</code> 循环</td><td>FastAPI 服务端点 <code class="true">POST /v1/chat/function_call</code></td></tr>
+  <tr><td><strong>函数调用循环</strong></td><td>while True + tool_calls 判断</td><td>封装在 <code class="true">run_function_call()</code> 函数里</td></tr>
+  <tr><td><strong>多轮支持</strong></td><td>是（messages 跨轮传递）</td><td>否（单次请求，无 session 记忆）</td></tr>
+  <tr><td><strong>工具数量</strong></td><td>1-4 个不等（各篇逐步增加）</td><td>2 个（get_weather / calculate_sum）</td></tr>
+  <tr><td><strong>核心技能</strong></td><td>Agent 编排 + 记忆 + 状态追踪</td><td>Function Calling 协议本身（服务化形态）</td></tr>
+</table>
+
+<!-- ========== 七 ========== -->
+<h2>七、Function Calling 三件套（贯穿 char02 + char03-06 的统一模式）</h2>
+<pre>
+┌─────────────────────────────────────────────────────────┐
+│  Function Calling 三件套（任何场景都离不开）              │
+│                                                           │
+│  1. 工具注册表 (tool_registry)                            │
+│     函数名 → 执行体（本地跑的 Python 函数）               │
+│     {"get_weather": get_weather, "calculate_sum": ...}    │
+│                                                           │
+│  2. 工具说明书 (tools)                                    │
+│     给模型看的 JSON Schema（OpenAI 协议格式）              │
+│     model 看这份说明书 → 自主决策                         │
+│                                                           │
+│  3. Function Calling 循环                                 │
+│     while True:                                           │
+│       response = call(tools=tools)                        │
+│       if response 里有 tool_calls:                        │
+│         本地执行 → 结果回传 → continue                     │
+│       else:                                               │
+│         返回自然语言 → break                               │
+└─────────────────────────────────────────────────────────┘
+</pre>
+<p>char02 的 8 篇代码只是给这三件套"加了壳"——有的加了记忆（03），有的加了状态追踪（02），有的加了服务化（08）。<strong>但三件套本身在所有文件里长得一模一样</strong>。理解了本篇的三件套，char02 八篇代码就是这三件套的 8 种不同包装方式。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学简化 vs 生产差距</h2>
+<div class="card">
+  <ul>
+    <li><strong>无多轮记忆</strong>：当前每次 POST 都是独立请求，没有 session 追踪。生产应加 session_id 参数 + Redis/数据库存储每个会话的 messages 历史（参考 char03-03 的 PersistentJSONMemory）</li>
+    <li><strong>无多次工具调用循环</strong>：当前只处理一轮 tool_calls（模型可能连续调多个工具，甚至第一轮调一个，拿到结果后再调另一个）。生产应改成 while True 循环直到模型不再返回 tool_calls</li>
+    <li><strong>无鉴权与限流</strong>：同 char03-05，任何请求都能过</li>
+    <li><strong>dispatch 无异常隔离</strong>：tool_registry 里的函数抛异常会直接崩掉。生产应 try/except 包裹，错误也返回字符串给模型（参考 char02-05 的四层防御）</li>
+    <li><strong>tools 说明书无动态注册</strong>：当前 tools 是硬编码列表。生产应支持动态注册——启动时扫描某个目录下的所有工具自动生成 tools 列表</li>
+  </ul>
+</div>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>加第三个工具</strong>：在 tool_registry 和 tools 里加一个 <code class="inline">translate_text(text, target_lang)</code>（直接返回"翻译结果：xxx"即可），然后问模型"帮我把 Hello World 翻译成法语"——观察模型是否自主选择新工具。</li>
+  <li><strong>多工具串联</strong>：加一个 <code class="inline">get_weather + calculate_sum</code> 的组合场景——让模型先查北京天气（比如返回"晴 25°C"），然后算 25 的一半是多少——体会模型连续调两次工具、第二次调用的输入依赖第一次结果的串联逻辑。</li>
+  <li><strong>多轮记忆版</strong>：给 ChatRequest 加 session_id 字段，用 Redis 或 char03-03 的 JSON 文件存储每个 session 的 messages 历史，实现同一 session 下的多轮对话。</li>
+  <li><strong>思维题</strong>：为什么 Function Calling 需要"两轮"（第一轮模型说"我要调 get_weather"，第二轮模型才生成最终回答）？能不能让模型一步到位，直接在第一次回复里同时给出函数调用和最终回答？（提示：看模型的输出格式约束）</li>
+  <li><strong>对比练习</strong>：用原代码的假关键词匹配逻辑重跑测试 2（"帮我算 88 加 112"），观察硬编码的 a="8", b="12" 如何失效——直观体会"真 Function Calling 为什么不可替代"。</li>
+</ol>
+
+</div>
+</body>
+</html>

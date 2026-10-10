@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char03 目录汇总说明 - 大模型服务开发架构总览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>char03 目录汇总说明 - 大模型服务开发架构总览</h1>
+<div class="meta">范围：aiTest/char03 全部 9 个 py 文件（01-09，均已改写为 dashscope 并运行验证） | 生成日期：2026-10-10 | 配套：每篇均有同名讲解 HTML（01 篇讲解文档为 01_远程调用大模型语义助手.html）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份文档帮你解决什么</h2>
+<p>你是刚接手这个课件目录的新人。char03 里有 9 个看起来各管一段的 py 文件：有的起 FastAPI 服务、有的发线程池、有的上传 JSONL、有的算 token 概率——<strong>它们合起来到底在教什么？先学哪个？哪些代码是"骨架"哪些是"变量"？</strong>这份文档一次说清。读完你应该能：说清 9 篇各自的位置与分工、画出 char03 的架构总图、知道按什么顺序学和自测。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、文件清单与定位速查表</h2>
+<table>
+  <tr><th>文件</th><th>教学主题</th><th>一句话定位</th><th>状态</th></tr>
+  <tr><td><a href="01_远程调用大模型语义助手.html">01_远程调用大模型语义助手.py</a></td><td>远程调用 + 工程参数</td><td>把云端模型当函数用：temperature / max_tokens / 批量推理 / 错误兜底</td><td>已验证（5 成语全部返回）</td></tr>
+  <tr><td><a href="02_模拟Qwen本地调用.html">02_模拟Qwen本地调用.py</a></td><td>本地部署 vs 云端调用</td><td>两种部署形态对比：本地五步（加载→编码→生成→解码）换成云端一步</td><td>已验证（max_tokens 截断现象成教学点）</td></tr>
+  <tr><td><a href="03_模型的LoRA微调控制.html">03_模型的LoRA微调控制.py</a></td><td>LoRA 微调</td><td>模型定制：本地 PEFT 九步原理 + 百炼 FineTunes 云端提交</td><td>已验证（上传成功；提交遇平台权限 403，属账号限制非代码问题）</td></tr>
+  <tr><td><a href="04_模拟支持多线程并发的GPU推理系统.html">04_模拟支持多线程并发的GPU推理系统.py</a></td><td>并发推理调度</td><td>多实例 + 多线程分发：串行 vs 并发实测 3.3 倍加速</td><td>已验证</td></tr>
+  <tr><td><a href="05_模拟ChatCompletion接口.html">05_模拟ChatCompletion接口.py</a></td><td>OpenAI 协议兼容</td><td>实现 /v1/chat/completions：协议即标准，客户端换 base_url 无感迁移</td><td>已验证（非流式 + 真流式 44 块）</td></tr>
+  <tr><td><a href="06_支持Qwen模型函数调用标准结构.html">06_支持Qwen模型函数调用标准结构.py</a></td><td>Function Calling 标准</td><td>真函数调用三件套：tools 说明书 + 模型自主决策 + 本地 dispatch</td><td>已验证（调天气/调求和/不调 三场景全通）</td></tr>
+  <tr><td><a href="07_并行处理与实时流式接口.html">07_并行处理与实时流式接口.py</a></td><td>批处理 + 流式双模式</td><td>吞吐（Batch）与延迟（Streaming）的取舍：4.29s 并发批 / 0.43s 首字</td><td>已验证</td></tr>
+  <tr><td><a href="08_审查敏感词过滤系统.html">08_审查敏感词过滤系统.py</a></td><td>内容安全审查</td><td>双层防线（生成前/后过滤）+ Trie 前缀树算法</td><td>已验证（三场景含 output_blocked 全触发）</td></tr>
+  <tr><td><a href="09_大模型的可信度评估.html">09_大模型的可信度评估.py</a></td><td>幻觉与置信度评估</td><td>逐 token 概率 = 模型的自我确信度；兼容模式 logprobs 实测</td><td>已验证（熟悉 0.9365 vs 生造 0.8763 对比）</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">目录里的非 py 文件</div>
+  <ul>
+    <li><code class="inline">_temp_train.jsonl</code>：03 篇构建微调数据时生成的演示产物（6 条 JSONL 样本），可留作格式参考，也可删除</li>
+    <li><code class="inline">05/06/07_*.png</code>：三张截图（应为人工保存的运行界面记录），与本汇总无关</li>
+    <li><code class="inline">01~09_*.html</code>：每篇的逐段代码讲解文档（本汇总的"下一层"阅读材料）</li>
+  </ul>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、char03 的架构定位：大模型的"服务化基础设施层"</h2>
+<p>先看三章的全局分工，char03 的位置才立得住：</p>
+<table>
+  <tr><th>章</th><th>视角</th><th>回答的问题</th><th>核心技能</th></tr>
+  <tr><td>char01</td><td>应用开发者·内圈</td><td><strong>对模型说什么</strong></td><td>提示词工程与任务建模（最小调用闭环）</td></tr>
+  <tr><td>char02</td><td>应用开发者·外圈</td><td><strong>让模型做什么</strong></td><td>Agent 编排：工具 / 记忆 / 持久化 / 服务化</td></tr>
+  <tr><td><strong>char03</strong></td><td><strong>平台/服务开发者</strong></td><td><strong>模型本身怎么变成可靠服务</strong></td><td>部署、定制、并发、协议、治理——MaaS 最小完整拼图</td></tr>
+</table>
+<p>char01/char02 假设"模型已经在那里，去调就行"；char03 把这个假设拆开：<strong>模型从哪来（01/02）？怎么按需定制（03）？怎么扛住流量（04/07）？对外说什么协议（05/06）？内容安全谁把关（08）？输出可信吗（09）？</strong>——这是从"用模型的人"升级为"运营模型服务的人"的完整技能树。</p>
+
+<!-- ========== 四 ========== -->
+<h2>四、char03 架构总图：一家"迷你模型服务公司"的全部部门</h2>
+<pre>
+                 【用户 / 客户端】
+                        │
+        ┌───────────────▼───────────────┐
+        │   对外协议层（说什么方言）      │
+        │   05: OpenAI /v1/chat/completions 协议兼容 + SSE 流式
+        │   06: Function Calling 工具调用标准结构
+        ├───────────────────────────────┤
+        │   治理层（敢不敢上线）          │
+        │   08: 敏感词双层过滤（Trie）——挡住"不该说"的
+        │   09: 逐 token 置信度（logprobs）——标出"不确定"的
+        ├───────────────────────────────┤
+        │   交付模式层（怎么把话送出去）  │
+        │   07: 批处理（吞吐优先） vs 流式（延迟优先）
+        │   04: 多实例并发调度（串行 3.3 倍加速实测）
+        ├───────────────────────────────┤
+        │   模型供给层（模型从哪来）      │
+        │   01: 远程 API 调用（最小闭环 + 工程参数）
+        │   02: 本地部署 vs 云端调用（两种形态对比）
+        │   03: LoRA 微调（本地 PEFT 原理 + 云端 FineTunes 提交）
+        └───────────────────────────────┘
+                        │
+                 【大模型（qwen-plus 等）】
+</pre>
+<div class="card">
+  <div class="card-title">这张图怎么用</div>
+  <p>9 篇文件不是平铺的列表，而是<strong>一个推理服务从下到上的四个楼层</strong>：先解决"模型从哪来"（供给层），再解决"流量怎么扛、结果怎么送"（交付层），再解决"对客户承诺什么接口、什么质量"（协议层），最后解决"内容安全与可信"（治理层）。逐层向上学，每层都有可运行的代码对应。</p>
+</div>
+
+<!-- ========== 五 ========== -->
+<h2>五、贯穿 9 篇的三条不变式（新人最先要认出来的模式）</h2>
+<ol>
+  <li><strong>统一的钥匙与改写范式</strong>：9 篇原教材全部依赖本地 GPU（transformers + .cuda()）或虚构 API，无法在无 GPU 环境运行。改写范式统一为三步：原代码注释保留（对照学习）→ 环境变量读 DASHSCOPE_API_KEY → 推理调用替换为 dashscope 云端（或兼容模式）。<strong>改写只动"模型怎么调"，从不动业务逻辑与架构</strong>。</li>
+  <li><strong>build_prompt 的消失</strong>：01~09 里凡是手动拼 [用户]：/[助手]： 角色标记的函数，改写后全部变成"messages 直接透传"。原因：<strong>云端 Chat 模型原生理解 role/content 结构</strong>——你调的接口越智能，客户端的格式工程越少。</li>
+  <li><strong>一平台两扇门</strong>：dashscope 原生 SDK（<code class="inline">Generation.call</code>，01/02/03/04 等篇用）简单但能力子集；OpenAI 兼容模式（<code class="inline">compatible-mode/v1/chat/completions</code>，05/06/09 篇用）功能完整（logprobs、工具协议、标准流式）。<strong>遇到原生 SDK 缺能力，第一反应去兼容模式找</strong>。</li>
+</ol>
+
+<!-- ========== 六 ========== -->
+<h2>六、核心概念自测清单（学完应能不看资料回答）</h2>
+<ol>
+  <li>temperature 和 max_tokens 各控制什么？改大改小分别什么效果？（01）</li>
+  <li>本地部署和云端调用在硬件、数据隐私、成本、弹性上各差在哪？（02）</li>
+  <li>LoRA 为什么"训练快、权重小"？本地 LoraConfig 的 r 和云端 hyper_parameters 怎么对应？（03）</li>
+  <li>为什么多线程并发 2 个实例能跑出 3.3 倍加速（超过 2 倍理论值）？串行是"求和"、并发是"取 max"指什么？（04）</li>
+  <li>OpenAI ChatCompletion 协议的请求体和两种响应格式（非流式/流式 SSE）长什么样？[DONE] 是干嘛的？（05/07）</li>
+  <li>真 Function Calling 三件套是什么？为什么说 char02 八篇都是这三件套的包装？（06）</li>
+  <li>批处理和流式各自优化什么？为什么所有聊天产品都是流式？（07）</li>
+  <li>内容审查为什么要两层（生成前+生成后）？Trie 比朴素匹配快在哪？（08）</li>
+  <li>为什么生成概率低意味着幻觉风险大？这个指标的三条局限是什么？（09）</li>
+  <li>dashscope 原生 SDK 和兼容模式各适合什么场景？（05/09）</li>
+</ol>
+
+<!-- ========== 七 ========== -->
+<h2>七、教学简化 vs 生产差距地图（每篇一步）</h2>
+<table>
+  <tr><th>篇</th><th>教学版</th><th>生产版要补的第一课</th></tr>
+  <tr><td>01</td><td>串行批量 + 简单 try/except</td><td>并发批量（见 07）+ 重试/限流</td></tr>
+  <tr><td>02</td><td>云端替代本地（资源受限的务实选择）</td><td>私有数据场景用本地/专有云部署</td></tr>
+  <tr><td>03</td><td>API 提交微调任务（平台权限 403 待开通）</td><td>数据质量与标注、评估集、过拟合判断</td></tr>
+  <tr><td>04</td><td>线程池 + 槽位轮询</td><td>asyncio、负载均衡、自动扩缩容</td></tr>
+  <tr><td>05</td><td>协议兼容但无鉴权/无 usage</td><td>API Key、用量统计、模型路由、错误 JSON 规范</td></tr>
+  <tr><td>06</td><td>单轮 Function Calling</td><td>while True 循环直到无 tool_calls + 会话记忆 + 工具异常隔离</td></tr>
+  <tr><td>07</td><td>线程池批处理（8 worker）</td><td>失败隔离、批大小限制、协程化、断线处理</td></tr>
+  <tr><td>08</td><td>4 个词的 Trie 黑名单</td><td>语义分类模型 + 多模态审核 + 词库热更新 + 审计留痕</td></tr>
+  <tr><td>09</td><td>logprobs 置信度汇总</td><td>RAG 锚定、自洽性检验、裁判模型、引用溯源</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、新人学习路径（建议 6 步，每步带自测标准）</h2>
+<ol>
+  <li><strong>第 1 步：会调模型</strong>（01→02）——能解释四组参数、能说清本地/云端取舍。自测：不看资料写出 01 的最小调用函数。</li>
+  <li><strong>第 2 步：懂定制</strong>（03）——能画出 LoRA 注入原理、说清 r 的意义。自测：讲出"为什么 235B 模型本地跑不动而 LoRA 权重却很小"。</li>
+  <li><strong>第 3 步：能扛流量</strong>（04→07）——理解并发思想与批/流取舍。自测：画出串行 vs 并发时间线，说清"批处理优化机器效率、流式优化人的感受"。</li>
+  <li><strong>第 4 步：通协议</strong>（05→06）——掌握 OpenAI 方言与 Function Calling 三件套。自测：手写 tools JSON Schema；解释为什么"换 base_url 不换代码"。</li>
+  <li><strong>第 5 步：会治理</strong>（08→09）——理解硬边界 + 软预警。自测：说清双层过滤的必要性（用"暴 力带空格"实验举例）。</li>
+  <li><strong>第 6 步：串成体系</strong>——重读本文第四节架构总图，把 9 篇放回四个楼层。自测：向别人复述"迷你模型服务公司"的部门分工。</li>
+</ol>
+<div class="ok">
+  <div class="ok-title">与 char01 / char02 汇总的衔接</div>
+  <p>三章各有一份 index 汇总：<strong>char01（提示词内圈）→ char02（Agent 外圈）→ char03（服务化基础设施）</strong>。char02 的 agent_chat 循环在 char03-06 里找到了协议源头；char03-05 的兼容模式是 char03-09 拿到 logprobs 的前提。三章连读，就是"从调用模型到运营模型服务"的完整课程线。</p>
+</div>
+
+<!-- ========== 九 ========== -->
+<h2>九、每篇讲解文档索引</h2>
+<ul>
+  <li><a href="01_远程调用大模型语义助手.html">01_远程调用大模型语义助手.html</a> — 含 OAI→dashscope 参数映射表、串行转并发方向</li>
+  <li><a href="02_模拟Qwen本地调用.html">02_模拟Qwen本地调用.html</a> — 含本地五步→云端改写映射表、本地 vs 云端选型对比</li>
+  <li><a href="03_模型的LoRA微调控制.html">03_模型的LoRA微调控制.html</a> — 含 LoRA 概念速查、参数映射表、微调闭环图、403 解读</li>
+  <li><a href="04_模拟支持多线程并发的GPU推理系统.html">04_模拟支持多线程并发的GPU推理系统.html</a> — 含串行/并发时间线、五步改写映射、加速比解读</li>
+  <li><a href="05_模拟ChatCompletion接口.html">05_模拟ChatCompletion接口.html</a> — 含协议速查表、假流式 vs 真流式、openai SDK 接入</li>
+  <li><a href="06_支持Qwen模型函数调用标准结构.html">06_支持Qwen模型函数调用标准结构.html</a> — 含假 vs 真函数调用对比、三件套模式、char02 关系表</li>
+  <li><a href="07_并行处理与实时流式接口.html">07_并行处理与实时流式接口.html</a> — 含批/流架构图、选型表、前端打字机练习</li>
+  <li><a href="08_审查敏感词过滤系统.html">08_审查敏感词过滤系统.html</a> — 含双层过滤架构、Trie 图解、output_blocked 实证</li>
+  <li><a href="09_大模型的可信度评估.html">09_大模型的可信度评估.html</a> — 含能力映射表、两组对比实验、指标局限</li>
+</ul>
+
+</div>
+</body>
+</html>

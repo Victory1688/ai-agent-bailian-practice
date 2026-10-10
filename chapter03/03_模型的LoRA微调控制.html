@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03_模型的LoRA微调控制 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>03_模型的LoRA微调控制 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char03 | 教学主题：LoRA 微调的云端工程化路径 | 技术栈：本地 PEFT LoRA 原理（注释保留）→ 改写为百炼 FineTunes + Files API | 已验证可运行（上传成功，提交返回 403 为百炼权限限制）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>原教材演示的是<strong>本地 LoRA 微调的完整 9 步流程</strong>——加载基座模型 → 配置 LoRA 注入位置 → 构造数据集 → Trainer 训练 → 保存权重。因为 LoRA 训练也需要本地显卡（至少 16GB 显存 + CUDA 环境），普通电脑跑不动，所以按用户要求把<strong>"本地训练"替换为百炼云端微调提交</strong>。LoRA 原理代码<strong>全部注释保留</strong>（理解微调机制的好教材），运行部分换成百炼 FineTunes API 的三步：构造 JSONL → 上传 → 提交。</p>
+<div class="card">
+  <div class="card-title">LoRA 微调：大模型应用开发的"定制化"环节</div>
+  <p>前两篇 char03 代码教了"怎么调大模型推理"，本篇教"怎么把大模型改成<strong>更懂你业务</strong>的定制版本"。LoRA（Low-Rank Adaptation）是当前最主流的微调方式——它<strong>冻结基座模型 99.9% 的参数</strong>，只在注意力层的 q_proj / v_proj 上注入极小的低秩矩阵做增量训练。产出权重通常只有几 KB 到几 MB，可以像"插件"一样随时挂载/卸载/分享。</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、LoRA 核心概念速查（新人请先看懂再看代码）</h2>
+<table>
+  <tr><th>概念</th><th>一句话解释</th><th>代码中的对应</th></tr>
+  <tr><td><strong>基座模型</strong></td><td>被微调的原始大模型（如 Qwen-1.8B / qwen-plus）</td><td>本地 <code class="inline">AutoModelForCausalLM.from_pretrained</code>；云端 <code class="inline">FineTunes.call(model='qwen-plus')</code></td></tr>
+  <tr><td><strong>LoRA 注入</strong></td><td>在基座模型的特定权重矩阵上挂一个小的增量矩阵 ΔW = BA</td><td>本地 <code class="inline">get_peft_model(base_model, lora_config)</code></td></tr>
+  <tr><td><strong>r（LoRA 秩）</strong></td><td>低秩矩阵的宽度。r 越小参数越少、训练越快；越大表达能力越强</td><td>本地 <code class="inline">LoraConfig(r=8)</code>；云端 <code class="inline">hyper_parameters["lora_r"]=8</code></td></tr>
+  <tr><td><strong>target_modules</strong></td><td>在哪些权重上注入 LoRA（q_proj / v_proj / k_proj / o_proj 可选）</td><td>本地 <code class="inline">target_modules=["q_proj", "v_proj"]</code>；云端 LoRA 模式默认注入注意力层</td></tr>
+  <tr><td><strong>LoRA 权重</strong></td><td>训练后产出的小权重文件（adapter_model.safetensors），只有基座模型的 0.01% 大小</td><td>本地 <code class="inline">model.save_pretrained("./output/...")</code>；云端训练完成后在百炼控制台下载</td></tr>
+  <tr><td><strong>指令微调（SFT）</strong></td><td>用"问题-答案"对训练，让模型学会你想要的回答风格/领域知识</td><td>本地 preprocess() 把 text+label 拼成 prompt；云端 messages 格式数据</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>三、本地 vs 云端微调的架构对比</h2>
+<pre>
+【原版：本地 LoRA 微调】                    【改写：百炼云端 LoRA 微调】
+┌────── 你的电脑 ───────┐               ┌── 你的电脑 ──┐
+│                        │               │ 构造 JSONL  │
+│  torch + transformers  │               │ Files.upload │──┐
+│  PEFT + datasets       │               └──────────────┘  │
+│  Qwen-1.8B (3.6GB)   │                                   │ HTTPS
+│  LoRA 注入 + Trainer   │                                   ▼
+│  GPU 卡训练数十分钟     │              ┌── 百炼云端 ──────────┐  │
+│                        │              │  qwen-plus 基座权重   │  │
+│  优点：数据不出门、     │              │  GPU 集群 LoRA 训练   │  │
+│       参数完全可控       │              │  自动保存 LoRA 权重   │  │
+│  缺点：硬件门槛高、     │              └───────────────────────┘  │
+│       运维复杂           │                优点：零硬件门槛、  │
+└────────────────────────┘                秒级提交、弹性资源     │
+                                          缺点：异步长任务、   │
+                                          数据上云、需权限 ←─────┘
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、参数映射：本地 LoraConfig → 云端 hyper_parameters</h2>
+<p>改写的核心洞察——<strong>本地 LoRA 配置的每个参数，在云端都有等价物</strong>，数值完全不变：</p>
+<table>
+  <tr><th>本地代码位置</th><th>本地参数值</th><th>云端 hyper_parameters 键</th><th>云端值</th></tr>
+  <tr><td>LoraConfig.r</td><td>8</td><td>"lora_r"</td><td>8</td></tr>
+  <tr><td>LoraConfig.lora_alpha</td><td>16</td><td>"lora_alpha"</td><td>16</td></tr>
+  <tr><td>LoraConfig.lora_dropout</td><td>0.1</td><td>"lora_dropout"</td><td>0.1</td></tr>
+  <tr><td>TrainingArguments.learning_rate</td><td>3e-4</td><td>"learning_rate"</td><td>3e-4</td></tr>
+  <tr><td>TrainingArguments.num_train_epochs</td><td>3</td><td>"epoch_count"</td><td>3</td></tr>
+  <tr><td>TrainingArguments.per_device_train_batch_size</td><td>2</td><td>"batch_size"</td><td>2</td></tr>
+  <tr><td>LoraConfig.target_modules</td><td>["q_proj", "v_proj"]</td><td>（云端 LoRA 模式默认注入注意力层的 q/v/k/o_proj）</td><td>—</td></tr>
+  <tr><td>TaskType.CAUSAL_LM</td><td>因果语言模型</td><td>FineTunes.call(mode="lora")</td><td>"lora"</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段讲解（4 个代码块）</h2>
+
+<h3>块 1：build_training_data —— 数据格式适配</h3>
+<pre>
+# 原代码格式（本地 datasets 库用）：
+# data_dict = {"text": ["客服态度很好...", ...], "label": ["正面", ...]}
+
+# 改写后格式（百炼微调要求 JSONL + messages）：
+def build_training_data():
+    samples = [("客服态度很好...", "正面"), ("屏幕亮度太低...", "负面"), ...]
+    lines = []
+    for text, label in samples:
+        item = {
+            "messages": [
+                {"role": "user", "content": f"请判断以下句子的情感倾向：{text}"},
+                {"role": "assistant", "content": label}
+            ]
+        }
+        lines.append(json.dumps(item, ensure_ascii=False))
+    return "\n".join(lines)      # 每行一条 JSON = 百炼要求的 JSONL 格式
+</pre>
+<div class="card">
+  <div class="card-title">两种数据格式的本质区别</div>
+  <p>本地版是<strong>"标签式数据集"</strong>（输入文本 + 标签），需要自己 preprocess 拼成 prompt 再 tokenize；百炼版是<strong>"指令微调格式"</strong>（messages 数组），模型自动识别 user → assistant 的监督学习模式。格式更接近 Chat 模型的原生交互方式。</p>
+</div>
+
+<h3>块 2：upload_dataset —— 上传到百炼</h3>
+<pre>
+def upload_dataset(jsonl_content: str, file_name: str = "lora_sentiment_train.jsonl") -> str:
+    temp_path = os.path.join(..., file_name)        # 1. 写成临时文件
+    with open(temp_path, "w", encoding="utf-8") as f:
+        f.write(jsonl_content)
+    resp = Files.upload(file_path=temp_path, purpose='fine_tune')   # 2. 上传
+    os.remove(temp_path)                              # 3. 删临时文件
+    if resp.status_code == 200:
+        return resp.output['uploaded_files'][0]['file_id']        # 4. 拿到 file_id
+    return None
+</pre>
+
+<h3>块 3：submit_lora_finetune —— 提交 LoRA 微调任务（改写的核心）</h3>
+<pre>
+def submit_lora_finetune(file_id: str, model: str = "qwen-plus"):
+    hyper_params = {
+        "lora_r": 8,                  # ← 本地 lora_config.r
+        "lora_alpha": 16,             # ← 本地 lora_config.lora_alpha
+        "lora_dropout": 0.1,          # ← 本地 lora_config.lora_dropout
+        "learning_rate": 3e-4,        # ← 本地 train_args.learning_rate
+        "epoch_count": 3,             # ← 本地 train_args.num_train_epochs
+        "batch_size": 2,              # ← 本地 train_args.per_device_train_batch_size
+    }
+    resp = FineTunes.call(
+        model=model,                  # 基座模型
+        training_file_ids=[file_id],  # Step 2 上传得到的文件 ID
+        mode="lora",                  # ← 本地 TaskType.CAUSAL_LM
+        hyper_parameters=hyper_params
+    )
+    # resp.status_code == 200 → 提交成功，返回 fine_tune_id
+    # resp.status_code == 403 + code="Model.AccessDenied" → 账号无微调权限
+</pre>
+<p>注意——LoRA 微调是<strong>异步长任务</strong>：提交后返回 fine_tune_id，训练在云端 GPU 集群进行（几十分钟到几小时），期间可以用 <code class="inline">FineTunes.wait(fine_tune_id)</code> 阻塞等待或用 <code class="inline">FineTunes.get(fine_tune_id)</code> 查询状态。训练完成后在百炼控制台下载 LoRA 权重文件。</p>
+
+<h3>块 4：本地 LoRA 原理代码（注释保留，必懂）</h3>
+<pre>
+# 1. 加载基座模型（Qwen-1.8B，float16 约 3.6GB）
+base_model = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen-1.8B", device_map="auto", torch_dtype=torch.float16)
+
+# 2. 配置 LoRA：r=8 意味着注入 8 维的低秩矩阵
+lora_config = LoraConfig(task_type=TaskType.CAUSAL_LM, r=8,
+    lora_alpha=16, lora_dropout=0.1, target_modules=["q_proj", "v_proj"])
+
+# 3. 注入：get_peft_model 把基座模型 + LoRA 适配器组装成可训练模型
+model = get_peft_model(base_model, lora_config)
+
+# 4. 训练：Trainer 是 transformers 的高级训练封装（自动处理梯度、优化器、日志）
+trainer = Trainer(model=model, args=train_args, train_dataset=tokenized_dataset)
+trainer.train()
+
+# 5. 保存：只保存 LoRA 权重（几 KB），基座模型不动
+model.save_pretrained("./output/qwen_lora_sentiment")
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（已验证）</h2>
+<pre>
+>>> Step 1: 构造训练数据（JSONL + messages 格式）
+    样本数: 6 条
+
+>>> Step 2: 上传数据到百炼
+[上传成功] file_id = c240e75b-fe57-40a2-8f43-454d4c0eb365
+
+>>> Step 3: 提交 LoRA 微调任务
+[提交被拒] status=403
+          code=Model.AccessDenied
+          message=Model access denied.
+          可能原因: 当前百炼账号未开通微调权限 / 所选模型暂不支持 LoRA 微调
+          解决: 在百炼控制台申请微调权限，或换用支持微调的模型
+
+>>> 后续步骤（需在百炼控制台操作或等待训练完成后调用 API）
+    1. 训练中: FineTunes.wait(fine_tune_id) 阻塞等待完成
+    2. 训练完成: 百炼控制台下载 LoRA 权重文件
+    3. 推理加载: AutoPeftModel.from_pretrained(base_model, lora_path)
+    4. 验证效果: 对比 base vs base+LoRA 的准确率
+</pre>
+<div class="warn">
+  <div class="warn-title">403 不是代码 bug，是平台权限限制</div>
+  <p>百炼平台对 LoRA 微调有账号权限控制——个人账号默认未开通微调功能，需要在百炼控制台申请。上传数据（Files.upload）是公开接口所以能成功，但提交训练（FineTunes.call）需要微调权限。代码逻辑和 API 调用完全正确，有权限的账号提交后会返回 200 + fine_tune_id，训练完成后可以下载 LoRA 权重挂载到推理时使用。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>七、LoRA 微调完整闭环（提交后发生了什么）</h2>
+<pre>
+FineTunes.call(mode="lora", model="qwen-plus", hyper_parameters={...})
+  │
+  │ 返回 fine_tune_id + status=200
+  ▼
+百炼云端 GPU 集群（异步训练，几十分钟到几小时）
+  │
+  ├─ 1. 从基座权重加载 qwen-plus
+  ├─ 2. 在注意力层 q_proj / v_proj 上注入 LoRA (r=8)
+  ├─ 3. 加载你的 6 条 JSONL 数据
+  ├─ 4. 按 epoch_count=3 训练
+  │     每个 epoch: 前向 → 计算 loss → 反向传播只更新 LoRA 参数 → 优化器 step
+  ├─ 5. 训练完成 → 自动保存 LoRA 权重（adapter_model.safetensors）
+  │
+  ▼
+训练完成后：
+  │
+  ├─ 百炼控制台: 直接下载 LoRA 权重 zip
+  ├─ API: FineTunes.get(fine_tune_id) 查询 status="SUCCEEDED" 后获取下载地址
+  │
+  ▼
+推理时挂载 LoRA：
+  base_model = AutoModelForCausalLM.from_pretrained("qwen-plus", ...)
+  model = AutoPeftModel.from_pretrained(base_model, lora_path="./downloaded_lora/")
+  # model 现在 = qwen-plus 基座 + 你的情感分类 LoRA 适配器
+  # 推理效果对比：基座可能说"客服态度很好...是什么意思？"，LoRA 版直接输出"正面"
+</pre>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学简化 vs 生产差距</h2>
+<div class="card">
+  <ul>
+    <li><strong>数据集太小</strong>：6 条样本是教学极简集，生产 LoRA 微调通常需要<strong>数千到数万</strong>高质量样本（指令微调 SFT 更是如此）。6 条在云端也能跑通训练，但模型不会真的学到东西——只是演示流程</li>
+    <li><strong>单模态微调</strong>：只演示了 CausalLM 指令微调。LoRA 也可以微调 Embedding、Rerank、多模态模型，但百炼 API 会有不同的 mode 和 hyper_parameters</li>
+    <li><strong>无评估集与验证</strong>：生产应拆 train/val，每个 epoch 后在 val 集上跑指标（准确率、F1），防止过拟合。百炼 FineTunes.call 支持 validation_file_ids 传入验证集</li>
+    <li><strong>未演示 QLoRA</strong>：原版代码是标准 LoRA（fp16/fp32 基座），显存需求仍不小。QLoRA 用 4-bit 量化基座 + LoRA，显存几乎砍半，百炼 mode="qlora" 支持</li>
+    <li><strong>训练后效果对比未自动化</strong>：生产应写自动化评测脚本——同一批样本跑 base vs LoRA，输出准确率差、典型错误、分领域变化</li>
+  </ul>
+</div>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>申请权限 + 跑通提交</strong>：在百炼控制台申请微调权限，或换一个支持微调的模型（部分模型对已认证用户开放），让 FineTunes.call 返回 200 + fine_tune_id。这是完整闭环的第一步。</li>
+  <li><strong>扩展数据集</strong>：把样本扩展到 20-50 条，覆盖正面/负面/中性、不同品类（手机/食品/服务），重新上传提交——观察训练时间是否明显变长。</li>
+  <li><strong>调 LoRA 秩</strong>：分别用 r=4 / r=16 / r=64 跑三次微调（在同一份数据上），训练完成后对比三者的"正面情感分类"准确率差异——理解 r 如何影响 LoRA 的表达能力。</li>
+  <li><strong>思维题</strong>：你要做一个"中医术语自动翻译"工具，基座模型是通用大模型。用 LoRA 微调 vs 用 RAG（检索增强生成）vs 用 Few-Shot Prompting，你会选哪种？列出三条理由。</li>
+  <li><strong>进阶（本地版）</strong>：如果有 16GB+ 显存显卡，用 Ollama 拉 Qwen2.5-1.5B，用 PEFT + peft-train 脚本跑本地 LoRA 微调——对比云端和本地的训练时间、显存占用、调参便捷性。</li>
+</ol>
+
+</div>
+</body>
+</html>

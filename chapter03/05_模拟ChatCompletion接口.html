@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05_模拟ChatCompletion接口 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>05_模拟ChatCompletion接口 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char03 | 教学主题：OpenAI 兼容接口协议（/v1/chat/completions）| 技术栈：FastAPI + Pydantic + SSE 流式 + dashscope 云端调用 | 已验证可运行（非流式 200 + 流式 44 个 SSE 块 + [DONE] 结束标记）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>用 FastAPI 搭一个<strong>和 OpenAI 接口协议完全兼容的对话服务</strong>——任何"会说 OpenAI 方言"的客户端（openai SDK、LangChain、ChatBox 等第三方工具）只要把 <code class="inline">base_url</code> 指向你这个服务，就能无缝使用。这是本篇的核心教学点：<strong>协议即标准</strong>。改写后，本地模型推理（需 GPU）替换为百炼云端调用，FastAPI / Pydantic / OpenAI 响应格式<strong>全部保留</strong>，并把原版的"假流式"升级为<strong>真流式</strong>。</p>
+<div class="card">
+  <div class="card-title">为什么"模拟 ChatCompletion 接口"是重要的工程能力？</div>
+  <ul>
+    <li><strong>客户端零改造</strong>：整个生态都在说 OpenAI 方言——你的服务实现了这个协议，就自动接入了整个生态</li>
+    <li><strong>透明换后端</strong>：客户端不关心你后面是 Qwen、DeepSeek 还是自己训练的模型——协议一样，体验一样</li>
+    <li><strong>企业落地常见形态</strong>：公司内部网关、模型中转站、私有化部署服务的对外接口，都是这个模式</li>
+  </ul>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、OpenAI ChatCompletion 协议速查（本篇的"方言词典"）</h2>
+<table>
+  <tr><th>协议要素</th><th>内容</th><th>代码中的位置</th></tr>
+  <tr><td><strong>端点</strong></td><td><code class="inline">POST /v1/chat/completions</code></td><td>@app.post("/v1/chat/completions")</td></tr>
+  <tr><td><strong>请求体</strong></td><td>model / messages（role+content 数组）/ temperature / max_tokens / stream</td><td>ChatRequest（Pydantic 模型，原样保留）</td></tr>
+  <tr><td><strong>非流式响应</strong></td><td>{"id": "cmpl-xxx", "object": "chat.completion", "choices": [{"message": {...}}]}</td><td>Step 5 的 return 字典</td></tr>
+  <tr><td><strong>流式响应（SSE）</strong></td><td>每块 <code class="inline">data: {"choices":[{"delta": {...}}]}</code>，结束发 <code class="inline">data: [DONE]</code></td><td>stream_response 生成器（改写升级）</td></tr>
+  <tr><td><strong>流式增量语义</strong></td><td>delta 表示<strong>新增内容</strong>，客户端自己拼接完整文本</td><td>dashscope incremental_output=True 对应</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>三、一次请求的完整生命线</h2>
+<pre>
+客户端 POST /v1/chat/completions
+  │  {"model": "qwen-plus", "messages": [...], "stream": false}
+  ▼
+FastAPI 收到请求 → Pydantic 校验（ChatRequest：缺字段/类型错直接 422）
+  │
+  ├─ stream=false（非流式）
+  │    build_messages(req) → dashscope.Generation.call（等整段生成完）
+  │    → 包装成 OpenAI 格式 {"id": "cmpl-local-001", "object": "chat.completion", ...}
+  │    → 一次性返回完整 JSON
+  │
+  └─ stream=true（流式）
+       StreamingResponse(media_type="text/event-stream")
+       → dashscope stream=True + incremental_output=True
+       → 模型每生成一段 → yield "data: {\"delta\": {\"content\": \"新增片段\"}}\n\n"
+       → 客户端边收边拼（打字机效果）
+       → 生成完毕 → yield "data: [DONE]\n\n"
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、逐段讲解（6 个 Step）</h2>
+
+<h3>Step 1：模型加载 → 云端配置（唯一被替换的环节）</h3>
+<pre>
+# 原写法（需 GPU，本地加载 3.6GB 权重常驻显存）：
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen-1.8B", ...)
+model = AutoModelForCausalLM.from_pretrained(...).cuda().eval()
+
+# 改写（云端调用，本地零加载）：
+api_key = os.environ.get('DASHSCOPE_API_KEY')
+dashscope.api_key = api_key
+</pre>
+
+<h3>Step 2：ChatRequest 数据结构（OpenAI 请求协议的代码化，原样保留）</h3>
+<pre>
+class Message(BaseModel):
+    role: str          # "system" / "user" / "assistant"
+    content: str
+
+class ChatRequest(BaseModel):
+    model: str                      # 客户端想用的模型名
+    messages: list[Message]         # 对话历史（含角色）
+    temperature: float = 0.7        # 随机性
+    max_tokens: int = 256           # 回复长度上限
+    stream: bool = False            # 是否流式
+</pre>
+<p>Pydantic 的价值：<strong>请求校验免费获得</strong>——客户端漏传 model、传错类型，FastAPI 自动返回 422 错误，不用手写校验代码。</p>
+
+<h3>Step 3：build_prompt 的消失（本篇最有意思的教学点）</h3>
+<pre>
+# 原写法：本地基座模型不认识 messages 数组，必须手动拼成带角色标记的大字符串
+def build_prompt(messages):
+    history = []
+    for msg in messages:
+        if role == "system":  history.append(f"[系统提示]：{content}")
+        elif role == "user":  history.append(f"[用户]：{content}")
+        ...
+    return "\n".join(history) + "\n[助手]："    # 用"[助手]："标记让模型接着说
+
+# 改写：dashscope 原生支持 messages 数组，直接透传
+def build_messages(req):
+    return [{"role": m.role, "content": m.content} for m in req.messages]
+</pre>
+<div class="card">
+  <div class="card-title">为什么这一步"消失"了？</div>
+  <p>原代码手动拼接角色标记，是因为<strong>裸的基座模型</strong>（base model）只是个"文字接龙机器"，不理解对话结构。而云端 Chat 模型（qwen-plus）是<strong>指令对齐过的对话模型</strong>，服务端天然理解 role/content 结构。<strong>你调的接口越智能，需要在客户端做的格式工程就越少</strong>——这正是 Chat Completion 协议比 Completion 协议先进的地方。</p>
+</div>
+
+<h3>Step 4：假流式 → 真流式（本篇第二个重点升级）</h3>
+<pre>
+# 原写法："假流式"——等整段生成完，再切成 10 字符一片，sleep 模拟打字机
+def stream_response(prompt, max_tokens, temperature):
+    ...model.generate(...)                      # 先整段生成（客户端干等）
+    for i in range(0, len(response), 10):
+        yield json.dumps({"choices": [{"delta": {"content": response[i:i+10]}}]}) + "\n"
+        time.sleep(0.05)                        # 人为放慢，装成在生成
+
+# 改写："真流式"——模型每生成一段就实时推送
+def stream_response(messages, max_tokens, temperature):
+    responses = dashscope.Generation.call(
+        model='qwen-plus', messages=messages,
+        stream=True, incremental_output=True)   # 增量流式
+    for response in responses:
+        chunk = response.output.choices[0].message.content or ""
+        if chunk:
+            yield f"data: {json.dumps({'choices': [{'delta': {'content': chunk}}]}, ensure_ascii=False)}\n\n"
+    yield "data: [DONE]\n\n"                    # OpenAI 协议结束标记
+</pre>
+<div class="warn">
+  <div class="warn-title">假流式 vs 真流式的本质区别</div>
+  <p>假流式的<strong>首字延迟 = 整段生成时间</strong>（长回答用户要干等十几秒才看到第一个字）；真流式的首字延迟 = 第一个 token 的生成时间（通常 1 秒内）。原代码还漏了 <code class="inline">data: </code> 前缀和 <code class="inline">[DONE]</code> 标记——标准 OpenAI 客户端会解析失败。改写版补齐了这两处，做到真正协议兼容。</p>
+</div>
+
+<h3>Step 5：主接口（一个端点两种模式）</h3>
+<pre>
+@app.post("/v1/chat/completions")
+async def chat_completion(req: ChatRequest):
+    messages = build_messages(req)
+    if req.stream:
+        return StreamingResponse(stream_response(...), media_type="text/event-stream")
+    else:
+        response = dashscope.Generation.call(...)
+        result = response.output.choices[0].message.content
+        return {"id": "cmpl-local-001", "object": "chat.completion",
+                "choices": [{"message": {"role": "assistant", "content": result}}]}
+</pre>
+<p>注意返回结构刻意保持 <code class="inline">id / object / choices</code> 的 OpenAI 格式——即使换了云端后端，<strong>对客户端暴露的协议纹丝不动</strong>。这就是"模拟 ChatCompletion 接口"的意义。</p>
+
+<h3>Step 6：启动服务的 bug 修复</h3>
+<pre>
+# 原写法：uvicorn.run("filename:app", ...) —— filename 是教材占位符，
+#         直接运行报 ImportError；且中文文件名无法作为 Python 模块导入
+# 改写：直接传 app 对象
+uvicorn.run(app, host="0.0.0.0", port=8080)
+</pre>
+
+<!-- ========== 五 ========== -->
+<h2>五、真实运行输出（已验证，两种模式全通）</h2>
+<pre>
+【测试 1：非流式请求】(stream=false)
+POST http://127.0.0.1:8080/v1/chat/completions
+{
+  "model": "qwen-plus",
+  "messages": [
+    {"role": "system", "content": "你是一名专业助手"},
+    {"role": "user", "content": "请解释一下LoRA技术的基本原理"}
+  ],
+  "temperature": 0.7, "max_tokens": 200, "stream": false
+}
+
+响应状态码: 200
+响应结构 keys: ['id', 'object', 'choices']
+choices[0].message.role: assistant
+content 前80字: LoRA（Low-Rank Adaptation）是一种高效、轻量化的
+               **大语言模型（LLM）微调技术**，由Microsoft Research在2021年提...
+
+【测试 2：流式请求】(stream=true)
+data: {"choices": [{"delta": {"content": "Lo"}}]}
+data: {"choices": [{"delta": {"content": "RA（Low"}}]}
+data: {"choices": [{"delta": {"content": "-R"}}]}
+data: {"choices": [{"delta": {"content": "ank Adapt"}}]}
+data: {"choices": [{"delta": {"content": "ation）是一种高效"}}]}
+...（模型每生成一段就实时推一块，共 44 个数据块）
+data: [DONE]
+共收到 SSE 数据行: 44
+</pre>
+<div class="ok">
+  <div class="ok-title">验证结论</div>
+  <p>非流式返回标准 OpenAI 三层结构；流式逐块到达且内容增量拼接后与整段回答一致（都是同一份 LoRA 解释），44 块 + [DONE] 标记符合协议。<strong>这个服务现在可以直接对接任何 OpenAI SDK 客户端</strong>。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、客户端怎么用你的服务（生态接入演示）</h2>
+<pre>
+# 用 openai SDK 对接你的本地服务（base_url 指向自己）
+from openai import OpenAI
+client = OpenAI(base_url="http://127.0.0.1:8080/v1", api_key="not-needed")
+
+resp = client.chat.completions.create(
+    model="qwen-plus",
+    messages=[{"role": "user", "content": "请解释一下LoRA技术的基本原理"}]
+)
+print(resp.choices[0].message.content)
+
+# 流式版本
+stream = client.chat.completions.create(
+    model="qwen-plus",
+    messages=[{"role": "user", "content": "讲个故事"}],
+    stream=True
+)
+for chunk in stream:
+    print(chunk.choices[0].delta.content or "", end="")
+</pre>
+<p>这段客户端代码<strong>一行都不用改</strong>就能切换到真正的 OpenAI 或任何兼容服务——只需要换 base_url。这就是协议兼容的价值。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、教学简化 vs 生产差距</h2>
+<div class="card">
+  <ul>
+    <li><strong>无鉴权</strong>：OpenAI 用 Bearer Token 鉴权，本服务任何请求都能过。生产要加 API Key 校验中间件</li>
+    <li><strong>无模型路由</strong>：请求体里的 model 字段被忽略了（无论传什么都调 qwen-plus）。生产应做模型名映射与多后端路由</li>
+    <li><strong>无用量统计</strong>：OpenAI 响应带 usage 字段（prompt_tokens / completion_tokens），本服务没返回——计费与限流都依赖它</li>
+    <li><strong>无并发保护</strong>：多请求同时打进来，全靠 dashscope 的 RPM/TPM 限额兜底，生产要加信号量/队列</li>
+    <li><strong>CORS 未配置</strong>：浏览器前端直调会被跨域拦截（对比 char02-08 加过 CORSMiddleware）</li>
+    <li><strong>异常处理缺失</strong>：dashscope 调用失败会直接 500，生产应捕获后返回 OpenAI 风格的错误 JSON（{"error": {...}}）</li>
+  </ul>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、与 char02-08 的关系（两篇 FastAPI 的分工）</h2>
+<table>
+  <tr><th>对比项</th><th>char02-08（UI 中间 API）</th><th>char03-05（本篇）</th></tr>
+  <tr><td>接口风格</td><td>自定义协议（/chat + {session_id, message}）</td><td><strong>OpenAI 标准协议</strong>（/v1/chat/completions）</td></tr>
+  <tr><td>教学重点</td><td>前后端分离的三段式架构</td><td>协议兼容 + SSE 流式</td></tr>
+  <tr><td>客户端</td><td>自己的前端页面</td><td>整个 OpenAI 生态（SDK/LangChain/第三方工具）</td></tr>
+  <tr><td>Agent 能力</td><td>有（Function Calling 记账工具）</td><td>无（纯对话透传）</td></tr>
+  <tr><td>适用场景</td><td>业务系统内部对接</td><td>对外提供"类 OpenAI"服务</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>OpenAI SDK 对接</strong>：启动服务后，用上面的 openai SDK 客户端代码（pip install openai）连自己的服务，验证"换 base_url 不换代码"。</li>
+  <li><strong>加 usage 字段</strong>：给非流式响应补上 <code class="inline">"usage": {"prompt_tokens": N, "completion_tokens": M}</code>（从 dashscope 响应的 usage 里取），对照 OpenAI 文档核对字段名。</li>
+  <li><strong>加鉴权</strong>：写一个 FastAPI 依赖（Depends），校验请求头 Authorization: Bearer my-secret-key，不匹配返回 401——体验 OpenAI 的鉴权方式。</li>
+  <li><strong>模型路由</strong>：根据 req.model 的值映射不同云端模型（如 "qwen-turbo"/"qwen-max"），实现一个网关接多个模型的转发效果。</li>
+  <li><strong>思维题</strong>：为什么 OpenAI 的流式协议用 delta（增量）而不是每次发全量？如果客户端中途断开连接，服务端的生成器会发生什么（提示：GeneratorExit）？</li>
+</ol>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>09_大模型的可信度评估 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>09_大模型的可信度评估 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char03 | 教学主题：幻觉（Hallucination）与基于生成概率的置信度评估 | 技术栈：原本地 output_scores 逐 token 概率 → 改写为 dashscope OpenAI 兼容模式 logprobs | 已验证可运行（两组对比实验：熟悉领域 avg=0.9365 / 生造问题 avg=0.8763 且 6 个低置信 token 恰在下断言处）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>回答用户问题的<strong>同时</strong>，把模型生成<strong>每一个 token 时的"内心确信程度"也抓出来</strong>：每个位置上模型候选了哪些词、各自概率多少、最终选中的那个词概率多高。原理一句话：<strong>生成概率越低的内容，模型越不确定，幻觉的可能性越大</strong>——就像人说话，滔滔不绝说得溜的部分通常靠谱，支支吾吾、磕磕绊绊的地方往往在瞎编。有了这份逐 token 概率，就能给每条回答算出一个"可信度分数"，交给下游决定：直接展示 / 加"仅供参考"标注 / 人工复核。</p>
+<div class="card">
+  <div class="card-title">为什么"概率"能反映"可信度"？</div>
+  <p>大模型每生成一个 token，本质是在词表上做一次概率分布（softmax）。训练数据里反复出现的事实（"LangChain 是框架"），模型见过成千上万次，分布高度集中——选中的词概率接近 1.0；而它没见过、在硬编的内容，分布扁平分散——选中的词可能只有 0.2~0.4。<strong>概率分布的"尖锐程度"就是模型的自我确信度</strong>。它不完美（有幻觉时模型也可能"自信地错"），但是目前最廉价、最通用的不确定性信号。</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、本地实现 vs 云端实现：逐项能力映射（改写的核心）</h2>
+<table>
+  <tr><th>能力环节</th><th>原写法（本地 GPU）</th><th>改写后（dashscope 兼容模式）</th></tr>
+  <tr><td>拿每步原始分数</td><td><code class="inline">model.generate(output_scores=True)</code> 返回每步 logits</td><td>请求参数 <code class="inline">"logprobs": true</code></td></tr>
+  <tr><td>取前 k 个候选</td><td><code class="inline">torch.topk(probs, k=req.top_k)</code></td><td>请求参数 <code class="inline">"top_logprobs": req.top_k</code>（服务端直接返回 top-k）</td></tr>
+  <tr><td>logits → 概率</td><td><code class="inline">F.softmax(scores[0], dim=-1)</code></td><td>返回的已是 log 概率，<code class="inline">math.exp(logprob)</code> 还原为 0~1 概率</td></tr>
+  <tr><td>候选词解码</td><td><code class="inline">tokenizer.decode([idx.item()])</code></td><td>服务端直接返回 token 文本，无需本地 tokenizer</td></tr>
+  <tr><td>角色拼接</td><td>build_prompt 手动拼 [用户]：/[助手]：</td><td>messages 直接透传（同 05~08）</td></tr>
+</table>
+<div class="warn">
+  <div class="warn-title">本篇最关键的工程知识：为什么要走"兼容模式"？</div>
+  <p>dashscope <strong>原生 SDK</strong>（<code class="inline">dashscope.Generation.call</code>，char02~03 前面所有篇用的那扇门）<strong>不返回 logprobs</strong>——你拿不到逐 token 概率，本篇的需求就实现不了。而 dashscope 的 <strong>OpenAI 兼容模式</strong>（<code class="inline">https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions</code>）支持 <code class="inline">logprobs</code> / <code class="inline">top_logprobs</code> 参数。<strong>同一个平台的两扇门：原生 SDK 简单易用但能力子集，兼容模式功能完整且说行业通用方言</strong>——这再次验证了 char03-05 的教学点：OpenAI 协议是行业协议，高级能力（logprobs、工具调用、流式）都定义在这套协议里。以后遇到"原生 SDK 缺某个能力"时，第一反应就该是：去兼容模式找找。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、一次请求的数据流转</h2>
+<pre>
+客户端 POST /v1/chat/with_confidence
+  {"messages": [{"role": "user", "content": "请解释一下LangChain的核心组件"}], "max_tokens": 32, "top_k": 5}
+  │
+  ▼
+兼容模式请求（requests.post + Authorization 头）
+  json: {model: "qwen-plus", messages: [...],
+         logprobs: true,          ← 每个生成 token 的对数概率
+         top_logprobs: 5}         ← 每步附 top-5 候选（= 原 torch.topk(k=5)）
+  │
+  ▼
+云端返回 choice["logprobs"]["content"]：
+  [{"token": "Lang", "logprob": -0.0001, "top_logprobs": [{"token": "Lang", "logprob": -0.0001}, ...]}, ...]
+  │
+  ▼
+本地加工（改写代码的核心循环）：
+  for i, item in enumerate(token_logprobs):
+      chosen_prob = math.exp(item["logprob"])        # 对数概率 → 概率
+      top_tokens/top_probs = 遍历 item["top_logprobs"] 逐个 exp
+      → 组装成与教材相同结构的 token_confidence
+  │
+  ▼
+本地汇总（改写新增）：
+  avg_token_prob = 平均选中概率        ← 全程平均置信度
+  low_confidence_ratio = 概率<0.5 的 token 占比  ← "踩薄冰"的占比
+  │
+  ▼
+返回 {"response", "token_confidence", "confidence_summary"}
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、真实运行输出（两组对比实验，数据会说话）</h2>
+<h3>实验 1：模型熟悉的领域（LangChain 问题）</h3>
+<pre>
+response 前80字: LangChain 是一个用于构建基于大语言模型（LLM）应用的开源框架，其核心设计理念是**将 LLM 作为"推理引擎...
+
+token_confidence 前 4 步：
+{"step": 0, "chosen_token": "Lang",   "chosen_prob": 1.0,    "top_tokens": ["Lang", ".Lang", " Lang", "LANG", "_lang"]}
+{"step": 1, "chosen_token": "Chain",  "chosen_prob": 1.0,    "top_tokens": ["Chain", "chain", "Ch", "Graph", " Chain"]}
+{"step": 2, "chosen_token": " 是",    "chosen_prob": 0.9999, "top_tokens": [" 是", "（", " 的", "是一个", " "]}
+{"step": 3, "chosen_token": "一个",   "chosen_prob": 1.0,    "top_tokens": ["一个", "一款", "一套", "面向", "一個"]}
+
+confidence_summary: {"avg_token_prob": 0.9365, "low_confidence_ratio": 0.0}
+</pre>
+<h3>实验 2：生造的问题（诱导幻觉场景）</h3>
+<pre>
+问："请详细介绍赵铁柱在1998年发表的《量子编译原理》论文的核心结论"
+response 前100字: 目前没有任何权威、可查证的学术记录表明存在一位名为"赵铁柱"的学者于1998年发表过题为
+                 《量子编译原理》的论文。经核查以下权威来源：🔹 Web of Science、Scopus、IEEE...
+
+confidence_summary: {"avg_token_prob": 0.8763, "low_confidence_ratio": 0.0938}
+
+低置信度 token（chosen_prob &lt; 0.5）共 6 个，最典型的 4 个：
+  {"step": 2, "chosen_token": "权威", "chosen_prob": 0.2927}
+  {"step": 3, "chosen_token": "、",   "chosen_prob": 0.3115}
+  {"step": 4, "chosen_token": "可",   "chosen_prob": 0.4768}
+  {"step": 5, "chosen_token": "查",   "chosen_prob": 0.32}
+</pre>
+<div class="ok">
+  <div class="ok-title">对比结论（本篇最有价值的教学数据）</div>
+  <ul>
+    <li><strong>实验 1</strong>：前 4 步概率全在 0.9999 以上——模型对"LangChain 是……"这种常识级开场毫无犹豫，avg 0.9365，低置信占比 0</li>
+    <li><strong>实验 2</strong>：整体 avg 降到 0.8763，出现 6 个低置信 token——<strong>而且位置极其讲究：全落在"权威、可、查"这些下断言的词上</strong>。模型在说"没有任何权威可查证记录"时，每一个字都在"踩薄冰"——它自己也不确定这个否定断言是否成立。概率分布把模型的"心虚"暴露得一览无余</li>
+    <li><strong>一个诚实的观察</strong>：这次 qwen-plus 选择拒绝编造（回答"没有记录"）而不是硬编一篇论文——对齐良好的模型面对生造问题常会拒答。但低置信信号依然准确亮起：<strong>这个指标无论模型选择"拒答"还是"硬编"，都能标出它不确定的位置</strong>——拒答时告诉你"它在这几处没底"，硬编时告诉你"这段话别信"</li>
+  </ul>
+</div>
+
+<!-- ========== 五 ========== -->
+<h2>五、token_confidence 怎么读（输出字段速查）</h2>
+<table>
+  <tr><th>字段</th><th>含义</th><th>解读要点</th></tr>
+  <tr><td><code class="inline">step</code></td><td>第几个生成的 token（从 0 计）</td><td>定位"心虚"发生在回答的哪个位置</td></tr>
+  <tr><td><code class="inline">chosen_token</code></td><td>模型实际选中的词</td><td>对照 top_tokens 看竞争是否激烈</td></tr>
+  <tr><td><code class="inline">chosen_prob</code></td><td>选中词的概率（0~1）</td><td><strong>&lt; 0.5 就值得警惕</strong>；数字、专有名词、日期等"事实性 token"低概率最危险</td></tr>
+  <tr><td><code class="inline">top_tokens / top_probs</code></td><td>该位置的 top-k 候选与概率</td><td>候选差距悬殊（1.0 vs 0.0）= 稳；几家平分秋色 = 模型在猜</td></tr>
+  <tr><td><code class="inline">avg_token_prob</code></td><td>全程平均选中概率</td><td>整体可信度分数；不同任务基线不同，需自己积累阈值经验</td></tr>
+  <tr><td><code class="inline">low_confidence_ratio</code></td><td>概率&lt;0.5 的 token 占比</td><td>占比越高，幻觉风险越大；可设阈值触发"仅供参考"标注</td></tr>
+</table>
+
+<!-- ========== 六 ========== -->
+<h2>六、教学简化 vs 生产差距（重要：低概率 ≠ 一定是幻觉）</h2>
+<div class="warn">
+  <div class="warn-title">三个必须知道的局限</div>
+  <ul>
+    <li><strong>概率反映的是"模型的语言习惯"，不是"事实真伪"</strong>：模型可能自信地编造（训练数据里谣言重复太多，它也说得溜），也可能在正确答案上犹豫（表达方式多样时分布天然分散）。低概率是"风险提示"，不是"错误判决"</li>
+    <li><strong>温度参数影响分布形状</strong>：temperature 越高分布越平，同样的回答置信度会系统性偏低。生产中做置信度对比必须在固定 temperature 下进行（本服务未显式传 temperature，用的是服务端默认值）</li>
+    <li><strong>token 粒度 ≠ 语义粒度</strong>：中文一个词常被拆成多个 token，单个 token 低概率未必对应一个完整的"可疑断言"。生产要做聚合：把低置信 token 聚簇映射回短语/句子级再判断</li>
+  </ul>
+</div>
+<div class="card">
+  <div class="card-title">生产级的幻觉检测是多种手段的组合</div>
+  <ul>
+    <li><strong>本篇的 logprobs</strong>：零成本的第一道信号（每次请求顺手就能算）</li>
+    <li><strong>RAG 事实锚定</strong>：让回答基于检索到的资料生成，从源头减少"凭记忆发挥"（char01/char02 之外最重要的配套技术）</li>
+    <li><strong>自洽性检验（Self-Consistency）</strong>：同一问题问 3~5 次，答案一致才可信——用采样多样性交叉验证</li>
+    <li><strong>裁判模型（LLM-as-Judge）</strong>：用另一个模型对着参考资料审查回答的事实性</li>
+    <li><strong>引用溯源</strong>：要求回答标注出处，无出处的断言降权展示</li>
+  </ul>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>七、在 char03 系列中的位置</h2>
+<table>
+  <tr><th>篇</th><th>主题</th><th>一句话定位</th></tr>
+  <tr><td>01~03</td><td>调用 / 部署 / 微调</td><td>模型从哪来、怎么调</td></tr>
+  <tr><td>04~05</td><td>并发 / 协议</td><td>服务怎么扛、怎么通</td></tr>
+  <tr><td>06~07</td><td>工具调用 / 批流模式</td><td>能力怎么扩、体验怎么优</td></tr>
+  <tr><td>08 审查过滤</td><td>内容安全（黑白名单）</td><td><strong>挡住"不该说"的</strong></td></tr>
+  <tr><td><strong>09 本篇</strong></td><td><strong>可信度评估</strong></td><td><strong>标出"不确定"的</strong>——安全管合规，可信管质量，合起来才是"敢上线"</td></tr>
+</table>
+<p>08 和 09 是一对搭档：08 是<strong>硬边界</strong>（命中即拦），09 是<strong>软预警</strong>（标注风险供下游决策）。生产系统的内容治理 = 硬边界 + 软预警 + 人工复核三层。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、动手练习</h2>
+<ol>
+  <li><strong>阈值联动实验</strong>：用同一个生造问题连发 5 次（temperature 保持默认），记录每次的 avg_token_prob 和 low_confidence_ratio——观察波动范围，思考阈值该设多少（对比实验 1 的 0.9365 基线）。</li>
+  <li><strong>事实 token 定位</strong>：问一个模型会硬编的问题（如让它介绍一个不存在的 API 函数的参数列表），检查低置信 token 是否集中在<strong>数字、参数名、版本号</strong>等事实性 token 上——验证"事实性 token 低概率最危险"这条经验。</li>
+  <li><strong>温度对照</strong>：给请求加 <code class="inline">"temperature": 0.0</code> 和 <code class="inline">"temperature": 1.2</code> 各测一次同一问题，对比 confidence_summary——直观感受温度对分布形状的影响（第六节局限 2 的实证）。</li>
+  <li><strong>降级策略</strong>：在端点里加一个逻辑——low_confidence_ratio &gt; 0.3 时，在返回里附加 <code class="inline">"warning": "本回答置信度较低，仅供参考"</code>。这就是生产系统"仅供参考"标注的原始形态。</li>
+  <li><strong>思维题</strong>：为什么 top_logprobs 的候选列表能帮你判断"模型是在背事实还是在猜"？如果某个位置 top_tokens 是 ["北京", "上海", "广州"] 且概率接近平均分配，这通常说明什么？（提示：分布的形状 vs 单个词的对错）</li>
+</ol>
+
+</div>
+</body>
+</html>

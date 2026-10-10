@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02_模拟Qwen本地调用 - 代码讲解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>02_模拟Qwen本地调用 - 代码讲解</h1>
+<div class="meta">位置：AI Agent Development Code/aiTest/char03 | 教学主题：本地部署 vs 云端调用两种推理形态 | 技术栈：原 transformers/torch 本地推理 → 改写为 dashscope 云端调用 | 已验证可运行（5 个成语批量云端推理全部成功）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这段代码要做什么</h2>
+<p>原教材演示的是<strong>本地部署大模型的完整五步流程</strong>：装依赖 → 下载模型权重到显卡 → 构造提示词 → 本地执行推理（逐 token 生成）→ 批量测试。因为 Qwen-235B 这种规模的模型<strong>需要数百 GB 显存的专业多卡环境</strong>，普通电脑装不下也跑不动，所以按用户要求把<strong>"模型加载"部分替换为百炼云端调用</strong>——模型权重留在云上，本地只发 HTTP 请求。而提示词构造、推理参数（max_tokens / temperature）、批量测试循环<strong>原样保留</strong>。</p>
+<div class="card">
+  <div class="card-title">本篇真正的教学价值：一次看懂两种推理形态</div>
+  <p>改写后的文件里<strong>同时存在两套代码</strong>（原版注释保留）：一套本地推理（transformers），一套云端推理（dashscope）。两套代码做的是<strong>同一件事</strong>——输入提示词、输出文本——对比它们，就理解了大模型行业"私有化部署"和"API 调用"两条路线的本质区别。</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码的问题与改写思路</h2>
+<div class="warn">
+  <div class="warn-title">问题不是"写错了"，而是"跑不起来"</div>
+  <ul>
+    <li><strong>资源门槛</strong>：Qwen-235B 是 2350 亿参数规模的模型，float16 加载需要约 470GB 显存——没有 8 卡 A100/H100 集群根本无法加载，普通开发机必然 OOM</li>
+    <li><strong>依赖门槛</strong>：torch + transformers + accelerate 全家桶数 GB 下载量；<code class="inline">pip install qwen==1.0.3</code> 这个包在真实环境也并非教材所述形态</li>
+    <li><strong>模型名问题</strong>：HuggingFace 上没有 "Qwen/Qwen-235B" 这个公开仓库（真实 Qwen 系列是 Qwen2.5、Qwen3 等），<code class="inline">from_pretrained</code> 会直接报仓库不存在</li>
+  </ul>
+  <p style="margin-bottom:0"><strong>改写原则</strong>：本地部署代码<strong>全部注释保留</strong>（它是理解推理原理的好教材），运行部分换成百炼云端调用；<code class="inline">build_prompt</code>、参数语义、批量循环原样保留。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、两种推理形态的架构对比（本篇核心图）</h2>
+<pre>
+【原版：本地部署推理】                          【改写：云端 API 调用】
+┌────────── 你的电脑 ──────────┐              ┌──── 你的电脑 ────┐
+│                              │              │  build_prompt()  │
+│  tokenizer     分词器         │              │  run_inference() │──┐
+│  model         数百GB权重     │              └──────────────────┘  │
+│  GPU显存       推理计算       │                                    │ HTTPS
+│  model.generate 逐token生成  │                                    ▼
+│                              │              ┌── 百炼云端 ──────┐  │
+│  优点：数据不出门、无按次费用   │              │  qwen-plus 权重   │  │
+│  缺点：硬件门槛极高、运维复杂   │              │  云端GPU集群推理   │  │
+└──────────────────────────────┘              │  返回生成文本     │  │
+                                              └──────────────────┘  │
+                                                优点：零硬件门槛、  │
+                                                秒级开通、弹性扩容   │
+                                                缺点：数据上云、    │
+                                                按token计费 ←──────┘
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、本地五步 → 云端改写的逐项映射</h2>
+<table>
+  <tr><th>原版步骤（本地部署）</th><th>改写版对应（云端调用）</th><th>变化说明</th></tr>
+  <tr><td>① pip install torch / transformers / accelerate（数 GB 依赖）</td><td>只需已安装的 dashscope 包</td><td>依赖从"深度学习全家桶"缩到"一个 HTTP SDK"</td></tr>
+  <tr><td>② <code class="inline">AutoTokenizer.from_pretrained("Qwen/Qwen-235B")</code> 下载分词器</td><td>不需要——分词在云端完成</td><td>本地不再接触 token 化细节</td></tr>
+  <tr><td>② <code class="inline">AutoModelForCausalLM.from_pretrained(device_map="auto", torch_dtype=float16)</code> 加载权重</td><td><code class="inline">dashscope.api_key = os.environ.get('DASHSCOPE_API_KEY')</code></td><td><strong>"加载模型"变成了"配置钥匙"</strong>——这是两种形态最本质的差异</td></tr>
+  <tr><td>③ build_prompt() 构造提示词</td><td>原样保留，一字未改</td><td>提示词工程与部署形态无关</td></tr>
+  <tr><td>④ <code class="inline">model.generate(**inputs, max_new_tokens=128, do_sample=True, temperature=0.7)</code> 本地逐 token 生成</td><td><code class="inline">dashscope.Generation.call(model='qwen-plus', max_tokens=128, temperature=0.7)</code></td><td>参数<strong>几乎同名同义</strong>：max_new_tokens→max_tokens；do_sample=True 对应云端默认采样模式</td></tr>
+  <tr><td>④ <code class="inline">tokenizer.decode(outputs[0], skip_special_tokens=True)</code> 解码</td><td><code class="inline">response.output.choices[0].message.content</code></td><td>解码也在云端完成，本地直接拿文本</td></tr>
+  <tr><td>⑤ for 循环批量测试 5 个成语</td><td>原样保留，一字未改</td><td>业务逻辑与部署形态无关</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段讲解（3 个代码块）</h2>
+
+<h3>块 1：本地部署部分（注释保留，但要读懂它）</h3>
+<pre>
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen-235B", trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen-235B",
+    device_map="auto",           # accelerate 库的能力：自动把层分配到 GPU/CPU
+    torch_dtype=torch.float16,   # 半精度：显存占用减半（470GB→235GB，仍然巨大）
+    trust_remote_code=True       # 允许执行模型仓库自带的自定义代码
+)
+model.eval()                     # 推理模式：关闭 dropout 等训练专用行为
+
+def run_inference(prompt, max_tokens=128, temperature=0.7):
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)  # 文本→token张量
+    with torch.no_grad():        # 推理不需要梯度，省内存提速
+        outputs = model.generate(**inputs, max_new_tokens=128,
+                                 do_sample=True, temperature=0.7)  # 逐token生成
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)  # token→文本
+</pre>
+<div class="card">
+  <div class="card-title">这段"跑不起来"的代码为什么值得保留</div>
+  <p>它揭示了云 API 帮你<strong>藏掉了什么</strong>：分词、张量设备搬运、无梯度上下文、逐 token 循环生成、解码——这五件事云端服务全包了。理解它们，你才能看懂"大模型推理服务"（vLLM、Ollama 等本地部署工具）到底在做什么；面试里"本地部署和 API 调用的区别"也考这些。</p>
+</div>
+
+<h3>块 2：云端改写版 run_inference（本篇的运行主体）</h3>
+<pre>
+def run_inference(prompt: str, max_tokens: int = 128, temperature: float = 0.7):
+    try:
+        response = dashscope.Generation.call(
+            model='qwen-plus',
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,       # 与原 max_new_tokens 语义一致
+            temperature=temperature,     # 与原 generate 的 temperature 语义一致
+            result_format='message'
+        )
+        return response.output.choices[0].message.content.strip()
+    except Exception as e:
+        return f"调用失败: {str(e)}"    # 永不抛异常，批量任务不因单条失败而中断
+</pre>
+<p>注意函数签名<strong>和原版完全一样</strong>（prompt / max_tokens / temperature 三个参数）——这是改写的刻意设计：<strong>上层业务代码零改动，只换底层实现</strong>。这就是接口抽象的价值。</p>
+
+<h3>块 3：批量测试循环（原样保留）</h3>
+<pre>
+idioms = ["画蛇添足", "纸上谈兵", "掩耳盗铃", "望梅止渴", "指鹿为马"]
+for idiom in idioms:
+    prompt = build_prompt(idiom)
+    result = run_inference(prompt)
+    print(f"\n【{idiom}】\n{result.strip()}\n")
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（已验证）</h2>
+<pre>
+>>> 开始批量推理任务
+
+【画蛇添足】
+"画蛇添足"是一个汉语成语，意为做了多余的事，非但无益，反而坏事；
+或比喻多此一举、弄巧成拙。... （在句子中途截断）
+
+【纸上谈兵】
+"纸上谈兵"...比喻空谈理论，不能解决实际问题... （在句子中途截断）
+
+【掩耳盗铃】 / 【望梅止渴】 / 【指鹿为马】
+（均返回部分内容后在句子中途截断，如"出自《吕氏春秋·自知"）
+</pre>
+<div class="warn">
+  <div class="warn-title">注意输出被"腰斩"了——这正是 max_tokens 在起作用</div>
+  <p>每条解释都在 200 字左右戛然而止（句子说到一半就断了），因为默认参数 <code class="inline">max_tokens=128</code> 限制了回复长度——128 个 token 约合 100-200 个汉字。<strong>这不是 bug，是参数生效的表现</strong>。想看完整解释，把调用改成 <code class="inline">run_inference(prompt, max_tokens=800)</code> 即可。这比讲十遍"max_tokens 是什么"都直观。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>七、什么时候本地部署，什么时候云端调用</h2>
+<table>
+  <tr><th>维度</th><th>本地部署（原版路线）</th><th>云端调用（改写版路线）</th></tr>
+  <tr><td>硬件门槛</td><td>极高：7B 模型约需 16GB 显存，235B 需多卡集群</td><td>零：能上网的电脑即可</td></tr>
+  <tr><td>数据隐私</td><td><strong>数据不出门</strong>——金融/医疗/政务敏感场景的首选</td><td>数据上传第三方平台</td></tr>
+  <tr><td>成本结构</td><td>一次性硬件投入 + 电费 + 运维人力，用得越多越划算</td><td>按 token 计费，零用量零成本，量大后成本线性上涨</td></tr>
+  <tr><td>弹性</td><td>扩容 = 买卡装机，周期以月计</td><td>换模型名即切换，秒级</td></tr>
+  <tr><td>延迟与离线</td><td>内网低延迟，可完全离线</td><td>依赖网络，公网往返几十到几百毫秒</td></tr>
+  <tr><td>典型选择者</td><td>大厂、国企、数据合规要求严的行业</td><td>初创团队、个人开发者、快速验证阶段</td></tr>
+</table>
+<div class="ok">
+  <div class="ok-title">本课程的选择逻辑</div>
+  <p>教学和原型阶段一律走云端（百炼）——把算力难题交给平台，学习焦点放在提示词、Agent 架构和应用逻辑上。等业务真正需要私有化时，你已经在注释里见过完整的本地部署代码形态，迁移时知道要补什么课。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学简化 vs 生产差距</h2>
+<div class="card">
+  <ul>
+    <li><strong>真实本地部署的工具链</strong>：生产级本地推理不用裸 transformers，而用 <code class="inline">vLLM</code>（吞吐量高、支持连续批处理）或 <code class="inline">Ollama / llama.cpp</code>（消费级显卡跑量化小模型）——原版代码是"原理教学版"而非"部署实操版"</li>
+    <li><strong>云端调用缺并发与重试</strong>：5 条串行调用，无 429 限流处理（同 char03-01）</li>
+    <li><strong>模型名与参数写死</strong>：qwen-plus / 128 / 0.7 应进配置；量化版本地部署时参数体系（quantization_bits、gpu_memory_utilization）会更复杂</li>
+    <li><strong>无输出持久化</strong>：结果 print 完即丢，应落 JSON/数据库</li>
+  </ul>
+</div>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>解除截断</strong>：把 max_tokens 改成 800 重跑，对比"画蛇添足"的解释完整度——直观感受 token 上限对输出长度的影响。</li>
+  <li><strong>调温对比</strong>：temperature 分别设 0.1 和 1.3，各跑一次"纸上谈兵"，观察输出风格的稳定性差异。</li>
+  <li><strong>换模型横评</strong>：把 model 依次换成 <code class="inline">'qwen-turbo'</code> / <code class="inline">'qwen-plus'</code> / <code class="inline">'qwen-max'</code>，对比同一成语的解释质量、响应速度，并上百炼控制台对比三者单价。</li>
+  <li><strong>思维题</strong>：假设你要做一个"医院内部病历摘要助手"，会用本地部署还是云端调用？列出三条理由（提示：数据隐私、硬件预算、并发量）。</li>
+  <li><strong>进阶（可选）</strong>：如果本地有 16GB+ 显存的显卡，试着用 <code class="inline">Ollama</code> 拉一个 Qwen2.5-7B 的量化版，用它的本地 API 替换本篇的 dashscope 调用——体会"换后端不换业务代码"。</li>
+</ol>
+
+</div>
+</body>
+</html>
