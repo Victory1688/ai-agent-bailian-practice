@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05_多工具调用顺序管理 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>05_多工具调用顺序管理 - 代码解析</h1>
+<div class="meta">对应文件：char04/05_多工具调用顺序管理.py | 教材出处：第4章【例4-5】多工具调用顺序管理：实现复杂任务流 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>这份代码演示了<strong>多工具协同</strong>：给 Agent 配三个工具——"搜索"、"摘要"、"翻译"——让它完成一个需要多步加工的任务："用中文总结 AI Agent 的基本定义"。理想链路是一条流水线：</p>
+<pre>
+search_web（搜定义）→ summarize_text（做摘要）→ translate_to_zh（翻中文）→ 最终回答
+</pre>
+<p>与前几篇只配一两个工具不同，本篇的问题是：<strong>三个工具按什么顺序调？谁决定顺序？</strong>——这正是本篇标题"多工具调用顺序管理"要回答的。而实测结果给出了比教材预期更深刻的答案（见第六、七节）。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码为什么跑不起来（两类问题）</h2>
+<table>
+  <tr><th>问题</th><th>原写法</th><th>说明</th></tr>
+  <tr><td>1. import 路径断裂</td><td>4 行 import</td><td>同 01-04 篇：@tool 装饰器在 <code class="inline">langchain_core.tools</code>，initialize_agent 进 <code class="inline">langchain_classic.agents</code>，ConversationBufferMemory 进 <code class="inline">langchain_classic.memory</code>；另原代码导入的 <code class="inline">typing.List</code> 从未使用，改写后一并省略</td></tr>
+  <tr><td>2. 模型不可直连</td><td><code class="inline">llm = OpenAI(temperature=0)</code></td><td>改用百炼 ChatTongyi（qwen-plus），temperature=0 语义不变——顺序规划任务要确定性输出</td></tr>
+</table>
+<div class="ok">
+  <div class="ok-title">好消息：本篇没有隐藏 bug</div>
+  <p>三个工具都是"哑工具"（返回固定值，无真实副作用），@tool 装饰器路径修正后即可运行。改写只动 import 与模型，其余一字未改。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程：教材预期链路 vs 实测真实路径</h2>
+<h3>教材预期的理想链路（三步全走）</h3>
+<pre>
+用户："用中文总结AI Agent的基本定义"
+        │
+        ▼
+   ① search_web("AI Agent")
+        │  Observation: AI Agent是一种基于大语言模型的自主任务执行单元…
+        ▼
+   ② summarize_text(搜索结果)
+        │  Observation: 智能体是一种基于大模型的自主系统。
+        ▼
+   ③ translate_to_zh(摘要)
+        │  Observation: 智能体是一种基于大模型的自主系统。
+        ▼
+   Final Answer（中文总结）
+</pre>
+<h3>实测路径 A：自然语言任务（模型抄近路，只走 1 步）</h3>
+<pre>
+① search_web("AI Agent definition") → 拿到中文定义
+Thought: 我已获得AI Agent的基本定义，现在可以进行中文总结。
+Final Answer: AI Agent（人工智能代理）是一种基于大语言模型构建的自主智能体…
+                                              ← ②③ 两步被模型判断为多余，直接自己写了
+</pre>
+<h3>实测路径 B：显式点名工具的任务（走了 2 步，第 3 步仍被理性跳过）</h3>
+<pre>
+① search_web("AI Agent definition") → 搜索结果
+② summarize_text(搜索结果) → 摘要
+Thought: 我已获得摘要结果，接下来需要将其翻译为中文。
+         但注意到摘要本身已是中文，因此直接返回即可。   ← 模型自己发现翻译无意义
+Final Answer: 智能体是一种基于大模型的自主系统。          ← ③ translate_to_zh 被跳过
+</pre>
+<div class="card">
+  <div class="card-title">这组对比是本篇最大的教学财富</div>
+  <p>教材想教的是"三个工具按特定顺序协同"，但 ReAct Agent 的真实语义是：<strong>调用顺序由模型现场规划，而不是开发者写死</strong>——模型有权判断"这一步是否必要"，甚至有权跳过你点名的工具（路径 B 第 3 步）。这不是模型不听话，恰恰是 Agent 与普通程序的本质区别：<strong>模型会为结果负责地省掉冗余步骤</strong>。如果任务必须强制三步顺序（确定性流水线），正确工具不是 Agent，而是本系列 01 篇的 SequentialChain——见第七节的对照闭环。</p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>@tool 装饰器</td><td>新式工具定义：函数 + docstring 直接变工具</td><td>三个工具的定义方式（本篇新知识点，见 5.1）</td></tr>
+  <tr><td>StructuredTool</td><td>@tool 装饰后生成的对象：带参数 schema 的工具</td><td>search_web 等三个函数装饰后的真身，可直接进 tools 列表</td></tr>
+  <tr><td>docstring 即说明书</td><td>@tool 方式下，函数的 docstring 自动成为工具 description</td><td>"根据用户输入执行Web搜索…"——模型选工具的唯一依据</td></tr>
+  <tr><td>哑工具（stub）</td><td>返回固定值的假实现</td><td>summarize_text / translate_to_zh 都是哑工具——教学上隔离外部依赖，让注意力集中在调用顺序</td></tr>
+  <tr><td>temperature=0</td><td>零随机性</td><td>顺序规划要可复现</td></tr>
+  <tr><td>多工具协同</td><td>多个工具按语义依赖接力（A 的输出是 B 的输入）</td><td>搜索 → 摘要 → 翻译的数据流水线</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段代码讲解</h2>
+<h3>5.1 @tool 装饰器（本篇新知识点，与 02-04 篇的 Tool 类对照）</h3>
+<pre>
+@tool
+def search_web(query: str) -> str:
+    """根据用户输入执行Web搜索，并返回摘要结果"""
+    if "AI Agent" in query:
+        return "AI Agent是一种基于大语言模型的自主任务执行单元，具备工具调用与上下文感知能力。"
+    return f"未找到关于：{query} 的相关信息"
+</pre>
+<p>对比 02-04 篇的旧式写法：</p>
+<table>
+  <tr><th>维度</th><td>Tool 类包装（02-04 篇）</td><td>@tool 装饰器（本篇）</td></tr>
+  <tr><td>定义位置</td><td>函数定义完再单独包装</td><td>定义的同时就地变工具</td></tr>
+  <tr><td>说明书来源</td><td>显式传 description 参数</td><td>直接用函数 docstring</td></tr>
+  <tr><td>参数 schema</td><td>无（ReAct 下输入是裸字符串）</td><td>从类型注解自动生成（StructuredTool）</td></tr>
+  <tr><td>本系列归宿</td><td>经典 API，已废弃</td><td>1.x 推荐方式（与 Function Calling 时代的工具定义一脉相承）</td></tr>
+</table>
+<h3>5.2 两个哑工具（原样保留）</h3>
+<pre>
+@tool
+def summarize_text(text: str) -> str:
+    """对给定文本执行摘要处理"""
+    return "智能体是一种基于大模型的自主系统。"      # 不管输入是什么，固定返回
+
+@tool
+def translate_to_zh(text: str) -> str:
+    """将英文摘要翻译成中文"""
+    return "智能体是一种基于大模型的自主系统。"
+</pre>
+<p>教材的刻意设计：<strong>工具实现是假的，调用顺序是真的</strong>——把外部依赖（真搜索/真翻译 API）隔离掉，教学注意力 100% 集中在"模型如何规划多工具"。生产中把函数体换成真实实现即可（呼应 char02-05 的外部 API 工具模式）。</p>
+<h3>5.3 工具集成与 Agent 组装（原样保留）</h3>
+<pre>
+tools = [search_web, summarize_text, translate_to_zh]   # 装饰后直接进列表，无需再包装
+agent = initialize_agent(tools=tools, llm=llm, memory=memory,
+    agent="zero-shot-react-description", verbose=True)
+output = agent.run("用中文总结AI Agent的基本定义")
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（两条路径实测）</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（qwen-plus 真实调用，两种任务提示词各跑一次）</div>
+</div>
+<h3>路径 A：原任务（自然语言）——1 个工具收工</h3>
+<pre>
+&gt; Entering new AgentExecutor chain...
+我需要先搜索关于AI Agent的基本定义，然后进行总结和翻译。
+Action: search_web
+Action Input: AI Agent definition
+Observation: AI Agent是一种基于大语言模型的自主任务执行单元，具备工具调用与上下文感知能力。
+Thought:我已获得AI Agent的基本定义，现在可以进行中文总结。
+Final Answer: AI Agent（人工智能代理）是一种基于大语言模型构建的自主智能体，
+能够理解用户目标、规划执行步骤、调用外部工具（如搜索、计算、API等），
+并根据上下文动态调整行为，从而完成复杂任务。其核心特征包括感知环境、
+推理决策、行动执行与持续学习能力。
+&gt; Finished chain.
+</pre>
+<h3>路径 B：点名工具任务（补充验证）——2 个工具 + 第 3 步理性跳过</h3>
+<pre>
+Action: search_web        →  Observation: AI Agent是一种基于大语言模型的自主任务执行单元…
+Action: summarize_text    →  Observation: 智能体是一种基于大模型的自主系统。
+Thought: 我已获得摘要结果，接下来需要将其翻译为中文。
+         但注意到摘要本身已是中文，因此直接返回即可。    ← 逻辑自洽的跳步决策
+Final Answer: 智能体是一种基于大模型的自主系统。
+</pre>
+<p>注意两个细节：<strong>①</strong> 模型传给 search_web 的参数是"AI Agent definition"（自己构造的查询词，命中工具的 if 条件）；<strong>②</strong> 路径 B 中模型把搜索结果<strong>原样传递</strong>给 summarize_text——ReAct 链路中"上一步 Observation 作为下一步 Action Input"的数据接力，与 01 篇 SequentialChain 的变量接力异曲同工，只是这里由模型在文本里手动搬运。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、核心洞察：char04 的 01 与 05 正好构成"工作流 vs Agent"对照闭环</h2>
+<table>
+  <tr><th>维度</th><td>01 篇 SequentialChain（工作流）</td><td>05 篇多工具 Agent（本篇）</td></tr>
+  <tr><td>调用顺序</td><td><strong>开发者写死</strong>：三段固定接力</td><td><strong>模型现场规划</strong>：可能走满、可能抄近路、可能跳过点名工具</td></tr>
+  <tr><td>确定性</td><td>高——每次运行结构相同</td><td>低——同一问题不同模型/提示词可能走出不同链路</td></tr>
+  <tr><td>数据传递</td><td>output_key 与占位符同名匹配（框架搬运）</td><td>模型在 Thought/Action Input 里手动搬运上一步 Observation</td></tr>
+  <tr><td>适用任务</td><td>流程固定、每步必达的任务（如报告生成流水线）</td><td>路径不确定、需要判断"要不要做"的任务（如开放问答）</td></tr>
+  <tr><td>成本可控性</td><td>调用次数固定</td><td>调用次数由模型决定——实测 1~2 次不等</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">给新人的选型口诀</div>
+  <p><strong>步骤必须全走 → 用链（01 篇）；步骤做不做由模型判断 → 用 Agent（本篇）</strong>。本篇教材标题里的"显式地管理调用顺序"，严格说只有链做得到；Agent 管理的是"工具的可用性"，顺序永远归模型管。理解这条界线，就理解了当前业界"工作流（Workflow）"与"智能体（Agent）"之争的技术本质——04 篇 HTML 首次提出这对概念，本篇用两条实测路径完成了实证闭环。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、生产视角：教学版离上线的差距</h2>
+<ul>
+  <li><strong>哑工具必须换真</strong>：search_web 接真实搜索 API（SerpAPI/Bing/博查），translate 接翻译服务；且真搜索返回的是长文本列表，需要先解析再入链</li>
+  <li><strong>顺序不可控的风险</strong>：业务上"必须三步都走"的场景（如合规要求每步留痕）不该用 Agent——用 01 篇的链，或 create_agent + 强制工具路由中间件</li>
+  <li><strong>中间结果不校验</strong>：模型可能把错误内容传给下游工具——生产在每步之间加结果校验（呼应 char03-09 的置信度评估）</li>
+  <li><strong>无迭代上限</strong>：多工具任务更容易陷入循环——AgentExecutor 应设 max_iterations</li>
+  <li><strong>无多任务并发</strong>：三个工具串行调用总耗时高——独立步骤可并行（呼应 char03-07 的批处理思想）</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>复现两条路径</strong>：先跑原任务（预期 1 个工具），再改用"请严格按以下步骤…"点名三工具的任务（预期 2 个工具）——亲眼对比模型规划的弹性。</li>
+  <li><strong>制造"必须翻译"的场景</strong>：把 search_web 的返回改成英文（"AI Agent is an autonomous task-executing unit based on LLMs..."），再跑点名任务——观察模型这次会不会真的调 translate_to_zh（提示：会，因为这次翻译有了真实意义）。</li>
+  <li><strong>哑工具升级</strong>：把 summarize_text 换成真实现（把 text 截取前 50 字 + 加"摘要："前缀），观察 Observation 变化——体会"工具实现换真，调用骨架不动"。</li>
+  <li><strong>对照实验</strong>：用 01 篇的 SequentialChain 把本篇三个工具串成固定链——同一任务分别用链与 Agent 跑 3 次，对比输出一致性与调用次数，亲手完成"工作流 vs Agent"的选型决策。</li>
+</ol>
+
+</div>
+</body>
+</html>

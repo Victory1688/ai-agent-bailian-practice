@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char04 index_汇总说明</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>char04 index_汇总说明 - LangChain 框架化开发技能总览</h1>
+<div class="meta">覆盖文件：char04/01-07 共 7 个 py 文件 | 全部已改写为 dashscope + LangChain 1.x 并实际运行验证 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、文件清单与验证状态速查表</h2>
+<table>
+  <tr><th>#</th><th>文件</th><th>教材主题</th><th>LangChain 组件</th><th>验证状态</th></tr>
+  <tr><td>01</td><td><a href="01_langchain多段链式处理.html">01_langchain多段链式处理</a></td><td>多段链式处理</td><td>SequentialChain + PromptTemplate</td><td>三段接力（子主题→研究问题→社会价值）全通；<strong>发现教材自带 bug</strong>：run() 多输出键必抛 ValueError</td></tr>
+  <tr><td>02</td><td><a href="02_tools与agent集成调度.html">02_tools与agent集成调度</a></td><td>Tools 与 Agent 集成调度</td><td>initialize_agent + Tool（ReAct）</td><td>汇率换算全通，ReAct 轨迹完整；<strong>发现教材自带 bug</strong>：字符串乘浮点必抛 TypeError</td></tr>
+  <tr><td>03</td><td><a href="03_具备对话以及功能的agent.html">03_具备对话以及功能的agent</a></td><td>Memory 记忆管理</td><td>ConversationBufferMemory</td><td>三轮递进全通；"那广州呢？"靠记忆补全省略主语；第 3 轮模型自主规划查天气并推荐</td></tr>
+  <tr><td>04</td><td><a href="04_tool执行环境与沙箱控制.html">04_tool执行环境与沙箱控制</a></td><td>沙箱 (Sandbox)</td><td>Tool + 受限 eval</td><td>正常计算/恶意拦截双路径通过；<strong>发现平台硬伤</strong>：signal.SIGALRM 是 Unix 专属，Windows 必报错 → 改线程限时；实测出现"双保险"（模型层 + 工具层都拦截）</td></tr>
+  <tr><td>05</td><td><a href="05_多工具调用顺序管理.html">05_多工具调用顺序管理</a></td><td>多工具调用顺序管理</td><td>@tool 装饰器（StructuredTool）</td><td>双路径实测：自然任务 1 个工具收工（模型抄近路）、点名工具 2 步后理性跳过第 3 步</td></tr>
+  <tr><td>06</td><td><a href="06_自定义提示词驱动agent.html">06_自定义提示词驱动agent</a></td><td>自定义提示词驱动智能体</td><td>prefix/suffix 定制</td><td>三轮全通；维基百科超时→模型重试→优雅降级；<strong>发现教材最深的 bug</strong>：custom_prompt 是概念代码，0.x 也跑不通（查源码实证）</td></tr>
+  <tr><td>07</td><td><a href="07_工具链动态规划逻辑.html">07_工具链动态规划逻辑</a></td><td>工具链动态规划逻辑</td><td>Memory + 多工具（CONVERSATIONAL_REACT）</td><td>跨轮记忆接力全通；<strong>发现隐蔽 bug</strong>：memory_key 静默断忆；openlibrary 国内超时且无兜底实测打崩 Agent → 模拟书库 + 输入清洗</td></tr>
+</table>
+<p>目录内无其他 py 文件——7 篇全部为教学主文件，无副本杂物。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、这组代码想表达什么（总定位：框架化）</h2>
+<p>char01~03 的所有 Agent 都是<strong>手写的</strong>——char02 用 200 行 Python 亲手写 agent_chat 循环，char03 亲手搭推理服务。char04 换了一种存在方式：<strong>把之前手写的一切交给 LangChain 组件</strong>。它想表达的核心命题是：</p>
+<div class="card">
+  <div class="card-title">框架化的本质：用声明换控制权</div>
+  <p><strong>手写循环（char02）</strong>：每一行消息流向都看得见，但每写一个新 Agent 都要重写骨架。<strong>框架（char04）</strong>：initialize_agent 一行拼装，但循环进了黑盒——你只控制"给什么工具、什么记忆、什么提示词"，不再控制"循环怎么转"。<br>
+  本系列的教学顺序刻意如此：<strong>先手写（char02）看透原理，再用框架（char04）享受效率</strong>——直接学框架的人永远不知道黑盒里在发生什么，出了问题（如本篇 06/07 的模板与记忆 bug）完全无从下手。</p>
+</div>
+<p>7 篇沿一条递进主线展开：</p>
+<pre>
+01 链（固定流水线） → 02 Agent（模型决策） → 03 +记忆 → 04 +安全沙箱
+                    → 05 多工具（新式定义） → 06 定制灵魂（提示词） → 07 跨轮工具链（收官）
+</pre>
+
+<!-- ========== 三 ========== -->
+<h2>三、"变与不变"：一个骨架、两种工具定义、一个模型适配</h2>
+<h3>3.1 六篇共用的 Agent 骨架（不变项）</h3>
+<pre>
+llm = ChatTongyi(model="qwen-plus", temperature=..., dashscope_api_key=os.environ.get("DASHSCOPE_API_KEY"))
+tools = [...]
+memory = ConversationBufferMemory(...)
+agent = initialize_agent(tools=tools, llm=llm, memory=memory, agent="zero-shot-react-description"/CONVERSATIONAL_REACT, verbose=True)
+agent.run("...")
+</pre>
+<p>02/03/04/05/06/07 六篇只换三样东西：<strong>工具集（变量）</strong>、<strong>agent 类型（02/05 用 zero-shot，03/04/06/07 用 conversational）</strong>、<strong>本篇的新组件（memory/沙箱/自定义 prompt）</strong>。骨架一次学完，后面每篇只增量学一个概念。</p>
+<h3>3.2 工具定义的两代同堂（char04 独有的对照）</h3>
+<table>
+  <tr><th>方式</th><th>篇目</th><th>写法</th><th>现状</th></tr>
+  <tr><td>旧式：Tool 类包装</td><td>02/03/04/07</td><td><code class="inline">Tool(name=..., func=..., description=...)</code></td><td>经典 API，已废弃</td></tr>
+  <tr><td>新式：@tool 装饰器</td><td>05</td><td>函数 + docstring 直接变 StructuredTool</td><td>1.x 推荐，与 Function Calling 一脉相承</td></tr>
+</table>
+<h3>3.3 模型适配层（每篇相同的两行换装）</h3>
+<p>原教材的 <code class="inline">OpenAI/ChatOpenAI</code> → <code class="inline">ChatTongyi(model="qwen-plus")</code> + 环境变量钥匙。<strong>LangChain 的模型抽象（BaseChatModel）在这里兑现价值：换模型不动任何 Agent 代码</strong>——这正是 char03-05"协议即标准"在框架层的体现。</p>
+
+<!-- ========== 四 ========== -->
+<h2>四、教材代码质量谱系（char04 特色：bug 密度最高的一章）</h2>
+<div class="warn">
+  <div class="warn-title">7 篇里 4 篇藏着"即使环境修好也跑不通"的教材自带 bug——这份谱系本身就是最好的教学素材</div>
+</div>
+<table>
+  <tr><th>篇</th><th>bug 类型</th><th>现象</th><th>根源</th><th>教学价值</th></tr>
+  <tr><td>01</td><td>API 误用（硬错误）</td><td>run() 声明 3 个输出键直接抛 ValueError</td><td>run() 只支持单输出键</td><td>链的多输出必须用 invoke()/dict 访问</td></tr>
+  <tr><td>02</td><td>类型错配（硬错误）</td><td>"20" * 7.25 抛 TypeError</td><td>ReAct 协议的输入永远是字符串</td><td>工具入参必须显式类型转换——Function Calling 的 JSON Schema 就是解药</td></tr>
+  <tr><td>06</td><td>概念代码（最深）</td><td>custom_prompt 覆盖不生效/报错</td><td>该 Agent 类型工具清单预格式化，from_llm_and_tools 无 prompt 参数（查源码实证）</td><td>自定义提示词的正确通道是 prefix/suffix</td></tr>
+  <tr><td>07</td><td>静默失败（最隐蔽）</td><td>不报错，但第 2 轮模型"失忆"</td><td>memory_key="history" 与默认模板 {chat_history} 不匹配</td><td>不抛异常的 bug 才是最危险的 bug</td></tr>
+  <tr><td>04</td><td>平台不兼容</td><td>signal.SIGALRM 在 Windows 抛 AttributeError</td><td>Unix 专属信号机制</td><td>跨平台代码不能假设 OS 能力</td></tr>
+  <tr><td>全部</td><td>import 断裂 + 模型不可直连</td><td>ImportError / 认证失败</td><td>LangChain 1.x 拆分 + 网络环境</td><td>共性改写范式的由来</td></tr>
+  <tr><td>03 / 05</td><td>（无隐藏 bug）</td><td>-</td><td>-</td><td>改写后即跑</td></tr>
+</table>
+<p>把这张表读一遍，等于把"AI 应用代码的常见死法"全见过了：<strong>import 断裂、类型错配、概念代码、静默失败、平台差异、无兜底网络调用</strong>——六类死法，每一种都有实测现场（详见各篇讲解 HTML）。</p>
+
+<!-- ========== 五 ========== -->
+<h2>五、char04 与前三章的关系（四章拼图的最后一块）</h2>
+<table>
+  <tr><th>章</th><th>定位</th><th>关键词</th></tr>
+  <tr><td>char01</td><td>内圈：把大模型当函数用</td><td>提示词、任务建模、结构化输出约定</td></tr>
+  <tr><td>char02</td><td>外圈：Agent 系统组成</td><td>手写 agent_chat 循环、工具注册表、记忆、服务化</td></tr>
+  <tr><td>char03</td><td>底座：模型服务化基础设施</td><td>供给/交付/协议/治理、推理优化、安全</td></tr>
+  <tr><td><strong>char04</strong></td><td><strong>框架化：组件拼装</strong></td><td><strong>LangChain 经典 API、SequentialChain、ReAct、Memory、@tool、prefix/suffix</strong></td></tr>
+</table>
+<div class="card">
+  <div class="card-title">char02 ↔ char04 逐篇对应表（本系列最值钱的一张表）</div>
+  <table>
+    <tr><th>char02 手写版</th><th>char04 框架版</th><th>换了什么</th></tr>
+    <tr><td>agent_chat 循环（02-01/02）</td><td>02 initialize_agent + ReAct</td><td>循环进黑盒，工具决策权仍在模型</td></tr>
+    <tr><td>tool_registry + tools 说明书</td><td>02/07 Tool 类 / 05 @tool 装饰器</td><td>注册表由框架的 name_to_tool_map 取代</td></tr>
+    <tr><td>memory 列表显式传递（02-01/02）</td><td>03 ConversationBufferMemory</td><td>记忆读写由框架托管</td></tr>
+    <tr><td>PersistentJSONMemory（02-03）</td><td>（char04 未涉及）</td><td>框架托管只解决便利性，持久化仍要自己来</td></tr>
+    <tr><td>exec_code 警示（02-07）</td><td>04 沙箱三道防线</td><td>警示落地为可运行实现</td></tr>
+    <tr><td>system_message（02 全系列）</td><td>06 prefix/suffix</td><td>提示词入口从裸调用挪进 ReAct 模板</td></tr>
+    <tr><td>02-02 跨轮状态（task_state）</td><td>07 跨轮工具链</td><td>记忆 + 工具在框架里合体</td></tr>
+  </table>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、概念自测清单（学完 7 篇应能回答）</h2>
+<ol>
+  <li>SequentialChain 的变量如何自动在子链之间传递？output_key 与占位符同名匹配的"接线规则"是什么？（01）</li>
+  <li>ReAct 四要素 Thought/Action/Action Input/Observation 各自由谁产生、给谁看？（02）</li>
+  <li>"工作流"与"Agent"的分界线是什么？什么任务该用链、什么任务该用 Agent？（02/04/05）</li>
+  <li>ConversationBufferMemory 的 memory_key 配错会发生什么？为什么这种 bug 比报错更危险？（03/07）</li>
+  <li>Memory 组件解决的是"便利性"还是"持久性"？跨进程恢复记忆该怎么做？（03 vs char02-03）</li>
+  <li>沙箱三道防线（限时/白名单/空 builtins）各挡什么攻击？为什么"模型的拒绝"不能当安全防线？（04）</li>
+  <li>signal.SIGALRM 为什么在 Windows 不可用？线程限时方案 trade-off 是什么？（04）</li>
+  <li>模型会"抄近路"跳过工具（05），也会"加戏"多做步骤（07）——这说明调用顺序的决定权在谁？</li>
+  <li>CONVERSATIONAL_REACT 的提示词由哪四段组装？哪两段可以定制、哪一段动了会炸？（06）</li>
+  <li>@tool 装饰器与 Tool 类包装的差异？docstring 在 @tool 方式下扮演什么角色？（05）</li>
+</ol>
+
+<!-- ========== 七 ========== -->
+<h2>七、教学版 vs 生产版差距地图</h2>
+<table>
+  <tr><th>教学版特征</th><th>生产要求</th><th>涉及篇目</th></tr>
+  <tr><td>initialize_agent / ConversationBufferMemory（已废弃，2.0 移除）</td><td>create_agent + LangGraph checkpointing / Store API</td><td>02-07 全部</td></tr>
+  <tr><td>Buffer 记忆无上限、进程内、无会话隔离</td><td>摘要记忆/滑动窗口 + 持久化 + 按 session_id 隔离</td><td>03/06/07</td></tr>
+  <tr><td>进程内微型沙箱（线程级）</td><td>subprocess / Docker 容器级隔离 + AST 白名单替代 eval</td><td>04</td></tr>
+  <tr><td>外部依赖不可达即演示失败（维基百科/openlibrary 国内超时）</td><td>可达数据源 + timeout + 降级策略</td><td>06/07</td></tr>
+  <tr><td>工具入参靠字符串猜测</td><td>Function Calling JSON Schema（结构化参数）</td><td>02/07（05 的 @tool 已是过渡形态）</td></tr>
+  <tr><td>无输出审计</td><td>输入/输出双层过滤 + 置信度预警</td><td>全部（接 char03-08/09）</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、新人学习路径（6 步，每步带自测标准）</h2>
+<ol>
+  <li><strong>跑通 01</strong>：理解链与变量接力，亲手把 run() 改成 invoke()。自测：能画出三段链的变量流向图。</li>
+  <li><strong>跑通 02</strong>：逐行品读 verbose 里的 ReAct 轨迹。自测：能背诵四要素并说明谁产生谁消费。</li>
+  <li><strong>跑通 03</strong>：改 memory_key 制造"失忆"再修好。自测：能解释 memory_key 与模板变量的匹配机制。</li>
+  <li><strong>跑通 04</strong>：直测 safe_eval 的三条错误路径。自测：能说出沙箱三道防线各挡什么、为什么不够。</li>
+  <li><strong>跑通 05+07（对照学）</strong>：同一任务分别观察"抄近路"与"跨轮接力"。自测：能完成工作流 vs Agent 的选型论证。</li>
+  <li><strong>跑通 06</strong>：改 prefix 换人格。自测：能画出 ReAct 模板四段组装图并指出可定制区。</li>
+</ol>
+
+<!-- ========== 九 ========== -->
+<h2>九、本篇讲解 HTML 索引与配套资源</h2>
+<table>
+  <tr><th>资源</th><th>路径</th></tr>
+  <tr><td>7 篇逐篇讲解</td><td>本目录下 01-07 同名 .html（9 章节固定格式）</td></tr>
+  <tr><td>架构版汇总（Mermaid 关联图）</td><td><a href="arch_汇总说明.md">arch_汇总说明.md</a>（VSCode/Typora/GitHub 可渲染）</td></tr>
+  <tr><td>前三章汇总</td><td>char01 / char02 / char03 目录下的 index_汇总说明.html 与 arch_汇总说明.md</td></tr>
+</table>
+
+</div>
+</body>
+</html>

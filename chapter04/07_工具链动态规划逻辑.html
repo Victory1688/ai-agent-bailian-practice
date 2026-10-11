@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07_工具链动态规划逻辑 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>07_工具链动态规划逻辑 - 代码解析</h1>
+<div class="meta">对应文件：char04/07_工具链动态规划逻辑.py | 教材出处：第4章【例4-7】工具链动态规划逻辑：实现任务的自动分解与执行 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>这份代码演示<strong>工具链的动态规划</strong>：Agent 配两个工具——"搜书"（SearchBooks）和"查详情"（GetBookDetails），两轮对话完成一条任务链：</p>
+<pre>
+第 1 轮："我想查几本关于人工智能的书"     → 调 SearchBooks → 返回书单
+第 2 轮："请介绍第一本书的详细信息"        → 模型靠记忆知道"第一本书"是谁
+                                        → 调 GetBookDetails → 返回详情
+</pre>
+<p>教材导语说得准确：Agent 不再被动执行单一指令，而是<strong>理解任务上下文和目标，动态判断调用的工具类型与顺序</strong>。本篇与 05 篇（多工具顺序）的差别在于：05 篇的接力发生在<strong>单轮内</strong>（模型在一条链里连调几个工具），本篇的接力是<strong>跨轮的</strong>——"第一本书"这个指代物存在于上一轮的记忆里，工具链靠 <strong>Memory + 模型规划</strong> 串起来。这实际上是 char04 系列的"05 篇 + 03 篇记忆"合体。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码为什么跑不起来（四类问题）</h2>
+<table>
+  <tr><th>问题</th><th>原写法</th><th>说明</th></tr>
+  <tr><td>1. import 路径断裂 + 模型不可直连</td><td>4 行 import + ChatOpenAI</td><td>同 01-06 篇的常规处理：langchain_classic + ChatTongyi，temperature=0 保留</td></tr>
+  <tr><td>2. <strong>memory_key 静默断忆（隐蔽 bug）</strong></td><td><code class="inline">ConversationBufferMemory(memory_key="history")</code></td><td>CONVERSATIONAL_REACT 默认模板的历史变量名是 <code class="inline">{chat_history}</code>（06 篇查源码实证）——变量名不匹配时<strong>记忆静默丢失</strong>：代码不报错，但第 2 轮模型根本不知道"第一本书"是谁，教学目标落空。改写修正为 "chat_history"</td></tr>
+  <tr><td>3. <strong>工具无异常兜底（实测打崩 Agent）</strong></td><td>两个工具函数直接 <code class="inline">requests.get(url)</code>，无 try/except</td><td>实测 openlibrary.org 国内连接超时，ConnectTimeout 从 tool.run 一路抛到顶层，<strong>AgentExecutor 直接崩溃退出</strong>——与 06 篇维基百科超时（有兜底、模型优雅降级）形成生死对照</td></tr>
+  <tr><td>4. openlibrary.org 国内不可达</td><td>真实开放书库 API</td><td>真实 API 实现原样注释保留（含 timeout=5 建议），改用本地模拟书库——与 05 篇哑工具同思路：工具实现是假的，工具链动态规划才是本篇灵魂</td></tr>
+</table>
+<div class="warn">
+  <div class="warn-title">同是"超时"，有无兜底，结局天壤之别（char04 两篇的对照实验）</div>
+  <table>
+    <tr><th></th><td>06 篇：维基百科超时</td><td>07 篇原代码：openlibrary 超时</td></tr>
+    <tr><td>工具有无 try/except</td><td>有（返回"查询失败：..."字符串）</td><td>无（异常直接上抛）</td></tr>
+    <tr><td>Agent 结局</td><td>Observation 收到失败信息 → 模型重试 → 优雅降级用通用知识回答</td><td><strong>ConnectTimeout 打崩 AgentExecutor，进程退出，第 2 轮根本没机会跑</strong></td></tr>
+  </table>
+  <p>"工具永不抛异常"不是风格偏好，是 Agent 稳定性的生死线——char02 系列反复强调的纪律，在这里有了反面的实证现场。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程：两级接力的工具链</h2>
+<pre>
+┌─── 第 1 轮："我想查几本关于人工智能的书" ──────────────────────────┐
+│                                                                  │
+│  Thought: Do I need to use a tool? Yes                           │
+│  Action: SearchBooks ──────→ Observation: 1. 人工智能：一种现代方法 by Stuart Russell
+│                                                                  │
+│  （教材预期：本轮到此结束，只返回书单）                              │
+│  （实测加戏：模型自主判断"顺便把详情也查了吧"——动态规划的现场展示）    │
+│  Thought: Do I need to use a tool? Yes                           │
+│  Action: GetBookDetails ───→ Observation: 书名/作者/出版时间        │
+│  AI: 我为您找到了一本经典著作……                                    │
+└──────────────────────────────────────────────────────────────────┘
+                    │ 第 1 轮问答存入 memory（chat_history）
+                    ▼
+┌─── 第 2 轮："请介绍第一本书的详细信息" ────────────────────────────┐
+│                                                                  │
+│  {chat_history} 里躺着第一轮的完整对话                              │
+│  → 模型从记忆中解析出"第一本书"= 《人工智能：一种现代方法》            │
+│                                                                  │
+│  Thought: Do I need to use a tool? Yes                           │
+│  Action: GetBookDetails                                          │
+│  Action Input: 《人工智能：一种现代方法》   ← 带书名号！              │
+│  Observation: 书名/作者/出版时间   ← 模拟工具的清洗逻辑处理了书名号    │
+│  AI: 完整介绍……                                                   │
+└──────────────────────────────────────────────────────────────────┘
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>工具链（Tool Chain）</td><td>多个工具按数据依赖接力（A 的输出是 B 的输入）</td><td>书名（SearchBooks 的输出）成为 GetBookDetails 的输入</td></tr>
+  <tr><td>动态规划（Agent 语境）</td><td>调用什么工具、什么顺序，由模型按上下文现场决定</td><td>第 1 轮模型自主加戏连查详情；第 2 轮自主决定调哪个工具</td></tr>
+  <tr><td>指代消解（Coreference）</td><td>理解"第一本书"这类指代具体指什么</td><td>第 2 轮的关键——完全依赖记忆注入成功</td></tr>
+  <tr><td>memory_key 与模板变量对齐</td><td>记忆注入的名字必须与 prompt 占位符一致</td><td>"history" → "chat_history" 的一字修正，决定本篇成败</td></tr>
+  <tr><td>静默失败（Silent Failure）</td><td>不报错但功能失效的 bug</td><td>变量名不匹配不抛任何异常——比 06 篇的硬错误更难察觉</td></tr>
+  <tr><td>输入清洗（Input Sanitization）</td><td>工具对模型传入参数做规范化处理</td><td>模拟版 GetBookDetails 剥书名号、去" by 作者"后缀</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段代码讲解</h2>
+<h3>5.1 两个工具（改写为本地模拟，返回格式与原版逐字符一致）</h3>
+<pre>
+LOCAL_BOOKS = [
+    {"title": "人工智能：一种现代方法", "author": "Stuart Russell", "year": 2020},
+    {"title": "深度学习", "author": "Ian Goodfellow", "year": 2017},
+    {"title": "生命3.0", "author": "Max Tegmark", "year": 2018},
+]
+
+def search_books(keyword: str) -> str:
+    """调用公开API搜索图书标题（改写版：本地模拟，返回格式与原版一致）"""
+    hits = [b for b in LOCAL_BOOKS if any(k in b["title"] for k in ["人工智能", "AI", "artificial", "智能"])]
+    ...
+    return "\n".join([f"{i+1}. {b['title']} by {b['author']}" for i, b in enumerate(hits[:3])])
+</pre>
+<p>原版 openlibrary 真实 API 全文注释保留。改写版刻意保持 <code class="inline">"1. 书名 by 作者"</code> 的返回格式——这样从模拟切回真实 API 时，模型的下游行为完全不变（模型对格式敏感，格式一变行为就变）。</p>
+<h3>5.2 输入清洗（实测催生的加固）</h3>
+<pre>
+t = title.strip().strip("《》").strip()
+if " by " in t:
+    t = t.split(" by ")[0].strip()
+</pre>
+<p>实测发现模型传入的书名可能带书名号（《…》）或拼上" by Stuart Russell"后缀——真实 API 用 HTTP 参数化查询天然健壮，模拟版必须自己做清洗。这是一个真实工程教训的浓缩：<strong>工具入参永远不要假设格式，模型的输出是"类人文本"不是结构化数据</strong>（对照 char03-06：Function Calling 的 JSON Schema 就是这个问题的结构化解法）。</p>
+<h3>5.3 记忆修复（本篇成败的关键一字）</h3>
+<pre>
+# 原写法：memory_key="history"   → 与默认模板 {chat_history} 不匹配，记忆静默丢失
+memory = ConversationBufferMemory(memory_key="chat_history")
+</pre>
+<h3>5.4 Agent 组装与两轮调用（原样保留）</h3>
+<pre>
+agent = initialize_agent(tools=tools, llm=llm,
+    agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION, memory=memory, verbose=True)
+response_1 = agent.run("我想查几本关于人工智能的书")
+response_2 = agent.run("请介绍第一本书的详细信息")    # "第一本书"不在本轮输入里！
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（两轮完整轨迹）</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（qwen-plus 真实调用，两轮全部跑通，且出现两处超预期的模型行为）</div>
+</div>
+<h3>第 1 轮：模型自主"加戏"——单轮跑完两级工具链</h3>
+<pre>
+Action: SearchBooks
+Action Input: 人工智能
+Observation: 1. 人工智能：一种现代方法 by Stuart Russell
+Thought: Do I need to use a tool? Yes          ← 教材预期本轮已可收尾，模型选择继续
+Action: GetBookDetails
+Action Input: 人工智能：一种现代方法
+Observation: 书名: 人工智能：一种现代方法
+作者: Stuart Russell
+出版时间: 2020
+AI: 我为您找到了一本关于人工智能的经典著作：《人工智能：一种现代方法》……
+</pre>
+<h3>第 2 轮：跨轮记忆接力成功</h3>
+<pre>
+Action: GetBookDetails
+Action Input: 《人工智能：一种现代方法》          ← "第一本书"从记忆里来，且带书名号
+Observation: 书名: 人工智能：一种现代方法          ← 清洗逻辑命中
+作者: Stuart Russell
+出版时间: 2020
+AI: 《人工智能：一种现代方法》（Artificial Intelligence: A Modern Approach，简称AIMA）
+    是人工智能领域最具权威性和影响力的经典教材之一……
+</pre>
+<p>三处值得品读的细节：<strong>①</strong> 第 2 轮输入只有"请介绍第一本书的详细信息"九个字——"第一本书"三个字的全部信息量都来自第 1 轮存入的记忆；<strong>②</strong> 模型复原书名时加了书名号《》——它认为自己在"指代一本书"，这是语言习惯，工具侧必须兜住（5.2 的清洗）；<strong>③</strong> 第 1 轮的"加戏"与 05 篇的"抄近路"恰好互补：模型既会省略多余步骤，也会主动补全信息缺口——动态规划的伸缩性。</p>
+<div class="card">
+  <div class="card-title">首次运行的意外收获：降级轨迹同样精彩（已随清洗加固修复）</div>
+  <p>首次运行时（清洗逻辑未加），第 2 轮模型收到两次"未找到该书籍详情"后，展现了教科书级的容错：先重试 SearchBooks 换取精确书名 → 再试一次 GetBookDetails（把"by Stuart Russell"也拼了进去）→ 仍失败后诚实降级，且<strong>准确诊断了失败原因</strong>（"书名/作者匹配存在细微偏差，例如常见译名差异"）——模型自己分析了 bug 的位置。修复清洗逻辑后，轨迹收敛为上面的干净版本。两个版本都值得教学展示：<strong>工具健壮性决定 Agent 的下限，模型韧性决定 Agent 的上限</strong>。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>七、"动态规划"在本系列的三种实现形态</h2>
+<table>
+  <tr><th>形态</th><th>代表篇目</th><th>规划者</th><th>接力发生的范围</th></tr>
+  <tr><td>固定链</td><td>01 SequentialChain</td><td>开发者（写死）</td><td>单次调用内，顺序确定</td></tr>
+  <tr><td>单轮多工具</td><td>05 多工具顺序管理</td><td>模型（单轮内）</td><td>一条 ReAct 链内连调 N 个工具</td></tr>
+  <tr><td><strong>跨轮工具链（本篇）</strong></td><td>07 工具链动态规划</td><td>模型（跨轮）</td><td>本轮工具的输入 = 上轮记忆中的结果</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">本篇在 char04 中的位置</div>
+  <p>本篇 = 05 篇的工具接力 + 03 篇的对话记忆。至此 char04 的主线清晰成型：<strong>链（01）→ Agent（02）→ 记忆（03）→ 安全（04）→ 多工具（05）→ 定制灵魂（06）→ 跨轮工具链（07）</strong>——每篇往前推一格，最后收敛到"能理解上下文、自主拆解任务"的完整智能体，正好接第 5 章（RAG 与更复杂的系统）。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、生产视角：教学版离上线的差距</h2>
+<ul>
+  <li><strong>数据源</strong>：模拟书库换真实 API 时注意保持返回格式稳定（模型行为对格式敏感）；openlibrary 国内不可达，生产换豆瓣/国家图书馆等可达数据源</li>
+  <li><strong>入参校验</strong>：5.2 的字符串清洗只是补丁——结构化解法是 Function Calling（char03-06 的 JSON Schema 让模型直接输出结构化参数，从根上消除格式猜测）</li>
+  <li><strong>指代消解的边界</strong>：靠全文记忆做消解，对话超过几十轮后关键信息会被稀释（Buffer 无上限问题）——生产用摘要记忆或结构化状态（char02-02 的 task_state 思路）</li>
+  <li><strong>工具永不抛异常</strong>：本篇实测反面教材（超时打崩 Agent）——所有工具必须兜底 + requests 加 timeout</li>
+  <li><strong>initialize_agent 已废弃</strong>：同前几篇，新项目用 create_agent</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>复现"静默断忆"</strong>：把 memory_key 改回教材的 "history" 重跑——观察第 2 轮模型是否反问"您指的是哪本书？"（预期：是）。这是比报错更危险的 bug 形态，亲眼见过才会防。</li>
+  <li><strong>切回真实 API</strong>：在能访问 openlibrary 的网络环境下，取消注释真实实现重跑——对比真实 API 返回（英文书名、真实出版年份）对模型行为的影响。</li>
+  <li><strong>指代升级</strong>：把第 2 轮改成"第 2 本书出版多少年了？"——观察模型是否正确消解"第 2 本书"（《深度学习》，2017）并自主算年份（2026-2017=9）——记忆 + 推理 + 工具的三合一。</li>
+  <li><strong>工具健壮性攻防</strong>：故意给 GetBookDetails 传"不存在的书""半截书名""全角空格书名"，观察清洗逻辑的漏网之鱼，再想想用 Function Calling 的 enum 约束能否从根上解决。</li>
+</ol>
+
+</div>
+</body>
+</html>

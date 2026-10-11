@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01_langchain多段链式处理 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>01_langchain多段链式处理 - 代码解析</h1>
+<div class="meta">对应文件：char04/01_langchain多段链式处理.py | 教材出处：第4章【例4-1】Chains 链式构造器 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>这份代码演示了 LangChain 的<strong>链式构造器（Chains）</strong>：把一个复杂任务——"研究人工智能伦理的社会意义"——拆成三个有序的小步骤，让模型像流水线一样逐步加工：</p>
+<ol>
+  <li><strong>子链一</strong>：给一个主题 → 列出 3 个细分研究方向（子主题）</li>
+  <li><strong>子链二</strong>：拿着子主题 → 为每个方向提出一个有挑战性的研究问题</li>
+  <li><strong>子链三</strong>：拿着研究问题 → 分析它们对社会发展的意义</li>
+</ol>
+<p>三段用 <code class="inline">SequentialChain</code> 串成一条流水线，<strong>上一段的输出自动作为下一段的输入</strong>——这就是"链式处理"的本质：任务拆解 + 结果接力。学完这份代码，你就掌握了"多步骤任务自动化"的最基本骨架。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码为什么跑不起来（三类问题）</h2>
+<table>
+  <tr><th>问题</th><th>原写法</th><th>说明</th></tr>
+  <tr><td>1. import 路径断裂</td><td><code class="inline">from langchain.llms import OpenAI</code> 等 3 行</td><td>LangChain 1.x 拆分了模块路径：PromptTemplate 搬进 <code class="inline">langchain_core.prompts</code>；经典链 LLMChain/SequentialChain 收纳进 <code class="inline">langchain_classic.chains</code>；langchain.llms.OpenAI 类已被移除</td></tr>
+  <tr><td>2. 模型不可直连</td><td><code class="inline">llm = OpenAI(temperature=0.5)</code></td><td>OpenAI 类需要 OPENAI_API_KEY 且国内无法直连官方服务——改用百炼平台的 ChatTongyi（qwen-plus）</td></tr>
+  <tr><td>3. <strong>原代码隐藏 bug</strong></td><td><code class="inline">full_chain.run(topic=...)</code></td><td><code class="inline">run()</code> 只支持"恰好一个输出键"的链，而 SequentialChain 声明了 3 个输出变量——<strong>即使在 0.x 旧版同样会抛 ValueError</strong>。这不是版本迁移问题，是教材代码本身的错误</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">改写策略：两改两不动</div>
+  <ul>
+    <li><strong>改</strong>：import 路径（3 行）+ 模型类（OpenAI → ChatTongyi，temperature=0.5 语义不变）</li>
+    <li><strong>不动</strong>：三条子链的模板文本、变量定义、output_key 命名，以及 SequentialChain 的组装方式——<strong>链式拆解的思想是本篇灵魂，一字不丢</strong></li>
+    <li><strong>修复</strong>：run() → invoke()（bug 修复 + 1.x 标准入口），并把三个输出全部打印出来，让"接力"效果可见</li>
+  </ul>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程</h2>
+<pre>
+用户任务："人工智能伦理"
+        │
+        ▼
+┌─────────────────────────────────────────────────────────┐
+│  子链一 chain1（LLMChain）                                │
+│  模板: "请列出与'{topic}'相关的三个细分研究方向，用逗号分隔。" │
+│  输入: topic ──────────────────► 输出: subtopics（3个方向）│
+└─────────────────────────────────────────────────────────┘
+        │ subtopics
+        ▼
+┌─────────────────────────────────────────────────────────┐
+│  子链二 chain2（LLMChain）                                │
+│  模板: "以下是子主题：{subtopics}，请为每个子主题提出一个     │
+│        具挑战性的研究问题。"                                │
+│  输入: subtopics ──────────────► 输出: questions（3个问题）│
+└─────────────────────────────────────────────────────────┘
+        │ questions
+        ▼
+┌─────────────────────────────────────────────────────────┐
+│  子链三 chain3（LLMChain）                                │
+│  模板: "以下是若干研究问题：{questions}，请简要分析其对于     │
+│        推动社会发展的意义。"                                │
+│  输入: questions ─────────────► 输出: impact（社会价值）   │
+└─────────────────────────────────────────────────────────┘
+        │
+        ▼
+SequentialChain.invoke({"topic": "人工智能伦理"})
+返回 dict: {subtopics, questions, impact}
+</pre>
+<div class="card">
+  <div class="card-title">关键机制：变量接力是怎么自动发生的</div>
+  <p>每条子链声明 <code class="inline">output_key</code>（产物叫什么名），SequentialChain 把每个 output_key 的结果<strong>自动填充到下游链模板的同名占位符</strong>里——chain2 的模板里有 <code class="inline">{subtopics}</code>，chain1 的 output_key 恰好叫 <code class="inline">subtopics</code>。这就是为什么模板文本一个字都没改还能跑通：<strong>接线的规则写在变量名里</strong>。</p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>PromptTemplate</td><td>提示词模板：占位符 + 填充规则</td><td>定义每段任务的"话术"，input_variables 声明需要哪些变量</td></tr>
+  <tr><td>LLMChain</td><td>最小链单元：模板 + 模型 = 一次完整调用</td><td>三条子链的基本积木</td></tr>
+  <tr><td>output_key</td><td>本链输出变量的命名</td><td>给产物起名，供下游链的占位符引用</td></tr>
+  <tr><td>SequentialChain</td><td>顺序组合器：按序执行多条链并自动传递变量</td><td>把三段流水线串起来，声明全局输入/输出</td></tr>
+  <tr><td>input_variables / output_variables</td><td>链的"总入口参数表"和"总交付物清单"</td><td>topic 进，subtopics/questions/impact 出</td></tr>
+  <tr><td>verbose=True</td><td>打印链的执行过程日志</td><td>运行时输出 "Entering/Finished SequentialChain chain"</td></tr>
+  <tr><td>invoke()</td><td>1.x 统一调用入口：传字典、回字典</td><td>替代 run()，多输出键时唯一的正确姿势</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段代码讲解</h2>
+<h3>5.1 模型初始化（改写点）</h3>
+<pre>
+llm = ChatTongyi(
+    model="qwen-plus",
+    temperature=0.5,
+    dashscope_api_key=os.environ.get("DASHSCOPE_API_KEY"),
+)
+</pre>
+<p>原代码 <code class="inline">OpenAI(temperature=0.5)</code> 只保留 temperature=0.5 语义，模型换成百炼 qwen-plus。API Key 从环境变量读取（不硬编码进源码）。ChatTongyi 与 OpenAI 类在 LangChain 中同属"模型接口"，对下游链完全透明——<strong>换模型不动链</strong>，这正是框架分层的价值。</p>
+<h3>5.2 三条子链（原样保留）</h3>
+<pre>
+chain1 = LLMChain(llm=llm, prompt=prompt1, output_key="subtopics")
+chain2 = LLMChain(llm=llm, prompt=prompt2, output_key="questions")
+chain3 = LLMChain(llm=llm, prompt=prompt3, output_key="impact")
+</pre>
+<p>每条链三个要素：<strong>模型（llm）+ 模板（prompt）+ 产物命名（output_key）</strong>。注意三条链共用同一个 llm 实例——链是"调用配方"，模型是"灶台"，多个配方可以共用一个灶。</p>
+<h3>5.3 串成总链（原样保留）</h3>
+<pre>
+full_chain = SequentialChain(
+    chains=[chain1, chain2, chain3],
+    input_variables=["topic"],
+    output_variables=["subtopics", "questions", "impact"],
+    verbose=True
+)
+</pre>
+<p>input_variables 声明"这条流水线从外界要什么"（topic），output_variables 声明"交付什么"（三段产物全部保留，中间产物也可审查——调试流水线时这非常关键）。</p>
+<h3>5.4 执行与打印（bug 修复点）</h3>
+<pre>
+result = full_chain.invoke({"topic": "人工智能伦理"})
+print(result["subtopics"])   # 中间产物一：三个子主题
+print(result["questions"])   # 中间产物二：三个研究问题
+print(result["impact"])      # 最终产物：社会价值分析
+</pre>
+<p><code class="inline">invoke()</code> 传入变量字典、返回变量字典——进出对称。三个键全部打印，让你亲眼看到"上一段产出喂给下一段"的接力证据。</p>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（节选）</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（qwen-plus 真实调用，三段链全部成功）</div>
+</div>
+<pre>
+&gt; Entering new SequentialChain chain...
+&gt; Finished chain.
+== 子主题 subtopics ==
+人工智能偏见与公平性、人工智能可解释性与透明度、人工智能责任归属与法律规制
+
+== 研究问题 questions ==
+1. 人工智能偏见与公平性 —— 如何构建可形式化验证的"时变公平性"框架……
+2. 人工智能可解释性与透明度 —— 是否存在理论极限——忠实解释必然超出人类认知带宽……
+3. 人工智能责任归属与法律规制 —— 如何建立"责任流拓扑模型"，确立动态权重分配的归责机制……
+
+== 社会价值 impact ==
+1. 推动"公平"从伦理宣言走向制度性能力……
+2. 重塑人机关系的信任范式，缓解认知断层危机……
+3. 为智能社会奠基新型责任秩序，避免治理真空与规制僵化……
+</pre>
+<p>（输出有删节，完整内容运行脚本可见。）两个值得注意的现象：<strong>①</strong> verbose 日志证明链按序执行；<strong>②</strong> 子链二的输出明显比子链一长得多——链式结构中<strong>各段的生成量由模板要求决定</strong>，子链三还要在子链二的长输出基础上再加工，这正是 SequentialChain 里"上下文越滚越厚"的直观体现。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、经典链（本篇）vs LCEL 管道（char01-02）对比</h2>
+<p>char04-01 的 SequentialChain 和 char01-02 的 LCEL 管道（<code class="inline">template | llm | parser</code>）做的是同一件事——把多步调用串起来。两种写法对照：</p>
+<table>
+  <tr><th>维度</th><td>经典链 SequentialChain（本篇）</td><td>LCEL 管道（char01-02）</td></tr>
+  <tr><td>写法</td><td>声明式：把链和变量名"登记"给组合器</td><td>管道式：用 | 运算符把组件串起来</td></tr>
+  <tr><td>变量传递</td><td>靠 output_key 与占位符<strong>同名匹配</strong></td><td>靠管道<strong>顺序</strong>（上一步输出 = 下一步输入）</td></tr>
+  <tr><td>多输出保留</td><td>原生支持（output_variables 全留）</td><td>需要用 RunnableParallel 等显式构造</td></tr>
+  <tr><td>状态</td><td>LangChain 0.1.17 起标记废弃，2.0 将移除</td><td>LangChain 1.x 的官方推荐</td></tr>
+  <tr><td>教学价值</td><td>变量接力机制显式可见，适合建立心智模型</td><td>更简洁、可组合任意 Runnable，是生产写法</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">为什么教材用"过时"的 SequentialChain 教学是有道理的</div>
+  <p>SequentialChain 把"变量怎么在链间流动"写成了显式的名字匹配——新人能看清每一滴数据的去向；LCEL 管道简洁但把传递机制藏进了 | 运算符。<strong>先学看得见的（本篇），再学更优雅的（char01-02）</strong>，理解顺序上先本篇后 char01-02 反而更顺。</p>
+</div>
+<div class="ok">
+  <div class="ok-title">char04 在三章体系中的位置</div>
+  <p>char01 教"对模型说什么"（单次调用的提示词建模），char02 教"让模型做什么"（agent_chat 循环 + 工具），char03 教"把模型变成服务"。char04 开始引入<strong>框架</strong>：LangChain 把"提示词、模型、链、记忆、工具、Agent"标准化成组件——本篇是框架篇的第一块砖：用链组织任务流程。后面几篇会看到框架化的记忆、Agent 等组件。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、生产视角：教学版离上线的差距</h2>
+<ul>
+  <li><strong>无错误处理</strong>：三段链中任何一段模型调用失败（网络/限流）整条流水线崩掉——生产要加 try/except + 失败重试 + 断点续跑（记住已完成到哪一段）</li>
+  <li><strong>上下文膨胀无预算</strong>：子链三的输入 = 子链二的完整输出，任务更长时会逼近上下文窗口上限——生产要加中间结果压缩/摘要</li>
+  <li><strong>输出不校验</strong>：子链一要求"逗号分隔三个方向"，模型偶尔不守约则下游模板照样填充——生产要加输出解析校验 + 不合格重试</li>
+  <li><strong>串行无并发</strong>：三段严格串行总耗时 = 三次调用之和；若某几段相互独立（本例不相独立，但很多业务里存在）可用并行结构省时</li>
+  <li><strong>deprecation 警告</strong>：LLMChain / run() 已标记废弃（2.0 移除）——迁移到 LCEL 是生产必答题（见动手练习 4）</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>加一段链</strong>：在 chain3 之后追加 chain4（output_key="roadmap"），模板要求"基于上述意义，给出三个可落地的行动建议"。提示：记得把它加进 chains 列表和 output_variables。</li>
+  <li><strong>观察断线后果</strong>：故意把 chain2 模板里的 <code class="inline">{subtopics}</code> 改成 <code class="inline">{subtopic}</code>（少个 s），运行看报什么错——理解变量名匹配机制为什么"错一个字母就断线"。</li>
+  <li><strong>温度实验</strong>：把 temperature 从 0.5 改成 0 和 1 各跑一次，对比三个子主题的稳定性差异（0 更稳、1 更发散）。</li>
+  <li><strong>LCEL 迁移</strong>：参照 char01-02_提示词驱动的Agent.py 的写法，把三条链改写成 LCEL 管道（提示：中间产物可用 RunnableParallel 保留）。完成后对比两种写法的代码行数与可读性。</li>
+</ol>
+
+</div>
+</body>
+</html>

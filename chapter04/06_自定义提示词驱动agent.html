@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06_自定义提示词驱动agent - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>06_自定义提示词驱动agent - 代码解析</h1>
+<div class="meta">对应文件：char04/06_自定义提示词驱动agent.py | 教材出处：第4章【例4-6】自定义提示词驱动智能体：定制Agent的"灵魂" | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>前几篇的 Agent 都在用框架默认的英文提示词（"Assistant is a large language model trained by OpenAI..."）。本篇要做的是<strong>把提示词换成自己的</strong>——教材把提示词比作 Agent 的"灵魂"：Agent 的行为逻辑完全依赖大模型的推理，而提示词就是引导推理方向的"核心指令集"。具体场景：自定义一个中文 persona（"知识渊博的智能助理"），配两个真实工具（wttr.in 天气 + 维基百科简介），完成三轮对话（介绍上海 → 上海天气 → 北京天气）。<br>
+但本篇也是系列里<strong>教材代码水分最大的一篇</strong>：教材展示的"自定义模板"即使在其原版 0.x 环境下也跑不通（下面二节用框架源码实证）。改写后用框架官方支持的 <code class="inline">prefix/suffix</code> 通道实现了同样的教学意图。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码为什么跑不起来（三类问题）</h2>
+<table>
+  <tr><th>问题</th><th>原写法</th><th>说明</th></tr>
+  <tr><td>1. import 路径断裂 + 模型不可直连</td><td>5 行 import + ChatOpenAI</td><td>同 01-05 篇的常规处理：langchain_classic + ChatTongyi，temperature=0.5 保留</td></tr>
+  <tr><td>2. <strong>教材模板是"概念示意代码"（本篇最深的发现）</strong></td><td><code class="inline">agent_kwargs={"prompt": custom_prompt}</code> + 一个只有 {input}/{history} 的对话模板</td><td><strong>原版 0.x 环境同样跑不通</strong>——查框架源码实证了三件事（见下方卡片）</td></tr>
+  <tr><td>3. memory_key 变量名不匹配</td><td><code class="inline">memory_key="history"</code></td><td>CONVERSATIONAL_REACT 默认模板里的变量名是 <code class="inline">{chat_history}</code> 不是 {history}——记忆注不进 prompt</td></tr>
+</table>
+<div class="warn">
+  <div class="warn-title">查源码实证：教材的"prompt 覆盖"在 CONVERSATIONAL_REACT_DESCRIPTION 上根本不成立</div>
+  <ul>
+    <li><strong>工具清单是"预格式化"的</strong>：读 <code class="inline">agents/conversational/base.py</code> 的 create_prompt 可见，最终模板 = <code class="inline">prefix + "\n\n" + tool_strings + "\n\n" + format_instructions + "\n\n" + suffix</code>——工具清单在构造时就被拼成了死字符串，模板里<strong>不存在 {tools}/{tool_names} 占位符</strong>，所以教材那种"在模板里写工具说明"的做法没有对应的注入通道</li>
+    <li><strong>from_llm_and_tools 没有 prompt 参数</strong>：该 Agent 类型只接受 prefix / suffix / format_instructions / ai_prefix 等部分定制参数——agent_kwargs={"prompt": ...} 传进去要么报错要么被静默丢弃</li>
+    <li><strong>教材模板缺 ReAct 必需变量</strong>：{agent_scratchpad}（回传 Thought/Action/Observation 中间轨迹）是 AgentExecutor 每轮填充的必需占位符，教材模板里没有；即使模板能注入，模型输出的 Thought/Action 格式也无法被 ConvoOutputParser 解析</li>
+  </ul>
+  <p>结论：教材想教的概念（提示词即灵魂）完全正确，但代码是伪代码。改写用框架真实支持的 <code class="inline">prefix/suffix</code> 实现同样意图。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、ReAct 默认提示词的真实组装结构（理解"能改哪里"的前提）</h2>
+<pre>
+┌──────────────────────────────────────────────────────────────────┐
+│                  CONVERSATIONAL_REACT_DESCRIPTION                  │
+│                    最终提示词的四段式组装                            │
+├──────────────────────────────────────────────────────────────────┤
+│ ① prefix（角色设定段）            ← 可定制（本篇改这里）             │
+│    "Assistant is a large language model trained by OpenAI…"       │
+│    ↓                                                              │
+│ ② tool_strings（工具清单）        ← 框架预格式化，不可定制           │
+│    "> GetWeather: 输入城市名称，返回该城市当前天气情况"               │
+│    "> GetCityIntro: 输入城市名称，返回该城市的百科简介"               │
+│    ↓                                                              │
+│ ③ format_instructions（ReAct 协议）← 可定制但慎动（本篇保留默认）     │
+│    "Thought: Do I need to use a tool? Yes                         │
+│     Action: the action to take, should be one of [{tool_names}]   │
+│     Action Input: the input to the action                         │
+│     Observation: the result of the action ...                     │
+│     {ai_prefix}: [your response here]"                            │
+│    ↓                                                              │
+│ ④ suffix（结尾流程段）            ← 可定制（本篇改这里）             │
+│    "Begin! / 历史对话记录如下：{history}                            │
+│     用户的问题如下：{input} / {agent_scratchpad}"                   │
+└──────────────────────────────────────────────────────────────────┘
+</pre>
+<div class="card">
+  <div class="card-title">三层可定制空间（改写后的正确姿势）</div>
+  <ul>
+    <li><strong>① prefix —— 定人格</strong>：你是谁、有什么工具、怎么回答。教材 persona 原文放这里</li>
+    <li><strong>④ suffix —— 定流程</strong>：历史记忆怎么呈现（{history}）、用户输入叫什么（{input}）、中间轨迹在哪（{agent_scratchpad}）。本篇用中文重写并把变量名定为 {history}，与教材 <code class="inline">memory_key="history"</code> 对齐</li>
+    <li><strong>③ format_instructions —— 定协议</strong>：ReAct 输出格式。可以改但必须保持 ConvoOutputParser 能解析的形态（如最终回答的 "AI: " 前缀是解析器协议的一部分）——本篇保留默认英文版不动</li>
+  </ul>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>prefix / suffix</td><td>ReAct 模板的头/尾定制参数（框架官方支持）</td><td>中文 persona 与中文流程段的注入通道</td></tr>
+  <tr><td>{agent_scratchpad}</td><td>ReAct 中间轨迹占位符（Thought/Action/Observation 序列）</td><td>框架每轮自动填充——多步推理的"草稿纸"，教材模板缺失的关键变量</td></tr>
+  <tr><td>{history} vs {chat_history}</td><td>历史对话占位符的名字由你自己定</td><td>必须与 <code class="inline">memory_key</code> 一致，否则记忆静默丢失</td></tr>
+  <tr><td>ConvoOutputParser</td><td>CONVERSATIONAL_REACT 的输出解析器</td><td>从模型输出中抠出 Action/Action Input 或最终回答（认 "AI: " 前缀）</td></tr>
+  <tr><td>ai_prefix</td><td>最终回答的前缀标记（默认 "AI"）</td><td>解析器据此识别"这是最终回答，不是工具调用"</td></tr>
+  <tr><td>预格式化（pre-formatted）</td><td>变量在模板构造时就拼成死字符串</td><td>工具清单的处理方式——这就是"模板里写 {tools} 没用"的原因</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段代码讲解</h2>
+<h3>5.1 两个真实工具（原样保留）</h3>
+<pre>
+def get_weather(city: str) -> str:
+    url = f"https://wttr.in/{city}?format=3"        # 单行格式（char02-05 用的 j1 JSON 格式）
+    response = requests.get(url)
+    return response.text.strip()                     # 形如 "上海: 🌤️  +25°C"
+
+def get_city_intro(city: str) -> str:
+    url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{city}"
+    response = requests.get(url).json()
+    return response.get("extract", "未找到该城市简介")
+</pre>
+<p>两个工具都带 try/except 兜底返回字符串（"工具永不抛异常"纪律）——第 6 节会看到这个兜底在维基百科超时时发挥了关键作用。</p>
+<h3>5.2 自定义提示词（本篇核心，改写点）</h3>
+<pre>
+custom_prefix = """你是一位知识渊博的智能助理，可以调用两种工具：GetWeather用于查询天气，GetCityIntro用于提供城市简介。
+请根据问题内容选择合适的工具进行调用，并用自然语言回答。"""
+
+custom_suffix = """开始！
+
+历史对话记录如下：
+{history}            ← 变量名与 memory_key="history" 对齐（教材原配置）
+
+用户的问题如下：{input}
+{agent_scratchpad}"""  ← 框架回传 ReAct 中间轨迹的必需变量
+
+agent = initialize_agent(..., agent_kwargs={"prefix": custom_prefix, "suffix": custom_suffix})
+</pre>
+<p>对比教材写法的本质差异：<strong>教材想"整个换掉模板"（该 Agent 类型不支持），改写用框架官方的两个切口换掉头和尾</strong>——人格（prefix）和流程（suffix）都是你的，协议（format_instructions）留给框架。这正是生产中自定义 ReAct Agent 的标准姿势。</p>
+<h3>5.3 Agent 组装与三轮对话（原样保留）</h3>
+<pre>
+agent = initialize_agent(tools=tools, llm=llm,
+    agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION,   # 教材指定的对话式 ReAct
+    memory=memory, verbose=True, agent_kwargs={...})
+agent.run("介绍一下上海")
+agent.run("那现在上海的天气如何？")     # 第二轮省略主语"上海"
+agent.run("北京天气怎么样？")
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（三轮完整轨迹）</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（qwen-plus 真实调用，三轮全部跑通）</div>
+</div>
+<h3>第 1 轮：维基百科超时 → 模型重试 → 优雅降级（本篇最精彩的一幕）</h3>
+<pre>
+Thought: Do I need to use a tool? Yes
+Action: GetCityIntro
+Action Input: 上海
+Observation: 查询失败：HTTPSConnectionPool(host='en.wikipedia.org', port=443):
+             Max retries exceeded ... Connection to en.wikipedia.org timed out.
+Thought: Do I need to use a tool? Yes
+Action: GetCityIntro          ← 模型对失败的第一反应：再试一次
+Action Input: 上海
+Observation: 查询失败：…（仍然超时）
+Thought: Do I need to use a tool? No
+AI: 很抱歉，目前无法通过工具获取上海的城市简介（因网络连接问题导致百科查询失败）。
+    不过，我可以基于通用知识为您简要介绍：上海是中国直辖市之一，位于长江入海口，
+    是全国经济、金融、贸易、航运和科技创新中心……外滩、东方明珠、豫园……
+</pre>
+<p>三个教学点浓缩在一轮里：<strong>①</strong> 工具的 try/except 兜底把异常变成字符串回流——Agent 循环不断（对比：如果工具抛异常，整个 Agent 直接崩溃）；<strong>②</strong> 模型面对失败展现韧性——重试一次再放弃；<strong>③</strong> 放弃后不编造"工具结果"，而是诚实说明失败原因并优雅降级到通用知识。<br>维基百科超时本身也是真实环境信号：<code class="inline">en.wikipedia.org</code> 在国内网络不可达，生产中要换国内可达的百科源或加代理配置（动手练习 2）。</p>
+<h3>第 2 轮：省略主语 + 真实天气</h3>
+<pre>
+Thought: Do I need to use a tool? Yes
+Action: GetWeather
+Action Input: 上海
+Observation: 上海: 🌤️  +25°C          ← wttr.in 真实响应（含 emoji 天气图标）
+Thought: AI: 上海当前天气晴朗，气温为25°C。
+</pre>
+<h3>第 3 轮：新城市 + 真实天气</h3>
+<pre>
+Action: GetWeather
+Action Input: 北京
+Observation: 北京: ✨  +26°C
+Thought: AI: 北京当前天气晴好，气温为26°C。
+</pre>
+<p>细节观察：第 2/3 轮模型把收尾写成了 <code class="inline">Thought: AI: ...</code>（一行同时完成 Thought 与最终回答）——ConvoOutputParser 对 "AI: " 前缀的识别让这种"偷懒格式"也能解析成功。这正是第 5.2 节说"format_instructions 别乱动"的原因：解析器与格式指令是配套协议。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、自定义提示词的"能改什么/不能改什么"决策表</h2>
+<table>
+  <tr><th>想定制的内容</th><th>正确通道</th><th>风险</th></tr>
+  <tr><td>人格/角色/语气/中文</td><td><strong>prefix</strong>（随便改）</td><td>几乎无风险——模型最擅长理解角色设定</td></tr>
+  <tr><td>历史/输入的呈现方式</td><td><strong>suffix</strong>（变量名可自定）</td><td>必须保证 {agent_scratchpad} 在场 + 变量名与 memory_key 一致</td></tr>
+  <tr><td>ReAct 输出格式</td><td><strong>format_instructions</strong>（慎动）</td><td>必须与 OutputParser 配套——改了格式不改编析器 = 运行时解析失败</td></tr>
+  <tr><td>工具清单</td><td>不可在模板里定制</td><td>预格式化自动生成——工具的 name/description 写好，清单自动变好</td></tr>
+  <tr><td>整个模板</td><td>仅部分 Agent 类型支持（prompt 参数）</td><td>CONVERSATIONAL_REACT 不支持——教材踩的正是这个坑</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">与本系列的呼应</div>
+  <p>本篇把 char01-06（上下文引导）、char02 全系列（system_message）、char04-02/03（框架默认 ReAct）三条线的"提示词"知识收拢成一层：<strong>system_message 是裸调用的提示词入口，agent 的 prefix/suffix 是 ReAct 循环的提示词入口——本质都是"在模型决策前注入指令"</strong>。差异只在注入的时机与形式。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、生产视角：教学版离上线的差距</h2>
+<ul>
+  <li><strong>外部依赖可达性</strong>：en.wikipedia.org 国内不可达（实测超时）——生产换内网知识库/国内百科 API/配置代理，并给 requests 加 timeout（原代码没设，超时要等很久）</li>
+  <li><strong>initialize_agent/AgentType 已废弃</strong>：2.0 移除；新体系 create_agent 的"自定义提示词"变成 system prompt 参数——概念不变，入口更简单</li>
+  <li><strong>无输出守卫</strong>：persona 说"用自然语言回答"模型就自由发挥了——生产要在 prefix 里加格式约束 + 上游审计（呼应 char03-08 双层过滤）</li>
+  <li><strong>记忆仍是无上限 Buffer</strong>：同 03 篇的问题，长对话会撑爆上下文</li>
+  <li><strong>温度 0.5</strong>：客服场景建议更低（0~0.2）以减少自由发挥</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>改 prefix 观察人格</strong>：把 prefix 换成"你是一位毒舌但专业的IT运维专家，回答不超过两句话"——重跑三轮对比语气与长度变化，体会"换提示词=换灵魂"。</li>
+  <li><strong>修复维基百科超时</strong>：给两个工具的 requests.get 加 <code class="inline">timeout=5</code>，再把 get_city_intro 换成国内可达的数据源（如 <code class="inline">https://zh.wikipedia.org</code> 配代理，或用本地字典模拟），重跑第 1 轮看完整链路。</li>
+  <li><strong>验证变量名匹配的必要性</strong>：把 suffix 里的 {history} 改回 {chat_history} 但保持 memory_key="history"——观察 verbose 日志里模型是否还能"记住"前两轮（预期：记不住，记忆静默丢失）。</li>
+  <li><strong>进阶：换 ZERO_SHOT 试 prompt 覆盖</strong>：查 langchain_classic 的 zero_shot 源码，确认 ZERO_SHOT_REACT_DESCRIPTION 的 from_llm_and_tools 是否接受 prompt 参数（答案：接受）——用教材那个模板在 ZERO_SHOT 上复现报错，亲手验证本篇第二节的分析。</li>
+</ol>
+
+</div>
+</body>
+</html>

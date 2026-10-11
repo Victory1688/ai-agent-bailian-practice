@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02_tools与agent集成调度 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>02_tools与agent集成调度 - 代码解析</h1>
+<div class="meta">对应文件：char04/02_tools与agent集成调度.py | 教材出处：第4章【例4-2】Tools &amp; Agent 集成 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>这份代码演示了 LangChain 的<strong>工具（Tools）与智能体（Agent）集成</strong>：给模型配两个工具——"网页摘要器"和"汇率换算器"——然后让它自主决定用哪个工具完成任务。当你问"20 美元换算成人民币"时，模型会：</p>
+<ol>
+  <li><strong>思考</strong>：换汇率需要用换算工具</li>
+  <li><strong>选工具</strong>：USDToCNYConverter</li>
+  <li><strong>填参数</strong>：Action Input: 20</li>
+  <li><strong>拿到结果</strong>：本地执行返回 145.0 人民币</li>
+  <li><strong>生成最终回答</strong>：20美元 ≈ 145.0人民币</li>
+</ol>
+<p>关键区别在于：上一篇（01）的链式处理是<strong>人把流程写死</strong>（固定三段接力），而本篇的 Agent 是<strong>模型自己决定流程</strong>（它看到问题后自主选择工具）。这就是"链"与"Agent"的本质分界。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、原教材代码为什么跑不起来（三类问题）</h2>
+<table>
+  <tr><th>问题</th><th>原写法</th><th>说明</th></tr>
+  <tr><td>1. import 路径断裂</td><td><code class="inline">from langchain.agents import Tool, initialize_agent</code> 等 3 行</td><td>LangChain 1.x 路径拆分：经典 Agent API 收纳进 <code class="inline">langchain_classic.agents</code>，Tool 在 <code class="inline">langchain_core.tools</code>；langchain.llms.OpenAI 类已移除</td></tr>
+  <tr><td>2. 模型不可直连</td><td><code class="inline">llm = OpenAI(temperature=0.3)</code></td><td>改用百炼 ChatTongyi（qwen-plus），temperature=0.3 语义不变</td></tr>
+  <tr><td>3. <strong>原代码隐藏 bug</strong></td><td><code class="inline">converted = round(amount * rate, 2)</code></td><td>ReAct 型智能体的工具输入是从文本协议（"Action Input: 20.0"）解析出的<strong>字符串</strong>，字符串 × 浮点数必然抛 <code class="inline">TypeError: can't multiply sequence by non-int of type 'float'</code>——<strong>原代码运行必然报错</strong>，不是版本迁移问题</td></tr>
+</table>
+<div class="warn">
+  <div class="warn-title">本篇最有价值的知识点：工具输入永远是字符串（ReAct 时代）</div>
+  <p>ReAct 是<strong>文本协议</strong>：模型输出的 "Action Input: 20.0" 本质是一段文字，框架解析后把字符串直接传给工具函数。Python 的类型注解 <code class="inline">amount: float</code> 只是标注<strong>不会转换</strong>——所以工具函数内部必须自己做 <code class="inline">float(amount)</code>。<br>
+  对比 char02 系列：Function Calling 时代模型输出的是<strong>结构化 JSON</strong>，框架已按 schema 自动解析类型——这就是两种工具调用方案的本质差异（详见第七节对比表）。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程：ReAct 循环</h2>
+<pre>
+用户任务："请帮我把20美元换算成人民币"
+        │
+        ▼
+┌───────────────────── AgentExecutor（ReAct 循环）─────────────────────┐
+│                                                                        │
+│   ┌──────────────────────────────────────────────────┐               │
+│   │ ① Thought（模型思考）：需要使用USDToCNYConverter…  │               │
+│   │ ② Action（选工具）：   USDToCNYConverter           │               │
+│   │ ③ Action Input（填参数）：20                       │               │
+│   └────────────────┬─────────────────────────────────┘               │
+│                    │ 文本协议解析出字符串 "20"                          │
+│                    ▼                                                  │
+│   ┌──────────────────────────────────────────────────┐               │
+│   │ ④ 本地执行：convert_usd_to_cny("20")              │               │
+│   │    float("20") × 7.25 = 145.0                    │               │
+│   └────────────────┬─────────────────────────────────┘               │
+│                    │ Observation 回流给模型                             │
+│                    ▼                                                  │
+│   ┌──────────────────────────────────────────────────┐               │
+│   │ ⑤ Thought：拿到结果 → Final Answer                │               │
+│   └──────────────────────────────────────────────────┘               │
+│                                                                        │
+│   （若任务未完成：Observation 后继续 ①Thought → ②Action…循环）          │
+└────────────────────────────────────────────────────────────────────────┘
+        │
+        ▼
+最终回答："20美元 ≈ 145.0人民币（按汇率7.25）"
+</pre>
+<div class="card">
+  <div class="card-title">ReAct 是什么：让模型"边想边做"的提示词协议</div>
+  <p>ReAct = <strong>Rea</strong>soning（推理）+ <strong>Act</strong>ion（行动）。它不是代码结构，而是<strong>一段写在 system 提示词里的格式约定</strong>——教模型按"Thought / Action / Action Input"的格式输出，框架解析这些文本行来驱动循环。ZERO_SHOT_REACT_DESCRIPTION 的意思：零样本（无需示例）+ 依据工具的 description 来选工具。</p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>Tool</td><td>工具包装器：name + func + description 三要素</td><td>把两个普通函数包装成模型可调用的工具</td></tr>
+  <tr><td>description（工具的）</td><td>给模型看的"工具说明书"</td><td>模型靠它判断"哪个工具适用当前任务"——写不好模型就选错</td></tr>
+  <tr><td>initialize_agent</td><td>经典 Agent 工厂：组装工具 + 模型 + Agent 类型</td><td>拼装出完整的 AgentExecutor（已标记废弃，新项目用 create_agent）</td></tr>
+  <tr><td>AgentType.ZERO_SHOT_REACT_DESCRIPTION</td><td>ReAct 风格智能体</td><td>决定模型按 ReAct 文本协议循环</td></tr>
+  <tr><td>AgentExecutor</td><td>Agent 的运行引擎：解析模型输出 → 执行工具 → 回流观察 → 循环</td><td>"决策权在模型、执行权在本地"的框架实现</td></tr>
+  <tr><td>Thought / Action / Action Input / Observation</td><td>ReAct 文本协议的四个关键字</td><td>verbose=True 时你在日志里看到的执行轨迹</td></tr>
+  <tr><td>verbose=True</td><td>打印 Agent 每一步的思考与行动</td><td>教学必备——不开就只看到最终答案</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段代码讲解</h2>
+<h3>5.1 工具1：网页摘要器（原样保留）</h3>
+<pre>
+def fetch_summary(url: str) -> str:
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            content = resp.text[:1000]
+            return f"网页摘要：{content[:300]}..."  # 仅返回前300字
+        else:
+            return "无法访问网页内容"
+    except Exception as e:
+        return str(e)
+</pre>
+<p>注意它完全符合 char02 沉淀的工具函数纪律：<strong>永不抛异常、错误也以字符串返回</strong>（HTTP 非 200 返回提示、异常返回错误文本）。这个纪律在 ReAct 时代同样成立——Observation 回流给模型，模型看到错误文本才知道"换条路"。</p>
+<h3>5.2 工具2：汇率换算器（bug 修复点）</h3>
+<pre>
+def convert_usd_to_cny(amount) -> str:
+    rate = 7.25
+    converted = round(float(amount) * rate, 2)   # 修复：float() 显式转换
+    return f"{amount}美元 ≈ {converted}人民币（按汇率7.25）"
+</pre>
+<p>原代码直接 <code class="inline">amount * rate</code>——ReAct 解析出的字符串 "20" 乘浮点数直接炸。修复加 <code class="inline">float()</code>。教学点：<strong>ReAct 工具函数的第一行往往是类型转换</strong>。</p>
+<h3>5.3 Tool 包装（原样保留）</h3>
+<pre>
+Tool(
+    name="USDToCNYConverter",
+    func=convert_usd_to_cny,
+    description="将美元金额转换成人民币金额，适用于财务相关查询",
+)
+</pre>
+<p>三要素缺一不可：name 是模型嘴里喊的名字（Action 行），func 是本地真正执行的函数，description 是模型选工具的唯一依据。description 的写法有讲究——"做什么 + 什么时候用"，本例两句话正好覆盖。</p>
+<h3>5.4 组装与执行（原样保留）</h3>
+<pre>
+agent = initialize_agent(
+    tools, llm,
+    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+    verbose=True
+)
+response = agent.run("请帮我把20美元换算成人民币")
+</pre>
+<p>initialize_agent 把"工具箱 + 模型 + 协议类型"拼成 AgentExecutor；agent.run 触发 ReAct 循环直到模型输出 Final Answer。</p>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出（完整 ReAct 轨迹）</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（qwen-plus 真实调用，ReAct 循环完整走通）</div>
+</div>
+<pre>
+&gt; Entering new AgentExecutor chain...
+需要使用USDToCNYConverter工具将20美元换算成人民币。        ← ① Thought（模型在思考）
+Action: USDToCNYConverter                                  ← ② Action（选了汇率工具）
+Action Input: 20                                           ← ③ Action Input（填了参数 20）
+Observation: 20美元 ≈ 145.0人民币（按汇率7.25）            ← ④ 本地执行结果回流
+Thought:Final Answer: 20美元 ≈ 145.0人民币（按汇率7.25）   ← ⑤ 拿到结果后收工
+
+&gt; Finished chain.
+==== 输出结果 ====
+20美元 ≈ 145.0人民币（按汇率7.25）
+</pre>
+<p>这段日志是本篇最大的教学财富：<strong>模型自主完成了"选工具 → 填参数 → 拿观察 → 给答案"的全过程</strong>，而本地代码只负责解析与执行。特别注意第一轮运行时曾抛出 TypeError——正是修复前的原代码 bug 现场：模型行为完全正确，错在工具函数没做类型转换。<strong>Agent 出错不一定是模型笨，更可能是工具实现糙</strong>。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、两代工具调用方案对比：ReAct（本篇）vs Function Calling（char02/char03-06）</h2>
+<table>
+  <tr><th>维度</th><td>ReAct（本篇，经典方案）</td><td>Function Calling（char02 八篇 / char03-06）</td></tr>
+  <tr><td>协议形态</td><td><strong>文本协议</strong>：Thought/Action/Action Input 都是提示词约定的文本行</td><td><strong>结构化协议</strong>：模型原生输出 tool_calls JSON</td></tr>
+  <tr><td>参数类型</td><td>永远是字符串，工具函数内自行转换</td><td>按 JSON Schema 自动解析（数字就是数字）</td></tr>
+  <tr><td>解析可靠性</td><td>靠正则/关键词解析文本，模型格式偶尔跑偏就解析失败</td><td>协议级保证，不依赖模型遵守文本格式</td></tr>
+  <tr><td>适用模型</td><td>任何能对话的模型（包括不支持 FC 的）</td><td>需要模型原生支持 function calling（qwen 系列都支持）</td></tr>
+  <tr><td>Agent 循环实现</td><td>框架内置 AgentExecutor，对新人是黑盒</td><td>char02 手写 while True 循环，每一步可见</td></tr>
+  <tr><td>历史地位</td><td>2022-2023 主流，教学价值高（决策过程可见）</td><td>当前主流，生产首选</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">char04 系列内部的关系：01 是"人写流程"，02 是"模型定流程"</div>
+  <ul>
+    <li><strong>01 链式处理</strong>：步骤顺序是<strong>开发者写死的</strong>（三段接力），适合流程固定的任务（摘要→提问→总结）</li>
+    <li><strong>02 Agent 集成</strong>：用不用工具、用哪个、用几次由<strong>模型现场决策</strong>，适合路径不确定的任务（问汇率就用换算器，问网页就开摘要器）</li>
+    <li>这两者正是"工作流（Workflow）"与"智能体（Agent）"的分野——当前业界讨论 AI 应用架构时的核心概念，char04 用两篇代码就把界线划清了</li>
+  </ul>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、生产视角：教学版离上线的差距</h2>
+<ul>
+  <li><strong>汇率是写死的 7.25</strong>：真实汇率每天浮动——生产应把工具升级为"调用实时汇率 API"（正好复用 char02-05 的外部 API 工具模式）</li>
+  <li><strong>initialize_agent / run() 已废弃</strong>：LangChain 1.x 推荐 create_agent（基于 LangGraph）——本篇的 ReAct 原理仍是理解一切 Agent 的地基，但新项目代码要换 API</li>
+  <li><strong>无最大迭代保护</strong>：模型若陷入"反复调工具不停"的循环会烧钱——AgentExecutor 应设 max_iterations（教学版未设）</li>
+  <li><strong>网页摘要无安全边界</strong>：fetch_summary 会请求任意 URL——生产要加域名白名单、响应大小限制、SSRF 防护</li>
+  <li><strong>ReAct 解析失败风险</strong>：qwen-plus 偶尔不按 Action 格式输出会导致解析失败——生产首选 Function Calling（见第七节）</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>让 ReAct 走两步</strong>：把测试任务改成"请帮我看一下 https://example.com 的网页内容，然后把摘要里出现的第一个数字当作美元金额换算成人民币"——观察 verbose 日志里 ReAct 连续调两个工具的接力过程。</li>
+  <li><strong>体验 description 的威力</strong>：故意把 USDToCNYConverter 的 description 改成"网页内容处理工具"再运行——看模型会不会选错工具，理解"说明书决定选型"。</li>
+  <li><strong>加一个工具</strong>：仿照现有写法增加第三个工具（如温度换算 CelsiustoFahrenheit），用新问题测试模型能否在三个工具中选对。</li>
+  <li><strong>类型转换思考题</strong>：把 fetch_summary 的参数类型改成 <code class="inline">url</code>（字符串）没问题，但如果是"金额列表"这样的复合参数，ReAct 文本协议下该怎么传？（答案：让模型输出 JSON 字符串、函数内 json.loads——这正是 Function Calling 出现前大家的土办法，也解释了 FC 为什么是进步。）</li>
+</ol>
+
+</div>
+</body>
+</html>
