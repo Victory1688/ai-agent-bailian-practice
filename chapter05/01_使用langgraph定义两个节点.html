@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01_使用langgraph定义两个节点 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>01_使用langgraph定义两个节点 - 代码解析</h1>
+<div class="meta">对应文件：char05/01_使用langgraph定义两个节点.py | 教材出处：第5章1节 LangGraph智能体编排与任务流管理——节点（Node）与边（Edge） | 环境实测：langgraph 1.2.11 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>这是 char05 的开篇——<strong>全书代码第一次不调用大模型</strong>。两个节点（search / generate）都是普通 Python 函数（"检索"/"生成"只是字符串拼接），教学目标是把 LangGraph 的<strong>最小图骨架</strong>立起来：节点=函数，边=顺序，状态=流转的字典。跑通后你将看到两个节点接力工作、状态逐步累积的完整画面——这是后面所有"智能体编排"的地基。<br>
+改写点只有一个：教材的 <code class="inline">class State(dict)</code> 在 langgraph 1.x 下<strong>不报错但 invoke 返回 None</strong>（静默失败），改用标准的 TypedDict 后一切正常。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、char05 在全书体系中的位置（为什么需要 LangGraph）</h2>
+<table>
+  <tr><th>章</th><th>组织多步任务的方式</th><th>问题</th></tr>
+  <tr><td>char01</td><td>手写顺序调用</td><td>每一步都要自己拼</td></tr>
+  <tr><td>char02</td><td>手写 agent_chat 循环</td><td>循环结构写死在代码里</td></tr>
+  <tr><td>char04</td><td>LangChain 框架（initialize_agent 黑盒）</td><td>循环进了黑盒，看不见也改不了</td></tr>
+  <tr><td><strong>char05</strong></td><td><strong>LangGraph 显式图</strong></td><td><strong>执行流程变成可编程的图——节点/边/条件全部自己拼，既看得见又改得动</strong></td></tr>
+</table>
+<div class="card">
+  <div class="card-title">一句话理解 LangGraph 与 char04 的关系</div>
+  <p>char04 的 SequentialChain 是"固定流水线"（01 篇），initialize_agent 是"黑盒循环"（02-07 篇）——前者不灵活，后者看不见。LangGraph 把两者的优点合起来：<strong>流程显式成图（看得见），节点里可以写任何逻辑包括模型决策（改得动）</strong>。本篇的两节点图，就相当于"手搓版 SequentialChain"——但它是你亲手拼的，每一根线都由你决定。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、教材代码为什么"跑得通但结果错"（本篇的静默失败）</h2>
+<div class="warn">
+  <div class="warn-title">实测 langgraph 1.2.11：原代码不报错、不崩溃，但 graph.invoke() 返回 None</div>
+  <ul>
+    <li><strong>教材预期</strong>：invoke 返回 <code class="inline">{'query': 'LangGraph', 'retrieved': '检索到与 LangGraph 相关的信息', 'answer': '...'}</code></li>
+    <li><strong>实际输出</strong>：<code class="inline">None</code>——两个节点都执行了，但状态收集不回来</li>
+    <li><strong>根源</strong>：LangGraph 1.x 靠 State 类的<strong>字段类型注解</strong>（<code class="inline">__annotations__</code>）构建状态 schema。<code class="inline">class State(dict): pass</code> 没有任何字段注解，图无法定义"状态有哪些键、如何合并"，invoke 只能返回 None</li>
+    <li><strong>系列呼应</strong>：这是继 char04-07（memory_key 静默断忆）之后第二个"静默失败"案例——<strong>AI 应用代码里，不抛异常的 bug 才是最危险的 bug</strong>，因为它让你以为程序是对的</li>
+  </ul>
+</div>
+<h3>修复方式：TypedDict + 字段注解（LangGraph 1.x 标准 State 写法）</h3>
+<pre>
+# 原写法（注释保留）：
+# class State(dict):
+#     pass
+
+# 改写：
+from typing import TypedDict
+
+class State(TypedDict):
+    query: str
+    retrieved: str
+    answer: str
+</pre>
+<p>三个字段对应三段数据：用户查询 → 检索结果 → 最终答案。TypedDict 不是运行时类，它的价值全在"给框架看的字段清单"——这正是 LangGraph 构建 schema 依赖的东西。</p>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>节点（Node）</td><td>接收完整状态、返回<strong>部分更新</strong>的普通函数</td><td>search_node / generate_node</td></tr>
+  <tr><td>边（Edge）</td><td>节点间的固定跳转关系</td><td>add_edge("search", "generate")——search 完必到 generate</td></tr>
+  <tr><td>状态（State）</td><td>在节点之间流转的字典</td><td>TypedDict 定义三字段：query/retrieved/answer</td></tr>
+  <tr><td>StateGraph</td><td>图构建器</td><td>add_node 注册节点、add_edge 连线</td></tr>
+  <tr><td>compile()</td><td>把构建器编译成可执行图</td><td>builder.compile() → CompiledStateGraph</td></tr>
+  <tr><td>invoke()</td><td>从入口跑一遍图，返回最终状态</td><td>graph.invoke({"query": "LangGraph"})</td></tr>
+  <tr><td>部分更新（Partial Update）</td><td>节点只返回要改的键，不返回整个状态</td><td>return {"retrieved": ...}——query 自动保留</td></tr>
+  <tr><td>entry / finish point</td><td>图的入口与出口</td><td>set_entry_point("search") / set_finish_point("generate")</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、整体执行流程图</h2>
+<pre>
+                    invoke({"query": "LangGraph"})
+                              │
+                              ▼
+   ┌─────────────────────────────────────────────────────┐
+   │  状态 = {"query": "LangGraph"}                        │
+   └─────────────────────────────────────────────────────┘
+                              │
+                              ▼  set_entry_point
+   ┌─────────────────────────────────────────────────────┐
+   │  search_node                                          │
+   │  读 state["query"] → 生成 {"retrieved": "检索到与      │
+   │  LangGraph 相关的信息"}                                │
+   │  （部分更新：query 保留，retrieved 被写入）               │
+   └─────────────────────────────────────────────────────┘
+                              │  add_edge("search","generate")
+                              ▼
+   ┌─────────────────────────────────────────────────────┐
+   │  generate_node                                        │
+   │  读 state["retrieved"] → 生成 {"answer": "基于检索到    │
+   │  与 LangGraph 相关的信息生成最终答案"}                    │
+   └─────────────────────────────────────────────────────┘
+                              │  set_finish_point
+                              ▼
+   ┌─────────────────────────────────────────────────────┐
+   │  返回最终状态：                                         │
+   │  {'query': 'LangGraph',                               │
+   │   'retrieved': '检索到与 LangGraph 相关的信息',          │
+   │   'answer': '基于检索到与 LangGraph 相关的信息生成最终答案'}│
+   └─────────────────────────────────────────────────────┘
+</pre>
+<p>注意状态的累积方式：invoke 传入的只有 query 一个键，后续每个节点用<strong>部分更新</strong>往里添键——这就是"状态在图里流转"的含义：不是传递，而是<strong>共享+增量写入</strong>。</p>
+
+<!-- ========== 六 ========== -->
+<h2>六、逐段代码讲解</h2>
+<h3>6.1 状态定义（唯一的改写点）</h3>
+<pre>
+from typing import TypedDict
+
+class State(TypedDict):
+    query: str       # 输入：用户查询
+    retrieved: str   # 中间：search_node 的产出
+    answer: str      # 输出：generate_node 的产出
+</pre>
+<h3>6.2 两个节点（原样保留）</h3>
+<pre>
+def search_node(state: State):
+    query = state.get("query", "")
+    return {"retrieved": f"检索到与 {query} 相关的信息"}
+    # 返回部分更新——只写 retrieved，query 自动保留在状态里
+
+def generate_node(state: State):
+    info = state.get("retrieved", "")
+    return {"answer": f"基于{info}生成最终答案"}
+</pre>
+<p>节点的接口约定是 LangGraph 的灵魂：<strong>入参 = 整个状态（只读），出参 = 部分更新（增量写）</strong>。所有节点长得一样，所以可以随意重组——加节点、换顺序、加条件分支，都不用改节点本身。这比 char04-01 SequentialChain 的 input_variables 接线更自由（后者要求占位符精确对齐，本例只需要键名约定）。</p>
+<h3>6.3 图的构建与执行（原样保留）</h3>
+<pre>
+builder = StateGraph(State)
+builder.add_node("search", search_node)      # 注册节点：起名 + 挂函数
+builder.add_node("generate", generate_node)
+
+builder.add_edge("search", "generate")       # 定边：search 完必到 generate
+builder.set_entry_point("search")            # 入口
+builder.set_finish_point("generate")         # 出口（旧式 API，新式为 add_edge("generate", END)）
+
+graph: CompiledStateGraph = builder.compile() # 编译成可执行图
+result = graph.invoke({"query": "LangGraph"}) # 跑一遍
+print(result)
+</pre>
+<p>API 演化说明：<code class="inline">set_entry_point/set_finish_point</code> 是旧式写法（教材风格），langgraph 1.x 中仍可用；新式写法是 <code class="inline">add_edge(START, "search")</code> 与 <code class="inline">add_edge("generate", END)</code>——import 里那个 END 就是给新式出口准备的。两种都能跑，读别人的代码两种都要认识。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（langgraph 1.2.11，无 LLM 调用，纯本地图执行）</div>
+  <pre>
+{'query': 'LangGraph',
+ 'retrieved': '检索到与 LangGraph 相关的信息',
+ 'answer': '基于检索到与 LangGraph 相关的信息生成最终答案'}
+  </pre>
+</div>
+<p>三个键按执行顺序依次出现，完整呈现"状态累积"过程。对照实验（改写前的原版 State(dict)）输出 None——建议自己跑一遍原版感受静默失败（动手练习 1）。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、LangGraph 的三步走与本篇的边界</h2>
+<table>
+  <tr><th>能力</th><th>API</th><th>本篇是否涉及</th></tr>
+  <tr><td>顺序图（A→B→C）</td><td>add_edge</td><td>是（全部内容）</td></tr>
+  <tr><td>条件图（按状态走不同分支）</td><td>add_conditional_edges</td><td>否（后续篇）</td></tr>
+  <tr><td>循环图（Agent 的 ReAct 循环）</td><td>条件边 + 环形结构</td><td>否（后续篇）</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">本篇与 char02 agent_chat 的预告式呼应</div>
+  <p>char02 手写的 agent_chat 循环，用 LangGraph 表达就是一个<strong>环形图</strong>：llm 节点 →（有 tool_calls？）→ tool 节点 → 回到 llm 节点；→（无 tool_calls？）→ END。char02-01 的 while True 在这里变成图上的回路。后续篇章会把这条环形线真正搭出来——本篇先记住：<strong>图的三要素（节点/边/条件）足以表达从流水线到 Agent 循环的一切</strong>。</p>
+</div>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>复现静默失败</strong>：把 TypedDict 换回原版 <code class="inline">class State(dict): pass</code> 跑一遍——亲眼看 invoke 返回 None（节点照常执行但状态丢失），然后思考：如果生产代码里状态悄悄变成 None，下游会怎么崩？（对应"静默失败最危险"）</li>
+  <li><strong>加第三个节点</strong>：写一个 <code class="inline">validate_node</code> 插在 generate 之后，给状态加 <code class="inline">valid: bool</code> 字段并检查 answer 非空——体会"加节点不动旧代码"的扩展性。</li>
+  <li><strong>换新式 API</strong>：把 set_entry_point/set_finish_point 改为 add_edge(START, ...) / add_edge(..., END)（记得 import START）——验证行为完全一致。</li>
+  <li><strong>进阶：接入真模型</strong>：把 generate_node 里的字符串拼接换成一次真实的 ChatTongyi 调用（char01-01 的写法），让这个两节点图变成真正的"检索-生成"雏形——char05 后续篇的地基。</li>
+</ol>
+
+</div>
+</body>
+</html>

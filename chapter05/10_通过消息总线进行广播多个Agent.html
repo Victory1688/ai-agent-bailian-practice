@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10_通过消息总线进行广播多个Agent - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>10_通过消息总线进行广播多个Agent - 代码解析</h1>
+<div class="meta">对应文件：char05/10_通过消息总线进行广播多个Agent.py | 教材出处：第5章 通过消息总线进行广播多个Agent | 环境实测：langgraph 1.2.11 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇把多 Agent 协作推向<strong>并行化</strong>：AgentA 把问题拆成 3 个子任务后<strong>广播</strong>给 AgentB 和 AgentC（一条消息同时投递多人），B 和 C <strong>并行执行</strong>（各自随机挑选子任务），完成后把结果发给中心节点 AgentD <strong>汇聚</strong>出最终结论。这是 char05 系列第一个<strong>并行分支图</strong>（前 9 篇全部是串行链）——一拆多、多合一的<strong>扇出-汇聚</strong>拓扑。<br>
+改写点只有 State(Dict) 静默失败（系列第十次）→ TypedDict；AgentHub、四节点、图构建全部原样保留。<strong>本篇还有系列最严重的一次教材预期输出造假：连键名都写错了</strong>（见第二节）。</p>
+
+<!-- ========== 二 ========== -->
+<h2>教材预期输出勘误：键名造假 + "漂亮分工"是假象</h2>
+<div class="warn">
+  <div class="warn-title">教材预期 vs 实际代码——两处硬伤</div>
+  <table>
+    <tr><th>教材预期（第 8 行）</th><th>实际代码（agent_d_node）</th></tr>
+    <tr><td><code class="inline">{'AgentD_results': ['AgentD完成:子任务1', ...]}</code>（列表，含"AgentD完成"）</td><td><code class="inline">return {"AgentD_conclusion": conclusion}</code>——键是 <strong>AgentD_conclusion</strong>，值是 B/C 结果拼接的<strong>字符串</strong>；D 自己根本不"完成"任务，只汇总</td></tr>
+  </table>
+  <p>更微妙的是教材展示的 B/C 分工（B 做 1、2，C 做 3）——<strong>恰好一人一个、不重不漏</strong>。但代码用的是 <code class="inline">random.choice([True, False])</code> 独立随机挑选，"不重不漏"只是 64 种可能里的一种。实测两次运行：</p>
+  <pre>
+第 1 次：AgentB 做 [子任务2]        AgentC 做 [子任务1, 子任务2]
+        → 子任务2 被 B、C 重复做了，子任务3 漏做没人干
+第 2 次：AgentB 做 [子任务3]        AgentC 做 [子任务3]
+        → 子任务1、2 全部漏做，子任务3 做了两遍
+  </pre>
+  <p>教材预期是"精心挑选的最好看的一种可能"（05 篇的造假是手写估错字数，本篇是键名错误 + 展示假象——系列教材输出问题的顶点）。<strong>随机性本身才是教学点</strong>：它模拟了分布式系统任务分配的真实不确定性（重复执行、无人认领），生产正解是确定性任务调度或幂等设计（重复执行无害）。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>本篇核心一：并行分支图——02 篇条件边的姊妹篇</h2>
+<pre>
+              ┌──→ agentB ──┐
+  agentA ─────┤              ├──→ agentD ──→ END
+              └──→ agentC ──┘
+</pre>
+<table>
+  <tr><th></th><td>02 篇 条件边</td><td>10 篇 并行边（本篇）</td></tr>
+  <tr><td>拓扑</td><td>一个节点 → 多条候选边</td><td>一个节点 → 多条并行边</td></tr>
+  <tr><td>执行</td><td><strong>只走一条</strong>（路由函数选路）</td><td><strong>全部都走</strong>（同一 superstep 并行）</td></tr>
+  <tr><td>汇聚</td><td>无需汇聚（单路直达）</td><td>agentD 等所有分支完成后才执行（<strong>屏障语义</strong>）</td></tr>
+  <tr><td>解决的问题</td><td>按状态分流（走哪条路）</td><td>任务拆分并行（多路同时干）</td></tr>
+</table>
+<p><strong>扇出-汇聚</strong>（fan-out / fan-in）是分布式计算的经典拓扑：MapReduce 的 map/reduce、微服务的并行 RPC 聚合，都是这个形状。LangGraph 里 B、C 并行执行的证据在时间戳上：两次汇报相差不到 1 毫秒（1791712280.1659 vs .1663）——同一批次先后完成。</p>
+
+<!-- ========== 四 ========== -->
+<h2>本篇核心二：消息总线升级——广播（broadcast）</h2>
+<pre>
+# AgentHub 相比 09 篇 A2AProtocol 只新增了一个方法：
+def broadcast(self, sender: str, content: Dict, agents: List[str]):
+    for agent in agents:
+        self.send(sender, agent, content)   # 广播 = 循环单播
+</pre>
+<p><strong>广播 1 次 → messages 里 2 条记录</strong>（A→B、A→C 各一条）——总线存的是投递明细，不是一条"群发"记录。这个实现形状与真实消息中间件完全同构：Kafka 的多消费者各自拉取同一消息、RabbitMQ 的 fanout exchange 复制消息到每个队列。教材用 4 行循环把"发布-订阅"模式的最小骨架建出来了。</p>
+
+<!-- ========== 五 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>AgentHub 消息总线</td><td>send + broadcast + receive 的通信中心</td><td>四个 Agent 的"邮局"（09 篇 + 广播能力）</td></tr>
+  <tr><td>广播</td><td>一条内容投递给多个 Agent</td><td>A 拆任务后同时分派给 B、C</td></tr>
+  <tr><td>并行分支图</td><td>一个节点接多条并行边</td><td>A 后 B/C 并行（系列第一个）</td></tr>
+  <tr><td>扇出-汇聚</td><td>拆分多路并行 + 汇总合流</td><td>MapReduce 式拓扑的教学版</td></tr>
+  <tr><td>屏障（barrier）</td><td>汇聚点等所有分支完成</td><td>agentD 等 B、C 都跑完才执行</td></tr>
+  <tr><td>随机分工</td><td>random.choice 模拟分配不确定性</td><td>实测出现重复执行与漏做</td></tr>
+  <tr><td>幂等设计</td><td>重复执行不产生副作用</td><td>随机分工的生产级解药</td></tr>
+</table>
+
+<!-- ========== 六 ========== -->
+<h2>整体执行流程图（含两次实测的随机分工）</h2>
+<pre>
+  invoke({"query": "科研协作任务"})
+        │
+        ▼
+  ┌─ AgentA（任务拆解员）────────────────────────────┐
+  │ sub_tasks = [科研协作任务-子任务1/2/3]              │
+  │ hub.broadcast(A → [B, C], {tasks})  ← 广播 1 次    │
+  │ State 写: AgentA_tasks                            │
+  └──────┬───────────────┬───────────────────────────┘
+         │ 并行           │ 并行（同一 superstep）
+         ▼               ▼
+  ┌─ AgentB ──────┐  ┌─ AgentC ──────┐
+  │ 收广播，随机挑  │  │ 收同一份广播，  │        第1次: B=[2] C=[1,2]（2重复,3漏）
+  │ random.choice  │  │ 独立随机挑      │        第2次: B=[3] C=[3]  （1,2全漏）
+  │ State 写: B结果 │  │ State 写: C结果 │
+  └──────┬────────┘  └──────┬────────┘
+         │ hub.send(B→D)    │ hub.send(C→D)
+         ▼                  ▼
+  ┌─ AgentD（中心汇总员）──────────────────────┐
+  │ 遍历收件箱全部消息，extend 拼接              │  ← 屏障：等两个分支都完成
+  │ conclusion = " | ".join(聚合结果)           │
+  │ State 写: AgentD_conclusion（字符串！）      │  ← 教材写的 AgentD_results 键不存在
+  └──────────┬────────────────────────────────┘
+             ▼
+            END → print(result) + print(hub.messages 共4条)
+</pre>
+
+<!-- ========== 七 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证两次（langgraph 1.2.11，无 LLM 调用，随机分工各不相同）</div>
+  <pre>
+【第 1 次】
+{'query': '科研协作任务',
+ 'AgentA_tasks': ['科研协作任务-子任务1', '科研协作任务-子任务2', '科研协作任务-子任务3'],
+ 'AgentB_results': ['AgentB完成:科研协作任务-子任务2'],
+ 'AgentC_results': ['AgentC完成:科研协作任务-子任务1', 'AgentC完成:科研协作任务-子任务2'],
+ 'AgentD_conclusion': 'AgentB完成:科研协作任务-子任务2 | AgentC完成:科研协作任务-子任务1 | AgentC完成:科研协作任务-子任务2'}
+   ↑ 子任务2 被 B、C 重复做；子任务3 无人做（对比教材预期：键名不同 + 分工不同）
+
+【第 2 次】
+{ ..., 'AgentB_results': ['AgentB完成:科研协作任务-子任务3'],
+       'AgentC_results': ['AgentC完成:科研协作任务-子任务3'],
+       'AgentD_conclusion': 'AgentB完成:科研协作任务-子任务3 | AgentC完成:科研协作任务-子任务3'}
+   ↑ 子任务1、2 全部漏做
+
+【hub.messages】4 条：A→B、A→C（广播明细）+ B→D、C→D（汇报）
+  时间戳证据：B、C 的汇报相差不到 1ms → 并行执行
+  </pre>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角：随机分工 → 可靠的任务分配</h2>
+<ul>
+  <li><strong>确定性调度</strong>：random 挑选 → 中央调度器按负载/能力分配，或任务队列（B、C 各自领，领走即标记——不重不漏）</li>
+  <li><strong>幂等设计</strong>：即使重复执行也无害（写入带唯一 ID、操作天然幂等）——分布式系统的标配防御</li>
+  <li><strong>漏做兜底</strong>：随机分配可能没人干 → 超时重派 / 补偿任务 / 心跳检测</li>
+  <li><strong>汇聚健壮性</strong>：agentD 假设收件箱格式永远正确 → 生产要校验消息版本与异常分支的空结果</li>
+  <li><strong>换真总线</strong>：AgentHub 内存列表 → Kafka/RabbitMQ（跨进程、可持久化、可回放——09 篇已建立的单播接口不变，本篇的 broadcast 对应 fanout/多订阅者）</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>统计随机性</strong>：把 invoke 包进 for 循环跑 20 次，统计"漏做任务"出现的比例——用数据验证随机分工的不可靠程度（理论上每个任务被漏做的概率约 25%）。</li>
+  <li><strong>确定性分工改造</strong>：把 random.choice 改成按索引均分（B 拿偶数位任务、C 拿奇数位）——观察输出变为可复现，思考两种模式的适用场景。</li>
+  <li><strong>幂等验证</strong>：给每个子任务加唯一 ID，agentD 汇总时用 set 去重——体会"重复执行无害"的幂等思想。</li>
+  <li><strong>进阶：三路扇出</strong>：新增 AgentE 节点加入并行组（A 广播给 B/C/E），观察汇聚与消息数量的变化（广播 3 条、汇报 3 条、messages 共 6 条）——验证扇出-汇聚拓扑的扩展方式。</li>
+</ol>
+
+</div>
+</body>
+</html>

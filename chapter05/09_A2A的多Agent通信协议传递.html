@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>09_A2A的多Agent通信协议传递 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>09_A2A的多Agent通信协议传递 - 代码解析</h1>
+<div class="meta">对应文件：char05/09_A2A的多Agent通信协议传递.py | 教材出处：第5章 A2A的多Agent通信协议传递 | 环境实测：langgraph 1.2.11 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇引入<strong>多 Agent 协作的消息传递范式</strong>：三个 Agent 节点（A 检索 → B 分析 → C 结论）之间<strong>不共享变量</strong>——A 检索完把结果"寄"给 B，B 分析完把结论"寄"给 C，每条消息都带发送方/接收方/时间戳/内容四要素。LangGraph 负责节点顺序，A2AProtocol 负责消息投递——"编排"与"通信"分离。<br>
+改写点：State(Dict) 静默失败（系列第九次）→ TypedDict。A2AProtocol、三节点、图全部原样保留。<strong>本篇有两个必讲辨析：假 A2A 协议命名（08 篇假 MCP 的续集）和实测抓到的"schema 裁剪输入键"新坑</strong>。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、命名辨析：此"A2A"非彼 A2A（假 MCP 的续集）</h2>
+<div class="warn">
+  <div class="warn-title">协议名陷阱连续剧：08 篇假 MCP，09 篇假 A2A</div>
+  <table>
+    <tr><th></th><td>教材的 "A2AProtocol"</td><td>真实的 A2A（Agent2Agent Protocol）</td></tr>
+    <tr><td>本质</td><td>同进程内的消息列表存取类</td><td><strong>Google 2025 年提出的开放协议</strong>（后捐给 Linux 基金会）</td></tr>
+    <tr><td>架构</td><td>一个 Python 对象，所有节点直接调用</td><td><strong>分布式</strong>：不同 Agent 是独立服务，跨网络通信</td></tr>
+    <tr><td>消息对象</td><td>自定义 dict（sender/receiver/timestamp/content）</td><td>标准 <strong>Agent Card（能力发现）/ Task / Message</strong> 对象</td></tr>
+    <tr><td>传输</td><td>函数调用（内存引用）</td><td><strong>JSON-RPC over HTTP</strong></td></tr>
+    <tr><td>定位</td><td>教学模拟</td><td>与 MCP 是<strong>"姊妹协议"</strong>：MCP 管 Agent↔工具，A2A 管 Agent↔Agent</td></tr>
+  </table>
+  <p>本篇真正教的概念：<strong>消息传递范式（message passing）</strong>——Agent 之间靠收发消息协作而非共享变量。这个范式在同进程里显得多余（State 直传更简单），但它真正的用武之地是<strong>分布式多 Agent</strong>：当 A、B、C 是三台机器上的三个服务时，唯一的协作方式就是消息传递——教材用同进程模拟把范式先建起来。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>实测发现：schema 裁剪输入键——比"返回 None"更隐蔽的新坑</h2>
+<div class="warn">
+  <div class="warn-title">系列第九坑的升级形态：图正常跑完，数据悄悄丢在入口</div>
+  <p>改写初版 State 只声明了三个结果字段、漏了 query（节点里会读它）。实测结果令人意外——</p>
+  <pre>
+invoke({"query": "LangGraph"})
+  → agentA_result: '未找到相关数据'     ← db.get("") 当然查不到
+  → 全链路照常跑完，没有任何报错！
+  </pre>
+  <p><strong>原因</strong>：LangGraph 1.x 会把<strong>不在 State schema 里的输入键静默裁剪掉</strong>——query 键进不了状态，agent_a_node 里 <code class="inline">state.get("query", "")</code> 拿到空串。修复（TypedDict 补上 query 字段）后一切正常。<br>
+  <strong>对照前 8 篇</strong>：State(dict) 无注解 → invoke 返回 None（错在出口，一眼见尸）；本篇漏字段 → 图跑完但数据丢（错在入口，结果"看起来正常"）——<strong>静默裁剪比静默失败更危险</strong>。教训：<strong>TypedDict 必须包含节点会读到的所有键，包括入口键 query</strong>。</p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>A2AProtocol</td><td>教材命名的同进程消息总线（非真 A2A）</td><td>三个 Agent 的"邮局"：send 寄信、receive 收信</td></tr>
+  <tr><td>消息四要素</td><td>sender / receiver / timestamp / content</td><td>每条消息的标准结构（真实 A2A 的 Message 同款思路）</td></tr>
+  <tr><td>收件箱（inbox）</td><td>receive 按 receiver 过滤出的消息子集</td><td>AgentB/C 各自的"信箱"</td></tr>
+  <tr><td>inbox[-1]</td><td>取最新一条</td><td>多条消息时的取舍策略（LIFO 最新优先）</td></tr>
+  <tr><td>消息传递范式</td><td>靠收发消息协作，不共享变量</td><td>A→B→C 三级接力全走 a2a，不走 State 直读</td></tr>
+  <tr><td>日志型外部存储</td><td>append 列表，只增不清</td><td>messages 跨 invoke 累积留痕（对照 08 篇的覆盖型）</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>整体执行流程图</h2>
+<pre>
+  a2a = A2AProtocol()  ← 模块级"邮局"常驻图外
+
+  invoke({"query": "LangGraph"})
+        │
+        ▼
+  ┌─ AgentA（检索员）───────────────────────────┐
+  │ db["langgraph"] 命中                         │
+  │ State 写: agentA_result                      │
+  │ a2a.send("AgentA" → "AgentB", {retrieved})  │──┐
+  └──────────┬─────────────────────────────────┘  │ 寄出
+             ▼                                    ▼
+  ┌─ AgentB（分析员）───────────────────────────────┐
+  │ inbox = a2a.receive("AgentB")  ← 开箱收信        │
+  │ analysis = "分析结果: ... -> 提取核心概念"          │
+  │ State 写: agentB_analysis                        │
+  │ a2a.send("AgentB" → "AgentC", {analysis})        │──┐
+  └──────────┬─────────────────────────────────────┘  │ 寄出
+             ▼                                        ▼
+  ┌─ AgentC（总结员）───────────────────────────────┐
+  │ inbox = a2a.receive("AgentC")  ← 开箱收信        │
+  │ conclusion = "最终结论基于: ..."                   │
+  │ State 写: agentC_conclusion                      │
+  └──────────┬─────────────────────────────────────┘
+             ▼
+            END → print(result) + print(json.dumps(a2a.messages))
+
+  注意：AgentB 的数据来自"收信"（a2a.receive），不是读 State 的 agentA_result——
+        消息传递范式的标志：Agent 之间没有共享变量，只有消息。
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>6.1 A2AProtocol（原样保留）——分布式消息总线的婴儿版</h3>
+<pre>
+def send(self, sender: str, receiver: str, content: Dict):
+    message = {"sender": sender, "receiver": receiver,
+               "timestamp": time.time(), "content": content}
+    self.messages.append(message)          # 日志式累积，永不覆盖
+
+def receive(self, agent: str):
+    inbox = [msg for msg in self.messages if msg["receiver"] == agent]
+    return inbox                            # 按收件人过滤 = "收件箱"
+</pre>
+<p>接口形状（send/receive + 收件人寻址）与真实消息中间件（RabbitMQ / Kafka 消费组）同构。<strong>与 08 篇的关键差异</strong>：context_store 是字典（同 key 覆盖，存"最新状态"），messages 是列表（append 累积，存"全部通信记录"）——KV 型 vs 日志型，生产里分别是 Redis（状态缓存）与消息队列/审计日志。</p>
+<h3>6.2 三个 Agent 节点（原样保留）——注意它们"不读对方的状态"</h3>
+<pre>
+# AgentB 的数据来源是收信，不是 state.get("agentA_result")：
+inbox = a2a.receive("AgentB")
+if inbox:
+    data = inbox[-1]["content"].get("retrieved", "")   # 取最新一条
+    ...
+a2a.send("AgentB", "AgentC", {"analysis": analysis})   # 处理完再寄给下一个
+</pre>
+<p><code class="inline">inbox[-1]</code> 的取舍：收件箱有多条时只认最新——简单但有信息丢失风险（真实 A2A 会用 Task 对象跟踪完整任务生命周期，而不是只看最后一条）。</p>
+
+<!-- ========== 七 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（langgraph 1.2.11，无 LLM 调用，双 invoke 实测）</div>
+  <pre>
+【第一次 invoke】
+{'query': 'LangGraph',
+ 'agentA_result': 'LangGraph是一种任务图编排框架',
+ 'agentB_analysis': '分析结果: LangGraph是一种任务图编排框架 -> 提取核心概念',
+ 'agentC_conclusion': '最终结论基于:分析结果: LangGraph是一种任务图编排框架 -> 提取核心概念'}
+
+【第二次 invoke】（messages 累积实证）
+{'query': 'Agent',
+ 'agentA_result': 'Agent系统依赖通信协议',
+ 'agentB_analysis': '分析结果: Agent系统依赖通信协议 -> 提取核心概念',
+ 'agentC_conclusion': '最终结论基于:分析结果: Agent系统依赖通信协议 -> 提取核心概念'}
+
+【最终 a2a.messages】——4 条，两次运行各 2 条，通信记录全部留痕（timestamp 为实时值）
+[ AgentA→AgentB {retrieved: LangGraph是一种任务图编排框架},
+  AgentB→AgentC {analysis: 分析结果: ... -> 提取核心概念},
+  AgentA→AgentB {retrieved: Agent系统依赖通信协议},
+  AgentB→AgentC {analysis: 分析结果: Agent系统依赖通信协议 -> 提取核心概念} ]
+  </pre>
+  <p>对照 08 篇：context_store 双 invoke 后只剩第二次的数据（覆盖），messages 留了两次全部 4 条（累积）——两种外部存储行为差异的完整实证。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角：同进程模拟 → 真分布式多 Agent</h2>
+<ul>
+  <li><strong>换消息中间件</strong>：A2AProtocol → RabbitMQ / Kafka / Redis Streams——send/receive 接口不变，实现换传输层</li>
+  <li><strong>换协议栈</strong>：自定义消息 dict → 真实 A2A 协议（Agent Card 声明能力 / Task 跟踪状态机）——Agent 可被任何协议客户端发现与调用</li>
+  <li><strong>什么时候才需要它</strong>：同进程多节点用 State 直传更简单；跨进程/跨机/跨组织的 Agent 协作才需要消息范式——不要为了"看起来像多 Agent"而引入分布式复杂度</li>
+  <li><strong>消息可靠性</strong>：inbox[-1] 丢历史 → 生产要有消息确认/重试/幂等设计</li>
+  <li><strong>schema 纪律</strong>：State 字段 = 节点要读写的全部键（含入口键）——第三节新坑的直接教训</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>复现 schema 裁剪坑</strong>：把 TypedDict 里的 query 字段删掉跑一次——亲眼看"图正常跑完但全链路未找到相关数据"，建立对这个最隐蔽坑的肌肉记忆。</li>
+  <li><strong>收件箱策略实验</strong>：手动 a2a.send 两条不同内容的消息给 AgentB，观察 inbox[-1] 只取到哪条；再改成 inbox[0]（最旧优先）对比。</li>
+  <li><strong>消息持久化</strong>：给 A2AProtocol 加 save_to_file/load_from_file（json 读写 messages）——让通信记录跨进程存活，接上 char02-03 持久化的思想。</li>
+  <li><strong>进阶：真分布式雏形</strong>：把 AgentB 拆成独立 FastAPI 服务（收 POST /receive、返回 analysis），agent_b_node 里改用 requests 调它——同一范式从内存引用变成网络调用，就是真实 A2A 的第一步。</li>
+</ol>
+
+</div>
+</body>
+</html>

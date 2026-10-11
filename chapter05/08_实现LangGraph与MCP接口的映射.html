@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08_实现LangGraph与MCP接口的映射 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>08_实现LangGraph与MCP接口的映射 - 代码解析</h1>
+<div class="meta">对应文件：char05/08_实现LangGraph与MCP接口的映射.py | 教材出处：第5章示例四 LangGraph与MCP接口的映射 | 环境实测：langgraph 1.2.11 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇演示<strong>"外部上下文存储"与图状态并行的双通道设计</strong>：一个模块级的 MCPInterface（内存字典存取器）在图外持续存在，每个节点执行时把中间产物存进去（query_ctx / retrieval_ctx），最后的 conclude 节点从外部存储读取前两步的存档拼出总结——同一份数据既走了 LangGraph State，也留了一份在外部存储里。<br>
+改写点只有 State(Dict) 静默失败（系列第八次）→ TypedDict；MCPInterface、三节点、图全部原样保留。<strong>但本篇最重要的内容不是代码，而是一个必须讲清的辨析：教材的"MCP"与真实 MCP 协议毫无关系</strong>（见第二节）。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、命名辨析：此"MCP"非彼 MCP（本篇最重要的知识点）</h2>
+<div class="warn">
+  <div class="warn-title">同名陷阱：教材的 MCPInterface 只是"内存字典存取类"</div>
+  <table>
+    <tr><th></th><td>教材的 "MCPInterface"</td><td>真实的 MCP（Model Context Protocol）</td></tr>
+    <tr><td>本质</td><td>一个 Python 类，包装了一个字典</td><td><strong>Anthropic 提出的开放协议</strong>（2024 年底发布，业界广泛采用）</td></tr>
+    <tr><td>架构</td><td>同进程内的对象引用</td><td><strong>客户端-服务器</strong>：AI 应用(MCP 客户端) ↔ 工具服务器(MCP Server)</td></tr>
+    <tr><td>通信</td><td>函数调用</td><td><strong>JSON-RPC</strong>（stdio / HTTP 传输）</td></tr>
+    <tr><td>能力</td><td>存取两个 key 的上下文</td><td><strong>工具 / 资源 / 提示词</strong>三大原语的标准协议</td></tr>
+    <tr><td>与 LangGraph 集成</td><td>本篇的"映射"</td><td><strong>langchain-mcp-adapters</strong> 库：把 MCP 服务器的工具转成 LangChain 工具再入图</td></tr>
+  </table>
+  <p>新人拿"MCP"去搜索会得到完全另一回事的资料——先建立这个区分。教材借用了热门名词做教学命名（注释里的"演示外部上下文存储方案"才是真实意图），<strong>本篇真正教的概念是"节点间通过共享的外部存储交换上下文"</strong>——这个概念是真的，生产对应物是 Redis / 数据库 / 文件存储。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、双通道上下文设计：State 与外部存储的分工（实测实证）</h2>
+<pre>
+                    同一份数据，两条通道
+  ┌─────────────────────────┐    ┌──────────────────────────────┐
+  │  LangGraph State         │    │  MCPInterface.context_store   │
+  │  （图内，单次 invoke 生命周期）│    │  （模块级对象，跨 invoke 存活）   │
+  │                          │    │                               │
+  │  invoke 1: query=LangGraph│    │  invoke 1: 三个key写入          │
+  │  invoke 2: query=Agent    │    │  invoke 2: 同名key被覆盖        │
+  │  （每次从零开始）           │    │  （数据跨执行存活）               │
+  └─────────────────────────┘    └──────────────────────────────┘
+</pre>
+<p><strong>实测实证</strong>（补充的第二组 invoke）：第一次 invoke("LangGraph") 后 context_store 三键存的是 LangGraph 数据；第二次 invoke("Agent") 后，State 里的值换成了 Agent 的，而 context_store 的三个键<strong>也全部被覆盖成 Agent 的数据</strong>——键数量不变（同 key 覆盖），数据跨执行存活。这就是两者的本质差异：<strong>State 的生命周期 = 单次 invoke；外部存储的生命周期 = 进程级（甚至更久）</strong>。</p>
+<div class="card">
+  <div class="card-title">与系列前作的对照：外部记忆思想的三次出现</div>
+  <ul>
+    <li><strong>char02-03</strong>：PersistentJSONMemory——手写 Agent 时代，JSON 文件实现"中断恢复"</li>
+    <li><strong>char05-08（本篇）</strong>：MCPInterface——图时代，字典对象实现"跨节点/跨执行存取"</li>
+    <li><strong>生产</strong>：Redis / 数据库——把"字典"换成"真正的外部服务"，多进程多机共享</li>
+  </ul>
+  <p>三次出现是同一个思想的三种实现强度：<strong>图状态管"本次执行"，外部存储管"执行之外的一切"</strong>（历史会话、跨进程共享、审计留痕）。</p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>MCPInterface</td><td>教材命名的内存字典存取类（非真 MCP）</td><td>外部上下文存储的教学载体</td></tr>
+  <tr><td>context_store</td><td>跨节点共享的字典</td><td>query_ctx / retrieval_ctx / final_ctx 三份存档</td></tr>
+  <tr><td>save_context / load_context</td><td>存取接口（生产对应 Redis set/get）</td><td>节点的"存档"与"读档"动作</td></tr>
+  <tr><td>双通道设计</td><td>State（图内）+ 外部存储（图外）并行</td><td>数据同时走两条路，演示各自的生命周期</td></tr>
+  <tr><td>模块级实例</td><td>在模块顶层创建、全节点共享的对象</td><td>外部存储能跨 invoke 的原因</td></tr>
+  <tr><td>真实 MCP 集成</td><td>langchain-mcp-adapters</td><td>教材概念的生产版（工具协议化）</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>整体执行流程图</h2>
+<pre>
+  mcp = MCPInterface()  ← 模块级初始化（图外常驻）
+
+  invoke({"query": "LangGraph"})
+        │
+        ▼
+  ┌─ preprocess ──────────────────────────┐
+  │ State 写: query                        │
+  │ mcp 存: query_ctx = {query: LangGraph} │
+  └──────────┬───────────────────────────┘
+             ▼
+  ┌─ retrieve ─────────────────────────────────────┐
+  │ fake_db["langgraph"] 命中                        │
+  │ State 写: retrieved                              │
+  │ mcp 存: retrieval_ctx = {retrieved: 支持任务图编排} │
+  └──────────┬───────────────────────────────────┘
+             ▼
+  ┌─ conclude ─────────────────────────────────────┐
+  │ mcp 读: query_ctx + retrieval_ctx（从外部存储读档）│
+  │ 拼装 summary = "问题:... | 检索结果:..."           │
+  │ State 写: summary                                │
+  │ mcp 存: final_ctx = {summary}                    │
+  └──────────┬───────────────────────────────────┘
+             ▼
+            END → print(result) + print(json.dumps(mcp.context_store))
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>6.1 MCPInterface（原样保留）——生产外部存储的婴儿版</h3>
+<pre>
+class MCPInterface:
+    def __init__(self):
+        self.context_store = {}
+    def save_context(self, key: str, value: Dict):   # 写入上下文
+        self.context_store[key] = value
+    def load_context(self, key: str) -> Dict:        # 读取上下文
+        return self.context_store.get(key, {})
+</pre>
+<p>接口形状（save/load + key-value）与 Redis 客户端、Memcached 客户端完全同构——<strong>把它换成 Redis 只需改两个方法的实现，三个节点一行不动</strong>。这就是"外部存储抽象"的价值。</p>
+<h3>6.2 双写节点（原样保留）</h3>
+<pre>
+def preprocess_node(state: State) -> State:
+    query = state.get("query", "")
+    mcp.save_context("query_ctx", {"query": query})   # 通道2：外部存储
+    return {"query": query}                            # 通道1：LangGraph State
+</pre>
+<p>每个节点既更新 State 又写 mcp——教材刻意让两条通道都装同一份数据，就是为了在结尾打印 context_store 时能"看见"外部存储的积累过程。生产中通常二选一：图内传递用 State，需要跨执行/跨服务的才写外部存储（双写会有一致性负担）。</p>
+<h3>6.3 从外部存储读档的 conclude（原样保留）</h3>
+<pre>
+def conclude_node(state: State) -> State:
+    query_ctx = mcp.load_context("query_ctx")          # 从外部存储读（而不是从 state 读）
+    retrieval_ctx = mcp.load_context("retrieval_ctx")
+    summary = f"问题:{query_ctx.get('query')} | 检索结果:{retrieval_ctx.get('retrieved')}"
+    mcp.save_context("final_ctx", {"summary": summary})
+    return {"summary": summary}
+</pre>
+<p>注意 conclude 明明可以从 state 里拿到同样的数据（query/retrieved 都在），教材偏要从 mcp 读——为了演示"外部存储取上下文"的姿势。演示意图与工程实践的差异，读者要有分辨。</p>
+
+<!-- ========== 七 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（langgraph 1.2.11，无 LLM 调用，双 invoke 实测）——第一次输出与教材预期完全一致</div>
+  <pre>
+【第一次 invoke】
+{'query': 'LangGraph', 'retrieved': 'LangGraph支持任务图编排',
+ 'summary': '问题:LangGraph | 检索结果:LangGraph支持任务图编排'}
+
+【第二次 invoke（补充验证跨 invoke 持久）】
+{'query': 'Agent', 'retrieved': '智能体依赖协议',
+ 'summary': '问题:Agent | 检索结果:智能体依赖协议'}
+
+【最终 context_store】——三键全部是第二次的数据：同 key 覆盖，数据跨执行存活
+{
+  "query_ctx": { "query": "Agent" },
+  "retrieval_ctx": { "retrieved": "智能体依赖协议" },
+  "final_ctx": { "summary": "问题:Agent | 检索结果:智能体依赖协议" }
+}
+  </pre>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角：从内存字典到真实外部存储</h2>
+<ul>
+  <li><strong>换实现</strong>：context_store 字典 → Redis（跨进程） / PostgreSQL（带查询） / 向量库（语义检索历史上下文）——节点代码不动，只改 MCPInterface 两个方法</li>
+  <li><strong>会话隔离</strong>：教材一个全局字典 → 生产按 session_id 分键空间（呼应 char02-03/04 的 session_id 实践）</li>
+  <li><strong>生命周期管理</strong>：字典永不清理 → TTL 过期 / 显式注销（呼应 char02-04 注销机制——外部存储必须有清理策略，否则内存泄漏）</li>
+  <li><strong>一致性</strong>：双写有漂移风险 → 生产明确"State 管执行内、外部存储管执行外"，不重复存同一数据</li>
+  <li><strong>真 MCP 的位置</strong>：想让外部工具"协议化"（任何 MCP 客户端都能用），走 langchain-mcp-adapters + MCP Server——那是工具层的事，与本篇的上下文存储是两个话题</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>Redis 形态体验</strong>：给 MCPInterface 加一个 max_size 上限，超出时删最早的 key（模拟 LRU）——体会"外部存储必须有生命周期管理"。</li>
+  <li><strong>会话隔离</strong>：save_context 加 namespace 参数，两次 invoke 用不同 namespace 存档——让 context_store 同时保留两次 invoke 的数据（当前同 key 覆盖只能留最后一次）。</li>
+  <li><strong>读档节点</strong>：新增 history_node（读 final_ctx 前先检查有没有旧存档，有则在 summary 里追加"上次问题:..."）——最小化的"跨 invoke 记忆"。</li>
+  <li><strong>进阶：真 MCP 初体验</strong>：了解 langchain-mcp-adapters 的文档结构（不必安装），画出"LangGraph 图 + MCP Server 工具"的架构草图——与本篇的"假 MCP"对照，看清协议化的真实含义。</li>
+</ol>
+
+</div>
+</body>
+</html>

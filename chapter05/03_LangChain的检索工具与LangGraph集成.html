@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03_LangChain的检索工具与LangGraph集成 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>03_LangChain的检索工具与LangGraph集成 - 代码解析</h1>
+<div class="meta">对应文件：char05/03_LangChain的检索工具与LangGraph集成.py | 教材出处：第5章示例一 LangChain检索工具与LangGraph集成 | 环境实测：langgraph 1.2.11 / faiss-cpu 1.15.0 / langchain-community 0.4.2 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>char05 到本篇第一次<strong>接上真实模型与向量库</strong>：用 FAISS 存两段知识文本，用百炼的向量化模型（DashScopeEmbeddings）建索引，用 RetrievalQA 链把"检索 + 让 qwen-plus 基于检索结果生成答案"打包成一个整体，再把这个链作为<strong>一个节点</strong>塞进 LangGraph 图。问"LangGraph是什么？"，图调起链，链先检索再生成——这是一个<strong>最小 RAG 流水线</strong>。<br>
+改写点有四：import 断裂、OpenAIEmbeddings 换百炼向量化、<strong>llm=None 伪代码修复</strong>（本篇最重的发现）、State(dict) 静默失败（系列第三次）。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、教材代码的四类问题（本篇是 char05 问题最重的一篇）</h2>
+<table>
+  <tr><th>#</th><th>问题</th><th>原写法</th><th>改写</th></tr>
+  <tr><td>1</td><td>import 路径断裂</td><td>langchain.chains / langchain.vectorstores / langchain.embeddings</td><td>langchain_classic.chains / langchain_community.vectorstores / langchain_community.embeddings</td></tr>
+  <tr><td>2</td><td>向量化模型不可用</td><td>OpenAIEmbeddings()（需 OPENAI_API_KEY，国内无法直连）</td><td>DashScopeEmbeddings()——百炼平台向量化模型，<strong>与聊天模型共用同一把 DASHSCOPE_API_KEY</strong></td></tr>
+  <tr><td>3</td><td><strong>llm=None 伪代码（最重）</strong></td><td><code class="inline">RetrievalQA.from_chain_type(llm=None, ...)</code></td><td>llm=ChatTongyi(qwen-plus)。RetrieQA 的职责是"检索 + 让 LLM 基于检索结果生成答案"——没有 LLM 这条链根本无法工作（run 时必然报错）</td></tr>
+  <tr><td>4</td><td>State(dict) 静默失败</td><td>class State(dict): pass（无注解）</td><td>TypedDict（question/answer 两字段）——01/02 篇同款修复，系列第三次出现</td></tr>
+</table>
+<div class="warn">
+  <div class="warn-title">为什么 llm=None 一眼就能断定是伪代码</div>
+  <p>看 RetrievalQA 的名字：<strong>Retrieval（检索）+ QA（问答）</strong>。它的内部流程是：问题 → 检索器找相关文档 → 把文档塞进提示词 → <strong>LLM 生成答案</strong>。检索只负责"找资料"，资料找来了总要有人读——LLM 就是那个读资料写答案的人。教材给 llm=None 相当于"组建了一个只有图书馆没有研究员的研究团队"。凡是不给 LLM 的 QA 链，都跑不起来。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>FAISS</td><td>Facebook 开源的向量相似度检索库</td><td>存两段知识文本的向量索引，本地运行（faiss-cpu）</td></tr>
+  <tr><td>DashScopeEmbeddings</td><td>百炼平台的文本向量化模型</td><td>把文本变成向量（建索引 + 查询都要用同一个模型）</td></tr>
+  <tr><td>as_retriever()</td><td>把向量库包装成统一的检索器接口</td><td>LangChain 组件之间的标准插座</td></tr>
+  <tr><td>RetrievalQA</td><td>"检索 + 生成"组合链（char04-01 链式思想的 RAG 特化版）</td><td>本篇被塞进图节点的职能单元</td></tr>
+  <tr><td>chain_type="stuff"</td><td>检索到的文档"全部塞进"一个提示词的策略</td><td>文档少时最简单直接（多文档时还有 map_reduce 等策略）</td></tr>
+  <tr><td>链入图（Chain as Node）</td><td>任何可调用对象都能当 LangGraph 节点</td><td>qa_tool.run() 就是 query_node 的全部内容</td></tr>
+</table>
+
+<!-- ========== 四 ========== -->
+<h2>四、整体执行流程图</h2>
+<pre>
+  graph.invoke({"question": "LangGraph是什么？"})
+                    │
+                    ▼
+  ┌────────────────────────────────────────────────────┐
+  │  query_node（图节点 = 职能单元）                       │
+  │                                                    │
+  │  ┌─ RetrievalQA 内部（对图是黑盒）─────────────────┐  │
+  │  │ ① DashScopeEmbeddings 把问题向量化              │  │
+  │  │ ② FAISS 相似度检索 → 命中                        │  │
+  │  │    "LangGraph是一个任务编排框架"                  │  │
+  │  │ ③ stuff：把命中文档塞进提示词                    │  │
+  │  │ ④ ChatTongyi(qwen-plus) 基于文档生成答案          │  │
+  │  └──────────────────────────────────────────────┘  │
+  │                                                    │
+  │  return {"answer": "LangGraph 是一个任务编排框架。"}  │
+  └────────────────────────────────────────────────────┘
+                    │
+                    ▼
+  {'question': 'LangGraph是什么？',
+   'answer': 'LangGraph 是一个任务编排框架。'}
+</pre>
+<p><strong>注意答案内容</strong>："LangGraph 是一个任务编排框架。"——与知识库文本几乎逐字一致。qwen-plus 自己当然也"知道" LangGraph，但这个答案的措辞直接来自检索命中——<strong>答案有出处，是 RAG 的核心价值</strong>（模型不知道或会过时的内容，也能答对）。</p>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段代码讲解</h2>
+<h3>5.1 检索工具初始化（三处改写）</h3>
+<pre>
+db = FAISS.from_texts(
+    ["LangGraph是一个任务编排框架", "LangChain是一个工具链框架"],
+    DashScopeEmbeddings()                        # 原写法 OpenAIEmbeddings() → 百炼向量化
+)
+retriever = db.as_retriever()                    # 原样保留：统一检索器接口
+qa_tool = RetrievalQA.from_chain_type(
+    llm=llm,                                     # 原写法 llm=None → 修复为真模型
+    retriever=retriever,
+    chain_type="stuff"
+)
+</pre>
+<p>要点：<strong>建索引和查询必须用同一个向量化模型</strong>——两段文本用 DashScopeEmbeddings 向量化入库，用户问题也用它向量化后去比对。换模型 = 索引全部重建（向量空间不同，没有可比性）。</p>
+<h3>5.2 节点与图（原样保留）</h3>
+<pre>
+class State(TypedDict):
+    question: str
+    answer: str
+
+def query_node(state: State):
+    result = qa_tool.run(state["question"])      # 链对图就是一个普通函数
+    return {"answer": result}
+
+builder = StateGraph(State)
+builder.add_node("query", query_node)
+builder.set_entry_point("query")
+graph = builder.compile()
+print(graph.invoke({"question": "LangGraph是什么？"}))
+</pre>
+<p><strong>链入图的哲学</strong>：图的节点接口（入参整个状态、返回部分更新）对内容零要求——纯函数（01/02 篇）、链（本篇）、后续的模型调用都能放。char05 建立的这套"图编排层"与 char04 的"链职能层"在这里完成合体：<strong>链管怎么干活，图管什么时候干活、干完去哪</strong>。</p>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（dashscope 真实调用：向量化 + qwen-plus 生成）</div>
+  <pre>
+{'question': 'LangGraph是什么？',
+ 'answer': 'LangGraph 是一个任务编排框架。'}
+  </pre>
+</div>
+<p>运行时的两条废弃警告（都是教学素材）：</p>
+<ul>
+  <li><code class="inline">langchain-community is being sunset</code>——社区包正在被拆分成独立集成包（如 langchain-qianwen），本系列为教学统一仍用它</li>
+  <li><code class="inline">Chain.run was deprecated ... will be removed in 2.0</code>——教材用的 <code class="inline">qa_tool.run()</code> 在 2.0 将移除，新写法 <code class="inline">qa_tool.invoke({"query": ...})</code>。教学版保持教材写法（能跑、贴近原文），生产代码应改 invoke</li>
+</ul>
+
+<!-- ========== 七 ========== -->
+<h2>七、本篇在系列中的位置（RAG 雏形 + 图链合体）</h2>
+<table>
+  <tr><th>能力线</th><th>本篇落点</th><th>后续走向</th></tr>
+  <tr><td>RAG 知识增强</td><td>两段文本的最小检索问答</td><td>真实文档库 / 分块 / 重排（第 7 章 RAG 主题）</td></tr>
+  <tr><td>图编排</td><td>单节点图（图最小化演示）</td><td>01 单节点 → 02 条件边 → 本篇链入图 → 后续多节点 RAG 图</td></tr>
+  <tr><td>百炼平台能力</td><td>聊天模型 + <strong>向量化模型</strong>（同一把钥匙）</td><td>一套 key 两种服务——生产中知识库项目的标准起点</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">与 char03（Embeddings 和向量数据库）的呼应</div>
+  <p>char03 时代你见过 FAISS 与向量检索（chatpdf-faiss 等），那时检索和生成是两段分开的代码。本篇用 RetrievalQA 把它们打包成一个链，再用 LangGraph 把链变成可编排的节点——<strong>同样的技术积木，组织方式在不断进化：函数 → 链 → 图节点</strong>。这一进化的方向就是"让复杂系统的每一层都能被替换和重组"。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、生产视角：教学版离上线的差距</h2>
+<ul>
+  <li><strong>知识库规模</strong>：两句话的内存 FAISS → 生产是持久化向量库 + 分块 + 批量入库 + 索引重建策略</li>
+  <li><strong>检索质量</strong>：默认 top-4 相似度检索 → 加 score_threshold / rerank / 混合检索（BM25+向量）</li>
+  <li><strong>答案可溯源</strong>：RetrievalQA.run 只返回答案字符串，丢掉了命中文档 → 用 return_source_documents=True 或改用 LCEL 链自组输出结构</li>
+  <li><strong>废弃 API</strong>：RetrievalQA / Chain.run 都是 2.0 待移除项——生产用 create_retriever_tool + create_agent，或 LCEL（retriever | prompt | llm）自组</li>
+  <li><strong>单节点图的局限</strong>：本篇图只有一个节点，图的编排价值还没发挥——下一课的多节点（检索→判断→生成）才是图的真正用武之地</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>验证 RAG 的出处价值</strong>：把知识文本换成一段 qwen-plus 大概率不知道的虚构知识（如"张三公司的内部报销系统叫报销侠"），再问"报销侠是什么"——模型只能靠检索命中作答，这就是"模型不知道的知识也能答对"的实证。</li>
+  <li><strong>复现教材伪代码的报错</strong>：临时把 llm 改回 None 跑一次，看 RetrievalQA 在哪一步炸——记住这个报错长相，以后 review 代码时能一眼识破同类伪代码。</li>
+  <li><strong>检索器参数</strong>：db.as_retriever(search_kwargs={"k": 1})——只取最相似的 1 条，观察答案变化；再把 k 调大试试。</li>
+  <li><strong>进阶：两节点 RAG 图</strong>：把 RetrievalQA 拆开——节点1 retrieve（只检索，把文档写进状态 docs 键），节点2 generate（拿 docs 调 qwen-plus 生成）——体会"链拆成图后，每一步都可见可替换"，这是第 5 章后面所有篇章的写法。</li>
+</ol>
+
+</div>
+</body>
+</html>

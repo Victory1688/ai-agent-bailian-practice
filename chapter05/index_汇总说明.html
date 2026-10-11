@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char05 index_汇总说明 - LangGraph 图编排技能总览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.8rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.35rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.45rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>char05 index_汇总说明 - LangGraph 图编排技能总览</h1>
+<div class="meta">目录：char05（10 个 py 文件，01-10 全部改写验证） | 环境实测：langgraph 1.2.11 | 生成日期：2026-10-11 | 配套架构文档：arch_汇总说明.md（含 Mermaid 关联图）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、文件盘点与速查表</h2>
+<p>目录共 <strong>10 个 py 文件（01-10），无副本杂物，全部已完成"改写 + 运行验证"</strong>。本篇改写量系列最小——教材的图结构代码基本真实，问题集中在 State 定义（十连坑）与个别教材自带 bug。</p>
+<table>
+  <tr><th>#</th><th>文件</th><th>教的图技能</th><th>改写/验证要点</th><th>讲解 HTML</th></tr>
+  <tr><td>01</td><td>使用langgraph定义两个节点</td><td>节点 + 固定边（最简图）</td><td>State(Dict)→TypedDict（静默失败第一次）；无 LLM</td><td><a href="01_使用langgraph定义两个节点.html">01</a></td></tr>
+  <tr><td>02</td><td>使用langgraph设置节点之间的条件边</td><td>条件边（动态路由）</td><td>实测输出与教材预期逐字符一致</td><td><a href="02_使用langgraph设置节点之间的条件边.html">02</a></td></tr>
+  <tr><td>03</td><td>LangChain的检索工具与LangGraph集成</td><td>链入图（RetrievalQA）</td><td>llm=None 伪代码实锤；RAG 真实跑通（向量+生成）</td><td><a href="03_LangChain的检索工具与LangGraph集成.html">03</a></td></tr>
+  <tr><td>04</td><td>LangChain函数调用工具与LangGraph集成</td><td>工具入图（@tool）</td><td>教材两处必炸（无 docstring + StructuredTool 不可调用）</td><td><a href="04_LangChain函数调用工具与LangGraph集成.html">04</a></td></tr>
+  <tr><td>05</td><td>基于LangGraph的简单任务流</td><td>多节点流水线 + 降级链</td><td>教材输出手写估错一个字（截断位置算错）</td><td><a href="05_基于LangGraph的简单任务流.html">05</a></td></tr>
+  <tr><td>06</td><td>科研助手多步骤任务实现</td><td>五工位 + 失败信号传递</td><td>降级链断裂 bug 全解剖；set 去重乱序实证</td><td><a href="06_科研助手多步骤任务实现.html">06</a></td></tr>
+  <tr><td>07</td><td>访问外部数据库进行检索</td><td>数据库工位（sqlite3）</td><td>教材预期首次全对；降级链"幸运活着"辨析</td><td><a href="07_访问外部数据库进行检索.html">07</a></td></tr>
+  <tr><td>08</td><td>实现LangGraph与MCP接口的映射</td><td>外部上下文存储（双通道）</td><td>假 MCP 辨析；跨 invoke 覆盖实证；教材预期正确</td><td><a href="08_实现LangGraph与MCP接口的映射.html">08</a></td></tr>
+  <tr><td>09</td><td>A2A的多Agent通信协议传递</td><td>消息传递范式（A→B→C）</td><td>假 A2A 辨析；schema 裁剪输入键新坑（最隐蔽）</td><td><a href="09_A2A的多Agent通信协议传递.html">09</a></td></tr>
+  <tr><td>10</td><td>通过消息总线进行广播多个Agent</td><td>广播 + 并行分支图（扇出-汇聚）</td><td>教材输出造假顶点（键名都错）；随机分工两次实证</td><td><a href="10_通过消息总线进行广播多个Agent.html">10</a></td></tr>
+</table>
+
+<!-- ========== 二 ========== -->
+<h2>二、这组代码想表达什么：从"链"到"图"的编排升级</h2>
+<p>char05 想表达的是<strong>大模型应用编排方式的跃迁——用显式有向图取代线性链和黑盒循环</strong>。char04 的 SequentialChain/initialize_agent 各自只有一种形状（线性流水线 / 框架黑盒），LangGraph 把执行流变成"看得见、改得动"的图：</p>
+<table>
+  <tr><th>编排形态</th><th>代表</th><th>能力边界</th></tr>
+  <tr><td>手写顺序调用</td><td>char01</td><td>单向一问一答，无循环无分支</td></tr>
+  <tr><td>手写循环</td><td>char02（agent_chat while True）</td><td>有循环，但流程硬编码在代码里</td></tr>
+  <tr><td>框架黑盒</td><td>char04（initialize_agent）</td><td>有循环有决策，但内部不可见不可控</td></tr>
+  <tr><td><strong>显式图（本篇）</strong></td><td><strong>char05（LangGraph）</strong></td><td><strong>节点是普通函数、边是显式声明——顺序/条件/并行/循环四种形状全部可声明，既看得见又改得动</strong></td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>三、十篇的四段演进线</h2>
+<pre>
+【第一段：图的积木】01-02
+   01 节点+固定边（顺序图）→ 02 条件边（路由函数+映射表，从流水线到任务流的分水岭）
+
+【第二段：组件入图】03-04
+   03 链入图（RetrieQA 整条塞进节点，粗粒度）→ 04 工具入图（@tool 细粒度嵌入）
+   ——LangChain 组件与 LangGraph 图的合体姿势
+
+【第三段：业务流水线与降级链】05-07
+   05 四工位（值传递降级）→ 06 五工位（信号被加工→链断）→ 07 数据库工位（信号未被加工→链活）
+   ——同一骨架三次复用，降级链三部曲（结构化 status 的诞生理由）
+
+【第四段：通信与并行】08-10
+   08 外部上下文存储（State 与图外存储双通道）→ 09 消息传递范式（Agent 间不共享变量）
+   → 10 广播+并行分支图（扇出-汇聚，系列第一个并行图）
+   ——从"编排一个图"到"编排一群 Agent"
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、系列级教学财富：char05 独有的四笔"学费清单"</h2>
+<div class="warn">
+  <div class="warn-title">1. 十连坑：State(Dict) 静默失败的完整谱系</div>
+  <table>
+    <tr><th>形态</th><th>篇</th><th>现象</th><th>危险度</th></tr>
+    <tr><td>裸 dict 子类</td><td>01-08</td><td>invoke 返回 None（错在出口，一眼见尸）</td><td>高（不报错）</td></tr>
+    <tr><td>TypedDict 漏字段</td><td>09</td><td>图正常跑完，不在 schema 里的输入键被静默裁剪（错在入口，结果"看起来正常"）</td><td><strong>更高</strong></td></tr>
+    <tr><td>修复姿势</td><td>全部</td><td>TypedDict 字段 = 节点要读写的全部键（含入口键 query）</td><td>—</td></tr>
+  </table>
+</div>
+<div class="card">
+  <div class="card-title">2. 降级链三部曲（05-07）：字符串失败信号的可靠性问题</div>
+  <p>05 信号整体替换（链活）→ 06 信号被格式加工（链断）→ 07 信号被加工函数放行（链活，纯靠运气：信号里恰好没有会被 replace 命中的字）。结论：<strong>失败状态是元信息，别和正常数据混管道靠字符串比对——生产用结构化 status 字段</strong>。</p>
+</div>
+<div class="card">
+  <div class="card-title">3. 教材输出问题谱系（char05 是重灾区）</div>
+  <p>05 手写估算截断位置（少算一字）→ 07 首次全对 → 08/09 正确 → 10 <strong>键名造假顶点</strong>（AgentD_results 键不存在 + 展示随机分工"最好看的一种可能"）。方法论沉淀：<strong>教材输出永远以实测为准，尤其是含随机性的示例</strong>。</p>
+</div>
+<div class="card">
+  <div class="card-title">4. 协议名陷阱连续剧（08-09）</div>
+  <p>08 的"MCPInterface"与真实 MCP 协议（Anthropic）无关、09 的"A2AProtocol"与真实 A2A 协议（Google，MCP 的姊妹协议）无关——教材借热门名词做教学命名。<strong>见到"自定义 MCP/A2A 类"先做同名辨析</strong>；真实集成走 langchain-mcp-adapters。</p>
+</div>
+
+<!-- ========== 五 ========== -->
+<h2>五、char05 贯穿十篇的三条不变式</h2>
+<ul>
+  <li><strong>① 节点 = 纯函数（状态进，部分更新出）</strong>：入参是整个 State（只读视角），返回值是要合并的增量字典——十篇全部如此，比 SequentialChain 的变量名接线更自由，也比黑盒 Agent 更可控</li>
+  <li><strong>② 图结构 = 显式声明（add_node + add_edge + set_entry_point）</strong>：执行流不在代码逻辑里而在图定义里——改流程 = 改声明，不动节点函数（05→06→07 三次换实现骨架零改动的实证）</li>
+  <li><strong>③ State 生命周期 = 单次 invoke</strong>：需要跨执行/跨节点群共享的东西必须外置（08 字典、09 消息列表、生产 Redis/DB）——与 char02 记忆思想一脉相承</li>
+</ul>
+
+<!-- ========== 六 ========== -->
+<h2>六、概念自测清单（读完 10 篇应该能不假思索回答）</h2>
+<ol>
+  <li>为什么 State(Dict) 会静默失败，而 TypedDict 能工作？（schema 由字段注解构建）</li>
+  <li>TypedDict 漏声明 query 字段时会发生什么？（输入键被静默裁剪，不报错——09 篇实测）</li>
+  <li>add_conditional_edges 的三个参数各是什么？（挂载点 / 路由函数 / 映射表——02 篇）</li>
+  <li>RetrievalQA 里 llm=None 为什么必炸？（链的职责 = 检索+生成，没有 LLM 就没有生成——03 篇）</li>
+  <li>@tool 为什么必须有 docstring？（docstring 就是给模型/框架看的 description——04 篇）</li>
+  <li>StructuredTool 为什么不能直接 multiply(a=7, b=8)？（@tool 返回的是工具对象不是函数，调用要走 .invoke——04 篇）</li>
+  <li>06 篇的降级链为什么断裂？（失败信号被中间工位的格式加工破坏，下游精确匹配失配）</li>
+  <li>07 篇的降级链为什么活着？（失败信号恰好不被 replace 命中——运气不是设计）</li>
+  <li>sqlite3 ":memory:" 每次连接意味着什么？（全新空库，连接关闭数据销毁——07 篇）</li>
+  <li>State 和外部存储（mcp/hub）的生命周期差异？（单次 invoke vs 进程级——08 篇双 invoke 实证）</li>
+  <li>09 篇的 AgentB 数据从哪来？（a2a.receive 收信，不读 State 的 agentA_result——消息传递范式标志）</li>
+  <li>条件边和并行边的区别？（只走一条 vs 全部都走——02/10 姊妹篇）</li>
+  <li>LangGraph 并行图的汇聚点为什么不会早到？（屏障语义：等所有分支完成——10 篇）</li>
+  <li>教材的 MCP/A2A 类和真实协议差在哪？（同名陷阱：真协议是跨进程标准，教材类是同进程对象——08/09 辨析）</li>
+</ol>
+
+<!-- ========== 七 ========== -->
+<h2>七、教学版 vs 生产版差距地图</h2>
+<table>
+  <tr><th>教学简化</th><th>生产要求</th><th>相关篇</th></tr>
+  <tr><td>fake_db / 模拟字典检索</td><td>向量库混合检索 + 数据库 FTS</td><td>03/05/06/09</td></tr>
+  <tr><td>:memory: 每次重建库</td><td>持久化库 + 连接池 + 只读权限</td><td>07</td></tr>
+  <tr><td>字符串失败信号 + 精确匹配</td><td>结构化 status 字段 + 类型化错误</td><td>05/06/07</td></tr>
+  <tr><td>模块级字典/列表当外部存储</td><td>Redis/DB + 会话隔离 + TTL 清理</td><td>08/09/10</td></tr>
+  <tr><td>random 随机分工</td><td>确定性调度 / 任务队列 / 幂等设计</td><td>10</td></tr>
+  <tr><td>同进程"假 MCP/A2A"</td><td>langchain-mcp-adapters / 真 A2A 协议栈</td><td>08/09</td></tr>
+  <tr><td>inbox[-1] 取最新一条</td><td>消息确认 / 重试 / 幂等消费</td><td>09/10</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、给新人的学习路径（char05 版）</h2>
+<ol>
+  <li><strong>先跑 01</strong>：亲手复现"invoke 返回 None"，再改 TypedDict 看它活过来——建立"schema 即契约"的第一直觉（自测：能解释为什么 Dict 子类失败）</li>
+  <li><strong>再跑 02</strong>：改路由函数的判断条件，观察走不同分支——理解"图是声明，路由是逻辑"（自测：说出条件边三参数）</li>
+  <li><strong>读 03/04 做对比</strong>：链入图 vs 工具入图，体会粗/细粒度选型（自测：能说出 @tool 无 docstring 会炸在哪一行）</li>
+  <li><strong>连读 05-07 做降级链专题</strong>：重点看 06 的断裂与 07 的"幸运"——这是本系列最珍贵的错误分析（自测：能画出三篇的信号传递链并标注断点）</li>
+  <li><strong>连读 08-10 做通信专题</strong>：先辨析假 MCP/假 A2A，再对比 State 与外部存储的生命周期，最后看并行图的屏障语义（自测：能解释 08 覆盖 vs 09 累积的差异）</li>
+  <li><strong>做练习题</strong>：每篇 HTML 的动手练习按 1→4 递进；09 练习 1（复现裁剪坑）和 10 练习 1（统计漏做比例）优先做</li>
+</ol>
+<p><strong>前置要求</strong>：char01-04 顺序学完（尤其 char04 的 initialize_agent——char05 是对"黑盒"的回应）。<strong>后续衔接</strong>：char05 补上了图的"循环"一课的最后拼图（02 条件边 + 回边 = Agent 循环的图版本），向上通往生产级图编排（checkpoint 持久化 / human-in-the-loop / 子图）。</p>
+
+<!-- ========== 九 ========== -->
+<h2>九、讲解 HTML 索引与配套文档</h2>
+<ul>
+  <li>逐篇讲解：<a href="01_使用langgraph定义两个节点.html">01</a> · <a href="02_使用langgraph设置节点之间的条件边.html">02</a> · <a href="03_LangChain的检索工具与LangGraph集成.html">03</a> · <a href="04_LangChain函数调用工具与LangGraph集成.html">04</a> · <a href="05_基于LangGraph的简单任务流.html">05</a> · <a href="06_科研助手多步骤任务实现.html">06</a> · <a href="07_访问外部数据库进行检索.html">07</a> · <a href="08_实现LangGraph与MCP接口的映射.html">08</a> · <a href="09_A2A的多Agent通信协议传递.html">09</a> · <a href="10_通过消息总线进行广播多个Agent.html">10</a></li>
+  <li>架构视角（含 4 张 Mermaid 关联图）：<a href="arch_汇总说明.md">arch_汇总说明.md</a></li>
+  <li>同系列总览：char01（提示词基本功）/ char02（Agent 能力矩阵）/ char03（模型服务化）/ char04（LangChain 框架化）的 index_汇总说明.html + arch_汇总说明.md 均在各自目录</li>
+</ul>
+
+</div>
+</body>
+</html>

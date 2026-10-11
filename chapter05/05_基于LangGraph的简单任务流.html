@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05_基于LangGraph的简单任务流 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>05_基于LangGraph的简单任务流 - 代码解析</h1>
+<div class="meta">对应文件：char05/05_基于LangGraph的简单任务流.py | 教材出处：第5章 基于 LangGraph 的简单任务流 | 环境实测：langgraph 1.2.11 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 01 篇两节点图的<strong>业务化扩展版</strong>：把"检索问答"搭成一条完整的四工位流水线——<strong>预处理</strong>（标准化问题文本）→ <strong>检索</strong>（字典数据库查资料）→ <strong>摘要</strong>（截断模拟）→ <strong>结论</strong>（基于摘要给答案）。每个节点"读上游的键、写自己的键"，五个状态字段就是五个工位的产出。整条流水线没有大模型参与——先把骨架跑通，真实实现后续再替换进来。<br>
+改写点只有一个：教材 <code class="inline">State(Dict)</code> 静默失败（系列第五次）→ TypedDict。四个节点、图构建、invoke 全部原样保留。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、四工位流水线全景</h2>
+<pre>
+  graph.invoke({"query": "LangGraph?"})
+            │
+            ▼
+  ┌──────────────────────┐
+  │ 1. preprocess 工位     │  读: query
+  │    strip + lower      │  写: query(被strip值覆盖), standardized
+  │    去掉 "?"            │      = "langgraph"
+  └──────────┬───────────┘
+             ▼
+  ┌──────────────────────┐
+  │ 2. retrieve 工位       │  读: standardized
+  │    字典数据库精确匹配    │  写: retrieved
+  │    "langgraph" 命中!   │      = "LangGraph是一种任务图编排框架，擅长复杂流程管理"
+  └──────────┬───────────┘
+             ▼
+  ┌──────────────────────┐
+  │ 3. summarize 工位      │  读: retrieved
+  │    截断20字符 + "..."  │  写: summary
+  │    (本地模拟"摘要")     │      = "LangGraph是一种任务图编排框架，..."
+  └──────────┬───────────┘
+             ▼
+  ┌──────────────────────┐
+  │ 4. conclude 工位       │  读: summary
+  │    拼装最终结论         │  写: conclusion
+  └──────────┬───────────┘
+             ▼
+            END
+</pre>
+<p>这是"任务流（Task Flow）"的正式登场：01 篇的两节点证明了图能跑，本篇证明<strong>图能承载完整业务流程</strong>——工位数想加就加，工位内部实现想换就换。</p>
+
+<!-- ========== 三 ========== -->
+<h2>三、教材代码的问题与教材输出的问题</h2>
+<div class="warn">
+  <div class="warn-title">问题1：State(Dict) 静默失败（系列第五次）</div>
+  <p><code class="inline">from typing import Dict</code> + <code class="inline">class State(Dict): pass</code>——比前几篇多绕了一层（Dict 而非 dict），本质相同：<strong>无字段注解 → 图无法构建状态 schema → invoke 返回 None</strong>。修 TypedDict 五字段（query/standardized/retrieved/summary/conclusion）。</p>
+</div>
+<div class="warn">
+  <div class="warn-title">问题2（有趣发现）：教材的"预期输出"是手写估算，不是真跑结果</div>
+  <p>教材预期 <code class="inline">summary: 'LangGraph是一种任务图编排框...'</code>——实测却是 <code class="inline">'LangGraph是一种任务图编排框架，...'</code>。为什么？<code class="inline">content[:20]</code> 按字符截断：LangGraph 占 9 个字符，"是一种任务图编排框架"占 10 个，第 20 个字符是"，"——所以截断点带着逗号。<strong>教材预期少算了一个"架"字和逗号</strong>，说明这段输出是作者估算的，没实际运行。教训：一切以实测为准（本篇实测输出已写进改写文件的注释里）。</p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>任务流</td><td>按固定顺序依次执行的节点流水线</td><td>本篇四工位单线图（01 篇的扩展）</td></tr>
+  <tr><td>状态五字段</td><td>TypedDict 声明的五个产出槽位</td><td>每个工位读上游键、写自己的键</td></tr>
+  <tr><td>键改写</td><td>节点返回已有键会覆盖原值</td><td>preprocess 用 strip 后的 query 覆盖原始输入</td></tr>
+  <tr><td>精确匹配检索</td><td>字典 get 的完全相等查找</td><td>standardized 恰好等于 "langgraph" 才命中</td></tr>
+  <tr><td>降级链</td><td>失败信号逐级传递+逐级翻译</td><td>"未找到文献"→"暂无可用信息"→"未能得到支持性资料"</td></tr>
+  <tr><td>模拟工位</td><td>占位实现（截断当摘要）</td><td>先验证骨架，真实实现（LLM/向量检索）后续替换</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段代码讲解</h2>
+<h3>5.1 预处理节点（原样保留）——节点可以改写上游键</h3>
+<pre>
+def preprocess_node(state: State) -> State:
+    query = state.get("query", "").strip()
+    standardized = query.lower().replace("?", "")
+    return {"query": query, "standardized": standardized}   # query 被 strip 后的值覆盖
+</pre>
+<p>注意返回字典里的 <code class="inline">"query": query</code>——把"清洗过的 query"写回 query 键，<strong>覆盖了用户原始输入</strong>（"LangGraph?" 变成 "LangGraph"）。这是部分更新机制的另一面：不仅能新增键，还能改写键。本例改写是合理设计（下游不需要问号），但要意识到：原始信息已被覆盖，想留痕就得另开键（如 raw_query）。</p>
+<h3>5.2 检索节点（原样保留）——字典精确匹配 vs FAISS 相似度</h3>
+<pre>
+database = {
+    "langgraph": "LangGraph是一种任务图编排框架，擅长复杂流程管理",
+    "agent": "智能体系统依赖任务调度与状态管理实现高效运行"
+}
+result = database.get(keyword, "未找到相关文献")
+</pre>
+<p>与 03 篇对照：<strong>同样的"检索工位"，03 用 FAISS 向量相似度（能容错"LangGraph 是什么"这类自然语句），本篇用字典精确匹配（只认恰好等于 "langgraph" 的标准化文本）</strong>。所以本篇的 preprocess 才如此重要——必须把 "LangGraph?" 清洗成恰好等于 key 的 "langgraph"。这个依赖关系正是真实系统里"预处理"存在的意义：把混乱的输入规整成下游能消费的形状。</p>
+<h3>5.3 摘要与结论节点（原样保留）——模拟实现 + 兜底判断</h3>
+<pre>
+def summarize_node(state: State) -> State:
+    content = state.get("retrieved", "")
+    if content == "未找到相关文献":          # 兜底判断：上游失败的信号我接住了
+        summary = "暂无可用信息"
+    else:
+        summary = content[:20] + "..."      # 模拟"摘要"：真实场景换成 LLM 生成
+    return {"summary": summary}
+</pre>
+<p>每个工位都先检查上游有没有给有效内容——失败就产出自己的"失败信号"（措辞逐级变化）。</p>
+<h3>5.4 图构建（原样保留）</h3>
+<pre>
+builder.set_entry_point("preprocess")
+builder.add_edge("preprocess", "retrieve")   # 四条固定边，单线到底
+builder.add_edge("retrieve", "summarize")
+builder.add_edge("summarize", "conclude")
+builder.add_edge("conclude", END)
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（langgraph 1.2.11，无 LLM 调用）</div>
+  <pre>
+{'query': 'LangGraph?', 'standardized': 'langgraph',
+ 'retrieved': 'LangGraph是一种任务图编排框架，擅长复杂流程管理',
+ 'summary': 'LangGraph是一种任务图编排框架，...',
+ 'conclusion': '基于文献摘要可得: LangGraph是一种任务图编排框架，...'}
+  </pre>
+  <p>五个字段按工位顺序齐全，状态累积完整可见——与教材预期<strong>结构一致</strong>，仅 summary 截断点按真实字符数计算（见第三节问题2）。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>七、本篇最有价值的对照：值传递兜底 vs 条件边分流（02 篇 vs 本篇）</h2>
+<table>
+  <tr><th></th><td>02 篇：条件边分流</td><td>本篇：值传递兜底</td></tr>
+  <tr><td>失败怎么处理</td><td>路由函数把流量引到别的分支（<strong>换路走</strong>）</td><td>失败信号写进状态，下游逐级判断翻译（<strong>同一条路都走完</strong>）</td></tr>
+  <tr><td>执行路径</td><td>只走命中的一条</td><td>四个工位全部执行</td></tr>
+  <tr><td>失败信息</td><td>失败分支自己产出</td><td>逐级翻译："未找到文献"→"暂无可用信息"→"未能得到支持性资料"</td></tr>
+  <tr><td>适合场景</td><td>失败后彻底换流程</td><td>统一流程里逐段降级、最终口径统一</td></tr>
+</table>
+<p>两种写法都是"处理异常"的合法姿势——<strong>条件边适合"分流"，值传递适合"降级"</strong>。看懂这个区别，就同时掌握了 char05 前半章的两把刷子。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、生产视角：模拟工位 → 真实实现 的替换清单</h2>
+<ul>
+  <li><strong>retrieve 工位</strong>：字典 get → FAISS/向量库相似度检索（03 篇已给过真实现）</li>
+  <li><strong>summarize 工位</strong>：截断 20 字符 → ChatTongyi 生成真摘要（注意"截断"会腰斩语义，LLM 摘要保留完整语义）</li>
+  <li><strong>conclude 工位</strong>：字符串拼接 → LLM 基于摘要生成结论（或直接让 03 篇的 RetrievalQA 一站式完成）</li>
+  <li><strong>preprocess 工位</strong>：lower+去问号 → 真实清洗规则（分词/纠错/改写），或干脆删掉换向量检索的容错性</li>
+  <li><strong>架构不变</strong>：四个节点、五字段状态、四条边——<strong>工位内部实现全部替换，骨架一行不动</strong>。这就是"先建骨架再换实现"开发法的教科书示范</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>体验降级链</strong>：invoke({"query": "Redis"})（数据库里没有的词）——观察三个工位如何逐级翻译失败信号，最终 conclusion 是什么。</li>
+  <li><strong>验证精确匹配的脆弱</strong>：把 query 改成 "langgraph is good"——即使包含 langgraph 也查不到（standardized 不恰好等于 key）。体会为什么 03 篇要用向量相似度。</li>
+  <li><strong>保护原始输入</strong>：新增 raw_query 键（TypedDict 加字段 + preprocess 覆盖前先写入），让最终状态能同时看到原始输入和清洗后输入。</li>
+  <li><strong>进阶：条件边升级版</strong>：把 summarize/conclude 里的 if 判断拆掉，用 02 篇的 add_conditional_edges 改造——"未找到"时绕过摘要直连一个专门的兜底节点。改造后对比两种形态的代码可读性。</li>
+</ol>
+
+</div>
+</body>
+</html>

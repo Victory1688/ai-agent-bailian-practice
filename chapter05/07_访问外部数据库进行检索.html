@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07_访问外部数据库进行检索 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>07_访问外部数据库进行检索 - 代码解析</h1>
+<div class="meta">对应文件：char05/07_访问外部数据库进行检索.py | 教材出处：第5章 访问外部数据库进行检索 | 环境实测：langgraph 1.2.11 / sqlite3 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>05 篇用字典当数据库（模拟），本篇把检索工位换成<strong>真正的 sqlite3 数据库</strong>：建表、插数据、按关键词执行 <code class="inline">SELECT ... WHERE keyword=?</code> 查询。四节点流水线：预处理（关键词提取）→ <strong>数据库检索</strong>（本篇核心）→ 工具加工（字符串替换模拟"外部工具"）→ 结论汇总。<br>
+改写点只有 State(Dict) 静默失败（系列第七次）→ TypedDict——四个节点（含全部 SQL 逻辑）原样保留。<strong>教材预期输出经实测核对完全正确</strong>（05 篇手写估错、06 篇没写，本篇是系列里教材输出与实测完全一致的第一篇）。</p>
+
+<!-- ========== 二 ========== -->
+<h2>本篇核心：数据库工位的三个教学点</h2>
+<h3>2.1 内存数据库 :memory: 的生命周期</h3>
+<pre>
+conn = sqlite3.connect(":memory:")   # 每次连接都是一个全新的空库
+cursor.execute("CREATE TABLE papers (...)")   # 所以节点里要重新建表
+cursor.executemany("INSERT INTO papers ...")  # 重新插数据
+...
+conn.close()    # 连接关闭，内存库连同数据一起销毁
+</pre>
+<table>
+  <tr><th></th><td>:memory: 内存库（本篇）</td><td>真实外部数据库（生产）</td></tr>
+  <tr><td>数据生命周期</td><td>连接打开→创建，连接关闭→销毁</td><td>持久化在磁盘，连接只是"看它的窗口"</td></tr>
+  <tr><td>每次 invoke</td><td>都要重新建表插数据（本篇节点内做）</td><td>建表一次，节点只做 SELECT</td></tr>
+  <tr><td>多节点/多进程共享</td><td>做不到（每个连接独立的库）</td><td>天然共享</td></tr>
+  <tr><td>教学价值</td><td>零配置自包含演示——演示完什么痕迹都不留</td><td>—</td></tr>
+</table>
+<p>教材注释"使用内存数据库示例"说得诚实——它是<strong>让演示自包含的手段</strong>：读者无需准备任何数据库文件就能跑通。换真库只需改 connect 参数，SQL 一字不动。</p>
+<h3>2.2 ? 占位符（SQL 注入防护，呼应 char02-06）</h3>
+<pre>
+cursor.execute("SELECT content FROM papers WHERE keyword=?", (kw,))
+</pre>
+<p>与 char02-06 篇（员工数据库）同款标准写法：参数永远走占位符 + 元组传参，绝不 f-string 拼 SQL。若 kw 被恶意注入 <code class="inline">"' OR '1'='1"</code>，占位符会把它当纯文本匹配（查无结果），拼接写法则会把全表泄出去。</p>
+<h3>2.3 按关键词逐个查询（与 06 篇同构）</h3>
+<pre>
+for kw in state.get("keywords", []):
+    cursor.execute("SELECT content FROM papers WHERE keyword=?", (kw,))
+    results.extend([row[0] for row in rows])
+</pre>
+<p>与 06 篇的字典 for 循环逐词检索同构——<strong>骨架复用的又一实证</strong>：把 <code class="inline">database.get(kw, [])</code> 换成 SQL 查询，其他节点一行不动。</p>
+
+<!-- ========== 三 ========== -->
+<h2>本篇最有价值的发现：降级链"活着"是运气不是设计</h2>
+<div class="warn">
+  <div class="warn-title">与 06 篇的对照实验：同样的写法，06 断了，07 活着——为什么？</div>
+  <table>
+    <tr><th></th><td>06 篇（断裂）</td><td>07 篇（活着）</td></tr>
+    <tr><td>失败信号</td><td>"有效文献不足"</td><td>"未找到相关数据"</td></tr>
+    <tr><td>中间工位加工</td><td>截断+加省略号 → <strong>"有效文献不足..."</strong></td><td>replace("系统","智能体系统") → <strong>信号里没有"系统"，原样通过</strong></td></tr>
+    <tr><td>下游精确匹配</td><td>失配 → 降级链断裂</td><td>命中 → 降级链正常</td></tr>
+  </table>
+  <p>本篇 conclude 与 06 篇一样用<strong>精确匹配</strong>判断失败信号——它能工作，仅仅因为 tool 工位的 replace 恰好碰不到信号里的字。做个反事实推演：若失败信号改叫"检索<strong>系统</strong>异常"，replace 会把它变成"检索<strong>智能体系统</strong>异常"→ 精确匹配立刻失效 → 与 06 篇同款断裂。</p>
+</div>
+<div class="card">
+  <div class="card-title">教训升华（05→06→07 三篇的完整故事线）</div>
+  <ul>
+    <li><strong>05</strong>：信号逐级<strong>整体替换</strong>（"未找到"→"暂无可用信息"）→ 链活</li>
+    <li><strong>06</strong>：信号被<strong>格式加工</strong>（加省略号）→ 链断</li>
+    <li><strong>07</strong>：信号被加工函数<strong>放行（运气好）</strong>→ 链活</li>
+  </ul>
+  <p>三篇合起来的结论：字符串信号在流水线里的存活是<strong>不可靠的</strong>——它取决于"下游有没有人碰巧改了它"。生产正解：<strong>失败状态走结构化通道</strong>（State 加 status 字段），文本内容随便加工，元信息永不失真。</p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>sqlite3</td><td>Python 标准库自带的轻量 SQL 数据库</td><td>零配置的"外部数据库"教学载体</td></tr>
+  <tr><td>:memory:</td><td>sqlite3 的内存库模式</td><td>自包含演示；连接关闭数据销毁</td></tr>
+  <tr><td>? 占位符</td><td>SQL 参数化查询标准写法</td><td>SELECT 的防注入（呼应 char02-06）</td></tr>
+  <tr><td>executemany</td><td>批量执行同一 SQL</td><td>一次性插 3 条文献数据</td></tr>
+  <tr><td>工具工位</td><td>对外部处理能力的抽象占位</td><td>replace 象征翻译/改写/润色等真实工具</td></tr>
+  <tr><td>降级链运气论</td><td>字符串信号的存活取决于加工函数</td><td>本篇活、06 断——同款写法不同命运</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>整体执行流程图</h2>
+<pre>
+  invoke({"query": "Graph Agent Database Research"})   invoke({"query": "Quantum"})（补测）
+              │                                                  │
+              ▼                                                  ▼
+  ┌─ preprocess ─────────────────┐                  ┌─ preprocess ──────┐
+  │ keywords = [graph, agent,     │                  │ keywords=[quantum] │
+  │             database, research]│                  └─────────┬─────────┘
+  └──────────┬────────────────────┘                            ▼
+              ▼                                     ┌─ retrieve(sqlite3) ──────┐
+  ┌─ retrieve(sqlite3) ──────────┐                  │ SELECT quantome→空        │
+  │ graph→1条 agent→1条 database→1条│                  │ → ["未找到相关数据"]        │
+  │ research→0条 → 共3条           │                  └─────────┬─────────┘
+  └──────────┬────────────────────┘                            ▼
+              ▼                                     ┌─ tool ───────────────────┐
+  ┌─ tool ───────────────────────┐                  │ replace 不碰"系统"→原样    │
+  │ "多Agent系统..."→"多Agent       │                  │ ["未找到相关数据"]          │
+  │  智能体系统..."（其余不变）      │                  └─────────┬─────────┘
+  └──────────┬────────────────────┘                            ▼
+              ▼                                     ┌─ conclude ───────────────┐
+  ┌─ conclude ───────────────────┐                  │ 精确匹配命中               │
+  │ 无失败信号 → 拼装综合分析       │                  │ → "未能生成有效结论"        │
+  └──────────┬────────────────────┘                  └─────────┬─────────┘
+              ▼                                                 ▼
+            END                                               END
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（langgraph 1.2.11 + sqlite3，正常+故障双路径）——正常路径与教材预期逐字符一致</div>
+  <pre>
+【正常路径】invoke({"query": "Graph Agent Database Research"})
+keywords:  ['graph', 'agent', 'database', 'research']
+retrieved: ['LangGraph提升任务流管理能力',
+            '多Agent系统依赖任务调度与协作',
+            '科研任务常涉及数据库查询与整合']
+processed: ['LangGraph提升任务流管理能力',
+            '多Agent智能体系统依赖任务调度与协作',      ← replace 生效处
+            '科研任务常涉及数据库查询与整合']
+conclusion: '综合分析结果: LangGraph提升任务流管理能力 | 多Agent智能体系统依赖任务调度与协作 | 科研任务常涉及数据库查询与整合'
+
+【故障路径】invoke({"query": "Quantum"})   ← 教材未含，补充实证
+retrieved: ['未找到相关数据']
+processed: ['未找到相关数据']              ← replace 未加工信号（运气）
+conclusion: '未能生成有效结论'              ← 降级链正常工作
+  </pre>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>生产视角：内存演示库 → 真实外部数据库</h2>
+<ul>
+  <li><strong>建库搬出节点</strong>：CREATE TABLE / INSERT 移到节点外（初始化脚本或 migrations），节点只留 SELECT——现在节点里"每次 invoke 重建库"是演示便利，生产绝不允许</li>
+  <li><strong>连接管理</strong>：sqlite3.connect 直接调 → 连接池/ORM（生产环境连接的建立是昂贵操作，且要防泄漏）</li>
+  <li><strong>查询策略</strong>：关键词逐条 SELECT → 批量 IN 查询 / 全文索引（FTS5）/ 与向量检索组合成混合检索</li>
+  <li><strong>失败状态结构化</strong>：status 字段（第三节三篇故事线的最终答案）</li>
+  <li><strong>权限最小化</strong>：检索节点通常只需要只读账号——应用连接不该有 DROP/DELETE 权限</li>
+</ul>
+
+<!-- ========== 八 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>反事实实验</strong>：把 retrieve 的失败信号改成"检索系统异常"，跑故障路径——亲眼看 replace 把它变成"检索智能体系统异常"导致 conclude 判断失效（在 07 篇亲手复现 06 篇的断裂）。</li>
+  <li><strong>批量查询</strong>：把逐关键词 SELECT 改成一条 SQL：<code class="inline">SELECT content FROM papers WHERE keyword IN (?,?,?,?)</code>（占位符数量与 keywords 等长）——对比两种写法的查询次数。</li>
+  <li><strong>持久化版</strong>：把 ":memory:" 换成文件路径（如 "papers.db"），建表插数据移到节点外只执行一次，节点只 SELECT——观察第二次 invoke 不再需要插数据。</li>
+  <li><strong>进阶：真外部工具</strong>：把 tool 工位的 replace 换成一次 ChatTongyi 调用（对每条文献生成一句话点评），体验"字符串加工工位 → 模型工位"的升级路径。</li>
+</ol>
+
+</div>
+</body>
+</html>

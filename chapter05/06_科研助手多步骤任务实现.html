@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06_科研助手多步骤任务实现 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>06_科研助手多步骤任务实现 - 代码解析</h1>
+<div class="meta">对应文件：char05/06_科研助手多步骤任务实现.py | 教材出处：第5章示例三 科研助手多步骤任务 | 环境实测：langgraph 1.2.11 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>05 篇是"单关键词流水线"，本篇升级为<strong>五工位的科研助手</strong>：预处理（关键词提取）→ 文献检索（<strong>多关键词批量查库</strong>）→ 文献筛选（<strong>去重过滤</strong>——05 篇没有的加工工位）→ 生成摘要（截断模拟）→ 汇总结论。查询 "Graph Agent Research" 会提取出 graph/agent/research 三个关键词，批量检索出 4 篇文献，去重后逐篇摘要，最后拼装结论。<br>
+改写点：State(Dict) 静默失败（系列第六次）→ TypedDict 六字段；外加修复一个隐蔽的<strong>降级链断裂 bug</strong>（见第三节，本篇最大发现）。</p>
+
+<!-- ========== 二 ========== -->
+<h2>三工位升级对照：05 篇 → 06 篇</h2>
+<table>
+  <tr><th>能力</th><td>05 篇</td><td>06 篇</td></tr>
+  <tr><td>关键词提取</td><td>整句标准化（lower+去问号）</td><td><strong>分词 + 停用词过滤（len&gt;3）+ 小写</strong></td></tr>
+  <tr><td>检索方式</td><td>单关键词精确匹配（命中一条）</td><td><strong>多关键词批量检索</strong>（每个词带一批文献 extend 进列表）</td></tr>
+  <tr><td>结果加工</td><td>无（直接进摘要）</td><td><strong>新增 filter 工位</strong>：过滤无效项 + 集合去重</td></tr>
+  <tr><td>数据形态</td><td>全程字符串</td><td><strong>全程列表</strong>（keywords/retrieved_docs/filtered_docs/summaries）</td></tr>
+  <tr><td>降级链</td><td>逐级翻译（正常工作）</td><td><strong>断裂 bug（被中间工位加工失真）</strong></td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>本篇最大发现：降级链断裂 bug（实测实锤）</h2>
+<div class="warn">
+  <div class="warn-title">一个"跑正常路径永远发现不了"的静默逻辑 bug</div>
+  <p>故障路径的信号传递链：</p>
+  <pre>
+filter 失败 → filtered_docs = ["有效文献不足"]     （6 个字符）
+       ↓
+summarize: doc[:15] + "..."  →  ["有效文献不足..."]  ← 不足15字不截断，但省略号照加！
+       ↓
+conclude:  if "有效文献不足" in summaries:          ← 精确匹配列表元素
+           "有效文献不足..." != "有效文献不足"        ← 永远失配！
+       ↓
+走 else 分支 → conclusion = "基于现有文献分析：有效文献不足..."
+                                        ↑ 失败被当成正常分析结果输出！
+  </pre>
+  <p><strong>实测铁证</strong>：查 "Quantum Research"（库里没有），修复前 conclude 输出"基于现有文献分析：有效文献不足..."——把失败信号当文献分析给了用户。</p>
+</div>
+<h3>修复方案与更深层的教训</h3>
+<p>最小修复：conclude 的判断从精确匹配改子串匹配 <code class="inline">any("有效文献不足" in s ...)</code>（原写法注释保留）。但更普适的教训是：<strong>失败信号是"元信息"，不应该和正常数据混在同一条管道里靠字符串比对区分</strong>——中间任何工位对内容做格式加工（截断/拼接/翻译），都可能让下游的信号识别失效。生产做法是加独立的状态字段（如 <code class="inline">status: "ok" | "no_docs"</code>），让失败状态走结构化通道，与文本内容彻底解耦。</p>
+<div class="card">
+  <div class="card-title">对照 05 篇：为什么 05 的降级链没断？</div>
+  <p>05 篇 summarize 对失败信号是<strong>整体替换</strong>（"未找到相关文献"→"暂无可用信息"，替换前后都是"完整信号"），06 篇是<strong>格式加工</strong>（截断+加省略号，信号被变形）。一个字之差：替换保留语义完整性，加工破坏信号结构。<strong>当你准备"顺手处理"一个可能是失败信号的字符串时，先问一句：下游有没有人在精确匹配它？</strong></p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>关键词提取</td><td>分词 + 长度过滤 + 小写归一</td><td>"Graph Agent Research" → ["graph","agent","research"]</td></tr>
+  <tr><td>多关键词检索</td><td>每个关键词各查一批、extend 合并</td><td>graph 2 篇 + agent 2 篇 + research 0 篇 = 4 篇</td></tr>
+  <tr><td>集合去重</td><td><code class="inline">{doc for doc in docs if ...}</code> → list</td><td>过滤"未找到"+去重——<strong>但会打乱顺序（实测实证）</strong></td></tr>
+  <tr><td>列表字段的状态</td><td>TypedDict 的 List[str] 注解</td><td>教材 import 的 List 终于派上用场</td></tr>
+  <tr><td>降级链断裂</td><td>失败信号被中间工位加工失真</td><td>本篇 bug：省略号让精确匹配失效</td></tr>
+  <tr><td>正常/故障双路径</td><td>同一张图跑两组输入验证</td><td>本篇实测：正常拼结论 / 故障报"未能生成"</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>整体执行流程图</h2>
+<pre>
+  invoke({"query": "Graph Agent Research"})        invoke({"query": "Quantum Research"})
+              │                                             │
+              ▼                                             ▼
+  ┌─ preprocess ─────────────┐                   ┌─ preprocess ─────────────┐
+  │ keywords = [graph,agent,  │                   │ keywords = [quantum,      │
+  │             research]     │                   │             research]     │
+  └──────────┬───────────────┘                   └──────────┬───────────────┘
+              ▼                                             ▼
+  ┌─ retrieve ───────────────┐                   ┌─ retrieve ───────────────┐
+  │ graph→2篇 agent→2篇       │                   │ quantum→[] research→[]    │
+  │ research→[]               │                   │ → ["未找到相关文献"]        │
+  │ → 4篇                     │                   └──────────┬───────────────┘
+  └──────────┬───────────────┘                              ▼
+              ▼                                  ┌─ filter ─────────────────┐
+  ┌─ filter ─────────────────┐                   │ 过滤"未找到" → 全空        │
+  │ 集合去重（4篇无重复）        │                   │ → ["有效文献不足"] ⚠️       │
+  │ → 4篇（顺序被打乱!）        │                   └──────────┬───────────────┘
+  └──────────┬───────────────┘                              ▼
+              ▼                                  ┌─ summarize ──────────────┐
+  ┌─ summarize ──────────────┐                   │ "有效文献不足"[:15]+"..."   │
+  │ 每篇截断15字+"..."          │                   │ → ["有效文献不足..."] ⚠️失真 │
+  └──────────┬───────────────┘                   └──────────┬───────────────┘
+              ▼                                             ▼
+  ┌─ conclude ───────────────┐                   ┌─ conclude（修复后）────────┐
+  │ 无失败信号 → 拼装结论       │                   │ 子串匹配命中               │
+  └──────────┬───────────────┘                   │ → "未能生成可靠的科研结论"   │
+              ▼                                   └──────────┬───────────────┘
+            END                                              ▼
+                                                           END
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>逐段代码讲解（只讲关键差异点）</h2>
+<h3>6.1 关键词提取（原样保留）</h3>
+<pre>
+keywords = [word.lower() for word in query.split() if len(word) > 3]
+</pre>
+<p>三个动作一行写完：按空格分词、小写归一（匹配数据库的 key）、长度&gt;3 过滤短词。实测 "Graph Agent Research" → ["graph", "agent", "research"]——<strong>research（8字符）也被保留</strong>，但库里没有这个词，get 返回空列表。多关键词检索的细节：没命中的词不报错，安静地带回空。</p>
+<h3>6.2 多关键词批量检索（原样保留）</h3>
+<pre>
+results = []
+for kw in state.get("keywords", []):
+    results.extend(database.get(kw, []))     # 每个词一批文献，合并进列表
+return {"retrieved_docs": results if results else ["未找到相关文献"]}
+</pre>
+<h3>6.3 集合去重（原样保留，实测发现顺序副作用）</h3>
+<pre>
+filtered = list({doc for doc in docs if "未找到" not in doc})
+</pre>
+<p><strong>实测实证</strong>：4 篇文献进 filter 出来后顺序变了（"图式化逻辑..." 排到了第一）。set 的迭代顺序由哈希决定，不保插入序——去重成功了，顺序牺牲了。保序去重写法：<code class="inline">list(dict.fromkeys(doc for doc in docs if "未找到" not in doc))</code>。</p>
+<h3>6.4 结论生成（bug 修复处）</h3>
+<pre>
+# 修复后（原写法见文件注释）：
+if any(("有效文献不足" in s) or ("未找到" in s) or (s == "暂无摘要") for s in summaries):
+    conclusion = "未能生成可靠的科研结论"
+</pre>
+
+<!-- ========== 七 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（langgraph 1.2.11，无 LLM 调用，正常+故障双路径）</div>
+  <pre>
+【正常路径】invoke({"query": "Graph Agent Research"})
+keywords:  ['graph', 'agent', 'research']
+retrieved_docs: 4 篇（graph 2 + agent 2）
+filtered_docs: 4 篇，顺序被打乱（set 去重实证）：
+  ['图式化逻辑提升多Agent协作效率', '多任务分解是关键挑战',
+   'LangGraph用于任务编排', '智能体体系依赖状态追踪']
+summaries: 4 条截断摘要
+conclusion: '基于现有文献分析：图式化逻辑提升多Agent协作... | 多任务分解是关键挑战... | ...'
+
+【故障路径】invoke({"query": "Quantum Research"})   ← 教材未含，补充实证
+filtered_docs: ['有效文献不足']
+summaries:     ['有效文献不足...']     ← bug 现场实锤：省略号确实被加上
+conclusion:    '未能生成可靠的科研结论'  ← 修复生效（修复前是"基于现有文献分析：有效文献不足..."）
+  </pre>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角：模拟五工位 → 真实科研助手</h2>
+<ul>
+  <li><strong>检索工位</strong>：字典 → 向量库 top-k 检索；关键词级检索在生产叫"稀疏检索"（BM25），与向量检索组合成混合检索</li>
+  <li><strong>filter 工位</strong>：生产还需要相关性重排（rerank）——去重只解决重复，不解决"检索到了但不相关"</li>
+  <li><strong>summarize 工位</strong>：截断 → LLM 生成摘要；截断是"保证不超长"，LLM 是"保留语义"</li>
+  <li><strong>失败状态结构化</strong>：加 status 字段（见第三节教训）——生产流水线的每一步都应该有机器可读的成功/失败标志</li>
+  <li><strong>图已就绪</strong>：五节点骨架与 05 篇同构，替换实现不动架构——char05 前 6 篇反复演示的就是这一件事</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>复现降级链断裂</strong>：把 conclude 改回精确匹配（原写法），跑 "Quantum Research"——亲眼看"失败被当正常结果"的荒诞输出，再看一眼 set 去重后 document 顺序变化。</li>
+  <li><strong>结构化失败状态</strong>：State 加 status 键（"ok"/"no_docs"），retrieve/filter 失败时写 status 而不是往文档列表里塞信号字符串——体会"元信息走结构化通道"的清爽。</li>
+  <li><strong>保序去重</strong>：用 dict.fromkeys 改写 filter 的去重，验证 filtered_docs 顺序与 retrieved_docs 一致。</li>
+  <li><strong>进阶：真 LLM 工位</strong>：把 summarize 的截断换成 ChatTongyi 真摘要（每篇一次调用），并给 conclude 的判断加上 LLM 版失败识别——结合 char05-03 的链入图方式，把本篇升级成"真模型科研助手"。</li>
+</ol>
+
+</div>
+</body>
+</html>

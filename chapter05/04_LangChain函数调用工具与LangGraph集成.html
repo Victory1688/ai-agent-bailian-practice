@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04_LangChain函数调用工具与LangGraph集成 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>04_LangChain函数调用工具与LangGraph集成 - 代码解析</h1>
+<div class="meta">对应文件：char05/04_LangChain函数调用工具与LangGraph集成.py | 教材出处：第5章示例二 LangChain函数调用工具与LangGraph集成 | 环境实测：langgraph 1.2.11 / langchain-core | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇与 03 篇配对：<strong>03 是"链入图"（RetrievalQA 当节点），04 是"工具入图"（@tool 工具当节点逻辑）</strong>。场景极简：一个 calc 节点拿到状态里的 x=7、y=8，调用 @tool 包装的 multiply 工具算出 56 写回状态。教学核心是示例注释里的那句话：<strong>LangChain 负责工具封装，LangGraph 负责编排调度</strong>。<br>
+但本篇教材代码"伤势不轻"：实测<strong>两处必炸</strong>（@tool 无 docstring 直接 ValueError、工具对象当函数调用 TypeError）+ State(dict) 静默失败（系列第四次）。另外要诚实说：标题里的"函数调用"是手动调用工具，<strong>没有大模型参与决策</strong>——真正的 Function Calling 循环见后续篇章。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、教材代码为什么跑不起来（四类问题，两处实测必炸）</h2>
+<table>
+  <tr><th>#</th><th>问题</th><th>原写法</th><th>实测结果</th><th>改写</th></tr>
+  <tr><td>1</td><td>import 断裂</td><td>from langchain.tools import tool</td><td>ImportError</td><td>from langchain_core.tools import tool</td></tr>
+  <tr><td>2</td><td><strong>@tool 无 docstring（定义处必炸）</strong></td><td>multiply 函数体直接 return</td><td>ValueError: Function must have a docstring if description not provided</td><td>补 docstring："计算两个整数的乘积"</td></tr>
+  <tr><td>3</td><td><strong>工具对象当函数调（节点处必炸）</strong></td><td>multiply(a=state["x"], b=state["y"])</td><td>TypeError: 'StructuredTool' object is not callable</td><td>multiply.invoke({"a": ..., "b": ...})</td></tr>
+  <tr><td>4</td><td>State(dict) 静默失败</td><td>class State(dict): pass</td><td>invoke 返回 None（不报错）</td><td>TypedDict（x/y/product）——系列第四次</td></tr>
+</table>
+<div class="warn">
+  <div class="warn-title">两处必炸的深层原因（都是"工具三要素"没配齐）</div>
+  <ul>
+    <li><strong>docstring 就是工具说明书</strong>：@tool 装饰器把"函数"升级成"StructuredTool 工具对象"——这个对象要能被模型看懂，必须有 description（模型靠它决定用不用这工具）。docstring 是 description 的默认来源，没有就拒绝定义。教材漏掉的这一行，恰恰是工具最灵魂的部分。</li>
+    <li><strong>@tool 返回的不是函数</strong>：装饰器把 multiply 重新绑定为 StructuredTool 实例。它长着函数的名字，但本体是"带说明书的可调用工具对象"，标准调用方式是 <code class="inline">.invoke(参数字典)</code>。想直接摸到底层函数，得访问 <code class="inline">multiply.func</code>——但生产代码永远用 invoke。</li>
+  </ul>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>@tool 装饰器</td><td>把普通函数包装成 StructuredTool 的装饰器</td><td>multiply 的包装工</td></tr>
+  <tr><td>工具三要素</td><td>函数体=执行逻辑 / 类型注解=参数 schema / docstring=description</td><td>一个装饰器自动生成全套说明书（呼应 char03-06 的三件套）</td></tr>
+  <tr><td>StructuredTool</td><td>带 JSON Schema 参数校验的工具对象</td><td>multiply 的真实身份（不是函数）</td></tr>
+  <tr><td>.invoke()</td><td>工具对象的标准调用方式（参数字典）</td><td>calc_node 里的正确调用姿势</td></tr>
+  <tr><td>工具入图</td><td>工具调用逻辑作为节点函数体</td><td>calc_node 的全部内容就是一次工具调用</td></tr>
+  <tr><td>手动调用 vs 模型决策</td><td>本篇是前者；模型自主决定调不调工具是 Function Calling</td><td>本篇无模型参与——标题易误导，需辨析</td></tr>
+</table>
+
+<!-- ========== 四 ========== -->
+<h2>四、整体执行流程图</h2>
+<pre>
+  graph.invoke({"x": 7, "y": 8})
+            │
+            ▼
+  ┌─────────────────────────────────────────────┐
+  │  calc_node                                    │
+  │                                               │
+  │  读 state: x=7, y=8                           │
+  │       │                                       │
+  │       ▼                                       │
+  │  multiply.invoke({"a": 7, "b": 8})            │
+  │       │                                       │
+  │       ▼                                       │
+  │  StructuredTool 校验参数(符合 a:int, b:int)     │
+  │       │                                       │
+  │       ▼                                       │
+  │  执行底层函数 return a * b  →  56              │
+  │                                               │
+  │  return {"product": 56}   （部分更新）          │
+  └─────────────────────────────────────────────┘
+            │
+            ▼
+  {'x': 7, 'y': 8, 'product': 56}
+</pre>
+
+<!-- ========== 五 ========== -->
+<h2>五、逐段代码讲解</h2>
+<h3>5.1 工具定义（改写：补 docstring）</h3>
+<pre>
+@tool
+def multiply(a: int, b: int) -> int:
+    """计算两个整数的乘积"""          ← 教材缺失的关键行（工具 description）
+    return a * b
+</pre>
+<p>对照 char03-06 的 Function Calling 三件套（执行函数 + tools 说明书 + 注册表），@tool 装饰器把三件事压缩成"一个函数 + 一个装饰器"：<strong>类型注解自动生成 parameters JSON Schema，docstring 自动变成 description，函数体就是执行逻辑</strong>。这正是 05 篇（char04）说"@tool 是 1.x 推荐写法"的原因——声明少了，说明书一点不少。</p>
+<h3>5.2 节点函数（改写：标准调用方式）</h3>
+<pre>
+def calc_node(state: State):
+    # 原写法：result = multiply(a=state["x"], b=state["y"])   → 实测 TypeError
+    result = multiply.invoke({"a": state["x"], "b": state["y"]})
+    return {"product": result}
+</pre>
+<p>.invoke(参数字典) 是所有 LangChain 可调用组件的统一入口——工具、链、模型、图全都是它。记住这一个动词，整套框架的调用方式就统一了。</p>
+<h3>5.3 图构建（原样保留）</h3>
+<pre>
+builder = StateGraph(State)
+builder.add_node("calc", calc_node)
+builder.set_entry_point("calc")
+graph = builder.compile()
+print(graph.invoke({"x": 7, "y": 8}))
+</pre>
+
+<!-- ========== 六 ========== -->
+<h2>六、真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（langgraph 1.2.11，无 LLM 调用）</div>
+  <pre>
+{'x': 7, 'y': 8, 'product': 56}
+  </pre>
+</div>
+<p>product 键被 calc_node 的部分更新写入，x/y 自动保留——与 01-03 篇的状态累积机制完全一致。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、"函数调用"辨析：本篇不是 Function Calling（诚实地图）</h2>
+<table>
+  <tr><th></th><td>本篇：工具手动入图</td><td>真正的 Function Calling（char03-06 / char02 系列）</td></tr>
+  <tr><td>谁决定调工具</td><td><strong>开发者写死在节点里</strong>（calc_node 必调 multiply）</td><td><strong>模型自主决策</strong>（模型看 tools 说明书后输出 tool_calls）</td></tr>
+  <tr><td>模型参与吗</td><td>完全不参与</td><td>核心参与者</td></tr>
+  <tr><td>tools 说明书给谁看</td><td>没人看（只是包装规范化）</td><td>给模型看（决策依据）</td></tr>
+  <tr><td>适合场景</td><td>固定步骤的业务节点</td><td>模型按需取用能力</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">本篇的真实教学价值：工具 = 图的标准积木</div>
+  <p>别被标题误导而失望——本篇的价值在于确立一个模式：<strong>@tool 工具（带说明书、带参数校验）可以直接当节点逻辑</strong>。后续篇章会把这个模式升级：节点里放一个"模型决策器"，模型看着工具说明书自主挑工具——手动调用升级为 Function Calling，本篇的工具定义方式原封不动复用。<strong>工具怎么定义本篇已教完，模型怎么用它后续教</strong>。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、03 vs 04：图节点里能放什么的两种答案</h2>
+<table>
+  <tr><th></th><td>03 篇：链入图</td><td>04 篇：工具入图</td></tr>
+  <tr><td>节点里放什么</td><td>RetrievalQA 整条链</td><td>@tool 工具的 invoke 调用</td></tr>
+  <tr><td>粒度</td><td>粗（检索+生成打包）</td><td>细（一次工具调用）</td></tr>
+  <tr><td>模型参与</td><td>有（链内部的 qwen-plus）</td><td>无（本篇无模型）</td></tr>
+  <tr><td>图的可见性</td><td>链内部是黑盒</td><td>每一步都透明</td></tr>
+  <tr><td>选型口诀</td><td>现成链能干就整链入图（快）</td><td>要精细控制步骤就拆开用工具（灵活）</td></tr>
+</table>
+<p>两条路线在后续篇章会合流：先用工具模式拆细（检索节点、生成节点各占一格），再在关键节点放模型决策（条件边路由）——这就是完整 Agent 图的组装过程。</p>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>复现两处必炸</strong>：删掉 docstring 跑一次（ValueError），恢复后再把 invoke 改回直接调用跑一次（TypeError）——把两个报错长相刻进肌肉记忆。</li>
+  <li><strong>体验参数校验</strong>：故意传 multiply.invoke({"a": "abc", "b": 8})——StructuredTool 会抛参数校验错误。这正是"类型注解=参数 schema"的运行时体现。</li>
+  <li><strong>加第二个工具节点</strong>：定义 @tool divide（注意除零处理），图改为 calc → divide 两节点串联（x 除以 product 或自定规则）——体会工具节点如何串联。</li>
+  <li><strong>进阶：模型决策版</strong>：在 calc_node 里先用 ChatTongyi 判断"x*y 是否超过 100"（Function Calling 或 JSON 输出），超 100 才调 multiply，否则直接写提示语——把本篇的"手动调用"升级成"模型决策调用"，呼应第七节的对照表。</li>
+</ol>
+
+</div>
+</body>
+</html>

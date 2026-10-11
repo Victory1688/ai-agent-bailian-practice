@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02_使用langgraph设置节点之间的条件边 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>02_使用langgraph设置节点之间的条件边 - 代码解析</h1>
+<div class="meta">对应文件：char05/02_使用langgraph设置节点之间的条件边.py | 教材出处：第5章2节 条件边（Conditional Edge） | 环境实测：langgraph 1.2.11 | 生成日期：2026-10-11</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>上一篇的两节点图是"走到底的直线"——search 必到 generate。本篇引入 LangGraph 的第二个关键机制：<strong>条件边（add_conditional_edges）</strong>——根据当前状态的值动态选择下一个节点。场景是工单分诊：check 节点检查 query 里有没有 "urgent"，有则走 fast 快速处理路径，没有则走 normal 普通路径。两次 invoke 分别命中两条分支。<br>
+改写点与 01 篇相同：教材的 <code class="inline">State(dict)</code> 静默失败（invoke 返回 None），改 TypedDict 后输出与教材预期<strong>逐字符一致</strong>。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、条件边意味着什么（从流水线到任务流的分水岭）</h2>
+<table>
+  <tr><th></th><td>01 篇：固定边</td><td>02 篇：条件边</td></tr>
+  <tr><td>执行路径</td><td>入口 → A → B → 出口（唯一）</td><td>入口 → 判断 → <strong>多条路径之一</strong> → 出口</td></tr>
+  <tr><td>表达能力</td><td>顺序流程（SequentialChain 同级）</td><td>分支/选择（if-else 图形化）</td></tr>
+  <tr><td>决定走哪条路的是</td><td>开发者（编译期写死）</td><td><strong>运行时的状态值</strong></td></tr>
+</table>
+<div class="card">
+  <div class="card-title">本篇是 Agent 循环的直接前身（提前看一眼 char02 的对照）</div>
+  <p>char02 手写的 agent_chat 里有一段：<code class="inline">if not tool_calls: 返回最终回答 else: 执行工具回到模型</code>——这就是一个内联条件边。用 LangGraph 表达它：<strong>判断节点</strong>（模型节点把"是否需要调工具"写进状态）→ <strong>路由函数</strong>（读这个键）→ <strong>映射表</strong>（"继续"→tool 节点，"结束"→END）。本篇练的"路由三件套"，就是后面把 agent_chat 变成图的所有前置知识。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、教材代码的问题（同 01 篇的静默失败）</h2>
+<div class="warn">
+  <div class="warn-title">实测 langgraph 1.2.11：State(dict) 下 invoke 返回 None——本篇还多一层问题</div>
+  <ul>
+    <li>与 01 篇相同：无字段注解 → 图无法构建状态 schema → 节点照常执行但状态收集不回来</li>
+    <li><strong>本篇加码</strong>：条件边的路由函数 <code class="inline">lambda state: state["route"]</code> 依赖 route 键——无 schema 时这个键根本不在状态定义里，路由机制本身失去依据</li>
+    <li>修复：TypedDict 声明三个字段（query/route/response），其余代码逐行原样保留</li>
+  </ul>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>四、核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>add_conditional_edges</td><td>按状态值动态选路的 API（三参数）</td><td>挂在 check 之后，按 route 值分流</td></tr>
+  <tr><td>路由函数</td><td>读状态、返回"选择值"的函数（lambda 或具名函数）</td><td><code class="inline">lambda state: state["route"]</code></td></tr>
+  <tr><td>映射表</td><td>选择值 → 目标节点名 的字典</td><td><code class="inline">{"fast": "fast", "normal": "normal"}</code></td></tr>
+  <tr><td>路由键（route）</td><td>承载判断结果的中间状态字段</td><td>check_node 写入，路由函数读取</td></tr>
+  <tr><td>END</td><td>图的终点哨兵</td><td>fast/normal 两条路径各自通向 END</td></tr>
+  <tr><td>多入口共享判断</td><td>同一个 check 分流多个业务节点</td><td>本例 1→2 分叉；还可以扩展成多级路由</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、整体执行流程图</h2>
+<pre>
+      invoke({"query": "urgent request"})          invoke({"query": "regular request"})
+                  │                                          │
+                  ▼                                          ▼
+   ┌──────────────────────────────┐          ┌──────────────────────────────┐
+   │ check_node                    │          │ check_node                    │
+   │ "urgent" in query.lower()?    │          │ "urgent" in query.lower()?    │
+   │  → 是 → 写 route="fast"       │          │  → 否 → 写 route="normal"     │
+   └──────────────┬───────────────┘          └──────────────┬───────────────┘
+                  │ 条件边                                    │ 条件边
+                  │ 路由函数读 route → "fast"                  │ 路由函数读 route → "normal"
+                  │ 映射表["fast"] → fast 节点                 │ 映射表["normal"] → normal 节点
+                  ▼                                          ▼
+   ┌──────────────────────────────┐          ┌──────────────────────────────┐
+   │ fast_node                     │          │ normal_node                    │
+   │ 写 response="快速处理路径已启动" │          │ 写 response="普通处理路径已启动"  │
+   └──────────────┬───────────────┘          └──────────────┬───────────────┘
+                  ▼                                          ▼
+                 END                                        END
+
+   实测输出（与教材预期逐字符一致）：
+   {'query': 'urgent request',  'route': 'fast',   'response': '快速处理路径已启动'}
+   {'query': 'regular request', 'route': 'normal', 'response': '普通处理路径已启动'}
+</pre>
+<p>一个值得注意的细节：<strong>route 是中间变量，但它也留在了最终状态里</strong>（教材预期输出如此，实测一致）。LangGraph 默认让所有状态字段全程可见——这既是调试福音（能看出为什么走这条路），也提示生产中若不想暴露中间变量，需在出口做后处理。</p>
+
+<!-- ========== 六 ========== -->
+<h2>六、逐段代码讲解</h2>
+<h3>6.1 状态与路由节点（原样保留，仅 State 改 TypedDict）</h3>
+<pre>
+class State(TypedDict):
+    query: str      # 用户输入
+    route: str      # 路由判断结果（中间变量）
+    response: str   # 最终响应
+
+def check_node(state: State):
+    if "urgent" in state.get("query", "").lower():
+        return {"route": "fast"}      # 判断结果写进状态，而不是直接决定走向
+    return {"route": "normal"}
+</pre>
+<p>关键设计：<strong>check_node 不直接选路，它只负责"把判断写进状态"</strong>——选路由条件边负责。判断逻辑与路由逻辑解耦，是图能被重组的前提（想换判断规则只改 check_node，想换路径映射只改映射表）。</p>
+<h3>6.2 条件边（本篇核心，原样保留）</h3>
+<pre>
+builder.add_conditional_edges(
+    "check",                            # 参数1：挂在哪个节点之后
+    lambda state: state["route"],       # 参数2：路由函数——读状态返回选择值
+    {"fast": "fast", "normal": "normal"} # 参数3：映射表——选择值 → 目标节点
+)
+</pre>
+<p>三参数解剖：条件边相当于把一句 <code class="inline">if route == "fast": go("fast") elif route == "normal": go("normal")</code> 图形化。映射表的价值：<strong>选择值与节点名解耦</strong>——路由函数可以返回语义值（"fast"），映射表决定它落到哪个节点（节点叫别的名字也行）。</p>
+<h3>6.3 图的组装与双路径验证（原样保留）</h3>
+<pre>
+builder.set_entry_point("check")        # 入口是判断节点
+builder.add_edge("fast", END)           # 两条业务路径各自通向终点
+builder.add_edge("normal", END)
+
+print(graph.invoke({"query": "urgent request"}))    # 命中 fast
+print(graph.invoke({"query": "regular request"}))   # 命中 normal
+</pre>
+<p>两次 invoke 共用同一个编译好的图——图是无状态的（状态只在单次 invoke 内流转），可重复执行。这与 char02 的 agent_chat 形成对照：agent_chat 靠外部 memory 跨轮累积，图的跨轮记忆要用 checkpointer（后续篇）。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（langgraph 1.2.11，无 LLM 调用）——输出与教材预期逐字符一致</div>
+  <pre>
+{'query': 'urgent request', 'route': 'fast', 'response': '快速处理路径已启动'}
+{'query': 'regular request', 'route': 'normal', 'response': '普通处理路径已启动'}
+  </pre>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、LangGraph 表达力三步走：本篇走到第二步</h2>
+<table>
+  <tr><th>步骤</th><th>API</th><th>表达能力</th><th>篇目</th></tr>
+  <tr><td>① 顺序图</td><td>add_edge</td><td>固定流水线</td><td>01</td></tr>
+  <tr><td><strong>② 条件图</strong></td><td><strong>add_conditional_edges</strong></td><td><strong>按状态分支</strong></td><td><strong>02（本篇）</strong></td></tr>
+  <tr><td>③ 循环图</td><td>条件边 + 指回上游的映射</td><td>Agent 的 ReAct 循环</td><td>后续篇</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">路由三件套模式（贯穿 char05 全章的骨架）</div>
+  <pre>
+判断节点（写状态键） → 路由函数（读键） → 映射表（分发）
+
+后续把它用到 Agent 循环上：
+llm 节点（写 need_tool 键） → 路由函数（读 need_tool） → {"是": "tool", "否": END}
+                                                    ↑ tool 节点再连回 llm 节点 = 循环
+  </pre>
+  <p>本篇的三件套写法原封不动就是后面 Agent 循环的骨架——只是判断者从"字符串包含"换成大模型。这就是 char05 存在的意义：<strong>把 agent_chat 的控制流拆成图形化积木</strong>。</p>
+</div>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习</h2>
+<ol>
+  <li><strong>三路分支</strong>：新增 <code class="inline">low_node</code>（低优先级路径），改 check_node 支持 "low" 关键词，映射表加一项——体会"加分支只动两处（判断+映射），业务节点零改动"。</li>
+  <li><strong>复现静默失败</strong>：换回原版 State(dict) 跑一遍，观察两次 invoke 都返回 None——并思考：条件边的路由函数读不到 route 键时，理论上会发生什么？（生产里的真实风险）</li>
+  <li><strong>路由函数解耦</strong>：把映射表键改成 {"high": "fast", "low": "normal"}，同步改 check_node 的返回值——验证"选择值与节点名解耦"的效果。</li>
+  <li><strong>进阶：模型当路由器</strong>：把 check_node 的字符串判断换成一次真实的 ChatTongyi 调用（让它判断"这个请求是否紧急"并输出 fast/normal）——本篇图立即升级为"LLM 驱动的动态分诊"，这就是后续 Agent 图的第一块砖。</li>
+</ol>
+
+</div>
+</body>
+</html>
