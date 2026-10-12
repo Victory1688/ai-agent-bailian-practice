@@ -2,6 +2,7 @@
 
 > 范围：`aiTest/char02` 全部 py 文件（01-08 共 8 篇教学文件 + agent_ui_api.py 副本，均已改写为 dashscope 并运行验证）
 > 配套：每篇均有同名讲解 HTML；本目录另有一份 `index_汇总说明.html`（网页版），本文档为 Markdown + Mermaid 版，可在 VSCode / Typora / GitHub 中直接渲染
+> SVG 独立架构图：见同目录 `svg/` 子文件夹（六层架构总图 / 八篇演进线全景图 / agent_chat生命线时序图 / 三条不变式与工具能力矩阵图）
 > 生成日期：2026-10-10
 
 ---

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char08 汇总说明 - 单智能体系统构建实战技能总览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+  .skill-bar { display: flex; gap: 8px; margin: 1rem 0; }
+  .skill-item { flex: 1; background: rgba(30, 41, 59, 0.8); border: 1px solid #334155; border-radius: 8px; padding: 0.8rem; text-align: center; font-size: 0.85rem; }
+  .skill-item .num { font-size: 1.4rem; color: #22d3ee; font-weight: bold; display: block; margin-bottom: 0.3rem; }
+  .skill-item .label { color: #34d399; font-weight: bold; margin-bottom: 0.2rem; }
+  .skill-item .files { color: #94a3b8; font-size: 0.75rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>char08 汇总说明 - 单智能体系统构建实战技能总览</h1>
+<div class="meta">对应目录：char08（5 个 py 文件，全部改写验证于 dashscope qwen-plus + LangChain 1.3.18）| 配套文档：<a href="arch_汇总说明.md">arch_汇总说明.md</a>（含 Mermaid 架构图 + SVG 独立文件）| 生成日期：2026-10-12</div>
+
+<!-- ========== SVG 架构图速查 ========== -->
+<div class="card">
+  <div class="card-title">SVG 独立架构图速查（点击跳转，浏览器直接打开）</div>
+  <table>
+    <tr><th>#</th><th>架构图</th><th>视角</th><th>核心内容</th></tr>
+    <tr><td>1</td><td><a href="svg/01_能力全景图.svg">01_能力全景图</a></td><td>总览</td><td>五大能力面（能看状态机/能听参数解析/能扛降级/能记 Memory/能省预算装填）+ 5 篇落位</td></tr>
+    <tr><td>2</td><td><a href="svg/02_分层架构总图.svg">02_分层架构总图</a></td><td>分层结构</td><td>状态感知→参数解析→异常处理→记忆管理→上下文压缩五层能力栈 + 跨章依赖</td></tr>
+    <tr><td>3</td><td><a href="svg/03_请求生命线时序图.svg">03_请求生命线时序图</a></td><td>运行时序</td><td>灵魂图：五泳道请求全链路（状态流转→参数封装→工具调用→Memory 读写→上下文裁剪→LLM）</td></tr>
+  </table>
+</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、char08 在课程体系中的定位</h2>
+<p><strong>核心命题：把 char01-07 学到的零件，组装成一个"能看、能听、能扛、能记、能省"的完整单 Agent。</strong></p>
+
+<pre>
+char01 调用壳 → char02 循环壳 → char04 框架壳 → char05 图壳 → char06 检索壳
+    → char07 上下文工程层（表示/路由/存储/合并）
+    → char08 本篇：单Agent 实战集成（把零件组装成完整能力面）
+</pre>
+
+<p>char07 是"数据层"（上下文的表示/存储/筛选），char08 是"控制层"（Agent 的生命周期/输入/故障/记忆/预算）——<strong>前七章都在教零件，本章教组装</strong>。五个 Agent 分别补上五种单点能力，合起来就是一个生产级单 Agent 的完整能力面。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、五大能力递进：单 Agent 的完整能力面</h2>
+<div class="skill-bar">
+  <div class="skill-item">
+    <span class="num">①</span>
+    <div class="label">能看</div>
+    <div class="files">01 状态感知<br>AgentState 六态</div>
+  </div>
+  <div class="skill-item">
+    <span class="num">②</span>
+    <div class="label">能听</div>
+    <div class="files">02 参数解析<br>parse_input 规则</div>
+  </div>
+  <div class="skill-item">
+    <span class="num">③</span>
+    <div class="label">能扛</div>
+    <div class="files">03 异常处理<br>降级 prompt</div>
+  </div>
+  <div class="skill-item">
+    <span class="num">④</span>
+    <div class="label">能记</div>
+    <div class="files">04 Memory<br>WindowMemory k=3</div>
+  </div>
+  <div class="skill-item">
+    <span class="num">⑤</span>
+    <div class="label">能省</div>
+    <div class="files">05 动态剪辑<br>贪心装填算法</div>
+  </div>
+</div>
+<p>五种能力不是孤立的——01 的状态机是骨架、02 的解析是入口、03 的降级是保险、04 的记忆是上下文来源、05 的剪辑是上下文的出口加工。<strong>串起来就是一个完整的请求生命周期：听懂（02）→ 记住（04）→ 精打细算（05）→ 执行中扛住故障（03）→ 全程可观测（01）</strong>。</p>
+
+<!-- ========== 三 ========== -->
+<h2>三、五篇文件逐一速览</h2>
+<table>
+  <tr><th>篇</th><th>核心函数/类</th><th>解决什么问题</th><th>实测亮点</th></tr>
+  <tr><td>01 具有状态感知的单Agent</td><td>AgentState 六态枚举 + execute 状态流转</td><td>生命周期可观测</td><td>时间戳链暴露工具 sleep(1s) + LLM 13s 耗时；WAITING_TOOL 首次显式建模外部依赖</td></tr>
+  <tr><td>02 输入参数解析与封装Agent</td><td>parse_input 三段式规则解析</td><td>NL→结构化的翻译桥</td><td>三参数全部正确提取；给出规则解析器三条盲区（明年/多区域/大小写）</td></tr>
+  <tr><td>03 具备异常处理能力的Agent</td><td>工具自捕获 + [ERROR] 信号 + 降级 prompt</td><td>优雅降级</td><td>降级路径 3 次随机命中 + 正常路径 monkeypatch 确定性复现；LLM 主动质疑假数据</td></tr>
+  <tr><td>04 langchain的Memory使用</td><td>ConversationBufferWindowMemory(k=3)</td><td>多轮对话记忆</td><td><strong>发现并修复 chat_memory.messages 绕开窗口截断的经典 bug</strong>；Round 4 实测窗口裁掉 Round 1</td></tr>
+  <tr><td>05 自动裁剪上下文并重构提示词</td><td>build_segment 六字段 + dynamic_clip_context 贪心装填</td><td>Token 预算管理</td><td>token_limit=100 九段全装入；priority 排序 system 优先实证</td></tr>
+</table>
+
+<!-- ========== 四 ========== -->
+<h2>四、char08 独有的三笔"学费清单"（系列最珍贵部分）</h2>
+
+<div class="warn">
+  <div class="warn-title">学费 1：LangChain Memory 经典陷阱——chat_memory.messages 绕开窗口截断</div>
+  <p>04 篇原代码直接用 <code class="inline">chat_memory.messages</code> 取历史——这是<strong>全量累积视图</strong>，k=3 参数形同虚设。窗口截断只在 <code class="inline">load_memory_variables({})['history']</code> 时发生。实测对照：</p>
+  <pre>
+错误姿势（原代码）：Round 4 时窗口视图 8 条（k 参数完全失效）
+正确姿势（修复后）：Round 4 时原始存储 8 条 | 窗口视图 6 条（Round 1 被裁掉）
+  </pre>
+  <p>这是 LangChain Memory 最容易踩的坑——<strong>很多人以为 chat_memory 就是窗口化后的结果，其实它是"读时过滤"设计</strong>：存储永远全量，截断发生在读取时。</p>
+</div>
+
+<div class="warn">
+  <div class="warn-title">学费 2：死代码谱系第三线——注册了但从未调用</div>
+  <table>
+    <tr><th>篇</th><th>死代码</th><th>根因</th></tr>
+    <tr><td>char07-03</td><td>tool 路由分支</td><td>子任务丢失关键词</td></tr>
+    <tr><td>char07-04</td><td>hybrid 路由分支</td><td>if/elif 顺序截胡</td></tr>
+    <tr><td><strong>char08-04（本篇）</strong></td><td><strong>FakeDataFetcher 工具</strong></td><td><strong>注册给 Agent 但 ask() 里从未调用</strong></td></tr>
+  </table>
+  <p>教材的死代码从"路由分支"扩展到"工具注册"——FakeDataFetcher 初始化了、注册了，但 LLM 回答全靠自己的知识，工具是纯摆设。加上 04 篇的三个死 import（OpenAI/ConversationChain/messages_from_dict 导入未用），本篇是教材"模板残留"的重灾区。</p>
+</div>
+
+<div class="warn">
+  <div class="warn-title">学费 3：降级 prompt 的风格漂移 + LLM 质疑假数据</div>
+  <p>03 篇实测两个意外发现：</p>
+  <ul>
+    <li><strong>降级时输出风格悄悄变了</strong>：正常路径 prompt 要求"语言简洁"，降级路径只说"简明解释"——实测降级回答更长更结构化（带分节和风险清单）。生产系统应统一两条路径的风格约束，避免用户体验跳变。</li>
+    <li><strong>LLM 会质疑不可信的工具数据</strong>：工具（假数据）给 5.3%，qwen-plus 没有照单全收，主动指出"显著高于历史趋势和主流机构预期"并附可持续性警告。但这不是可靠保障——<strong>数据质量必须从源头保证，不能指望下游 LLM 兜底</strong>。</li>
+  </ul>
+</div>
+
+<!-- ========== 五 ========== -->
+<h2>五、核心认知：五种"能"的实现技术谱系</h2>
+<table>
+  <tr><th>能力</th><th>教学实现</th><th>技术谱系（简→繁）</th><th>生产升级</th></tr>
+  <tr><td>能看（状态）</td><td>AgentState 六态 + history 列表</td><td>枚举状态机 → transitions 库 → 事件驱动架构</td><td>状态持久化（char07-05 JSONL）+ 超时自动转 FAILED</td></tr>
+  <tr><td>能听（解析）</td><td>parse_input 分词+关键词</td><td>正则规则 → NLU 槽位填充 → LLM function calling</td><td>两级漏斗：规则优先命中，未命中升级 LLM 解析</td></tr>
+  <tr><td>能扛（容错）</td><td>[ERROR] 字符串信号 + 降级 prompt</td><td>L1 重试 → L2 降级 → L3 熔断</td><td>结构化 status 信号（char05 结论）+ 多级降级链</td></tr>
+  <tr><td>能记（记忆）</td><td>WindowMemory(k=3)</td><td>全量 Buffer → 窗口 Window → 摘要 Summary → 语义检索</td><td>LangGraph checkpoint（Memory 类已在 0.3.1 废弃）</td></tr>
+  <tr><td>能省（预算）</td><td>priority+timestamp+length 贪心装填</td><td>规则窗口 → 预算装填 → 语义压缩</td><td>真实 tokenizer 计数 + 三流派叠加（char07-07 + 本篇 + RAG）</td></tr>
+</table>
+
+<!-- ========== 六 ========== -->
+<h2>六、跨章关联：char08 与前七章的承接</h2>
+<table>
+  <tr><th>关联章节</th><th>关联点</th><th>本篇对应</th></tr>
+  <tr><td>char07-01/02 上下文段结构</td><td>五字段/四类标注</td><td>05 篇 build_segment 六字段（+timestamp/priority/length，-task_id/meta）</td></tr>
+  <tr><td>char07-05 JSONL 日志</td><td>timestamp 性能探针</td><td>01 篇 history 时间戳链（内存版 vs 磁盘版，同一家族）</td></tr>
+  <tr><td>char07-07 动态合并</td><td>三级筛选规则窗口</td><td>05 篇贪心装填（两流派互补：规则粗筛 + 预算精筛）</td></tr>
+  <tr><td>char05 降级链三部曲</td><td>结构化 status 结论</td><td>03 篇 [ERROR] 字符串信号（教学保留，生产应升级）</td></tr>
+  <tr><td>char04-03 BufferMemory</td><td>全量对话记忆</td><td>04 篇 WindowMemory(k=3)（框架版 vs 手写版）</td></tr>
+  <tr><td>char02 agent_chat 循环</td><td>while True Agent 循环</td><td>01 篇 execute 状态流转（循环的"状态化"升级）</td></tr>
+</table>
+
+<!-- ========== 七 ========== -->
+<h2>七、char08 的集大成者：一个完整请求的生命周期</h2>
+<pre>
+用户输入 "请预测2024年美国的GDP增长趋势"
+    │
+    ▼ ① 能听（02 篇）
+parse_input → {"region": "美国", "year": 2024, "focus": "GDP"}
+    │
+    ▼ ② 能记（04 篇）
+load_memory_variables({})['history'] → 取最近 k=3 轮窗口视图
+    │
+    ▼ ③ 能省（05 篇）
+dynamic_clip_context(pool, token_limit) → priority 排序 + 贪心装填
+    │
+    ▼ ④ 能扛（03 篇）
+tool.call() → 成功走正常 prompt / 失败走降级 prompt
+    │
+    ▼ ⑤ 能看（01 篇）
+update_state: READY→RUNNING→WAITING_TOOL→RUNNING→COMPLETED
+    │
+    ▼
+dashscope.Generation.call(qwen-plus) → 回答 → 回写 memory → 返回用户
+</pre>
+<p>这就是 char08 五篇合体的完整拼图——<strong>每篇教一个环节，五篇合起来是单 Agent 的全链路</strong>。动手练习的终极任务就是把五篇代码真正合并成一个 Agent 类。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、给新人的学习路径</h2>
+<pre>
+① 先跑 01 → 理解状态机是什么
+   自测：把 ForecastTool 改成 raise Exception，观察 FAILED 分支
+
+② 再跑 02 → 理解 NL→结构化的翻译桥
+   自测：用"明年"、"欧盟和美国"、"小写cpi"三句话复现规则盲区
+
+③ 重点读 03 → 理解优雅降级
+   自测：monkeypatch random 强制两条路径，对比输出风格差异
+
+④ 细读 04 → 亲手复现 chat_memory bug
+   自测：把 load_memory_variables 改回 chat_memory.messages，看窗口失效
+
+⑤ 最后读 05 → 理解 Token 预算装填
+   自测：token_limit 从 100 收紧到 30，观察"跳过不终止"特性
+
+⑥ 终极综合：把五篇合并成一个 StatefulSmartAgent 类
+   状态机（01）+ 解析（02）+ 降级（03）+ 记忆（04）+ 剪辑（05）
+   ——这就是本课程的毕业设计
+</pre>
+<p><strong>前置</strong>：char01-07 学完（char07 的上下文工程是 05 篇剪辑策略的直接基础）</p>
+<p><strong>后续衔接</strong>：char09（多智能体协作）——单 Agent 的五大能力齐备后，下一个问题自然是"多个 Agent 怎么分工协作"</p>
+
+<div class="card">
+  <div class="card-title">配套架构资源</div>
+  <ul>
+    <li><a href="arch_汇总说明.md">arch_汇总说明.md</a> — 架构版汇总（Mermaid 关联图，VSCode/Typora/GitHub 可渲染）</li>
+    <li><a href="svg/01_能力全景图.svg">svg/</a> — SVG 独立架构图 3 张（能力全景图 / 分层架构总图 / 请求生命线时序图，浏览器直接打开）</li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>

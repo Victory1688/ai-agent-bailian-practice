@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1000" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char04 七篇技能演进线全景图 —— 每篇只增量学一个新概念</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">链式流水线 → ReAct Agent → +记忆 → +沙箱 → +新式工具 → +定制灵魂 → 跨轮收官</text>
+
+  <!-- ============ 演进主线（7 卡片两行排布） ============ -->
+  <!-- 第一行：01 → 02 → 03 → 04 -->
+  <g>
+    <!-- 01 -->
+    <rect x="60" y="110" width="300" height="210" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="60" y="110" width="300" height="40" rx="10" fill="#312e2f"/>
+    <rect x="60" y="138" width="300" height="12" fill="#312e2f"/>
+    <text x="76" y="137" font-size="16" font-weight="bold" fill="#22d3ee">01 多段链式处理</text>
+    <text x="76" y="172" font-size="13" font-weight="bold" fill="#e2e8f0">SequentialChain 固定流水线</text>
+    <text x="76" y="196" font-size="12" fill="#94a3b8">三段链：起名 → 题目 → 全文</text>
+    <text x="76" y="216" font-size="12" fill="#94a3b8">变量自动接力（output_key）</text>
+    <rect x="76" y="234" width="268" height="34" rx="4" fill="#7f1d1d"/>
+    <text x="84" y="248" font-size="11" fill="#fca5a5">教材自带 bug：run() 多输出键</text>
+    <text x="84" y="262" font-size="11" fill="#fca5a5">必抛 ValueError → 改 invoke()</text>
+    <circle cx="340" cy="124" r="5" fill="#fbbf24"/>
+
+    <path d="M 360 215 L 396 215" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrowCyan)"/>
+
+    <!-- 02 -->
+    <rect x="400" y="110" width="300" height="210" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <rect x="400" y="110" width="300" height="40" rx="10" fill="#064e3b"/>
+    <rect x="400" y="138" width="300" height="12" fill="#064e3b"/>
+    <text x="416" y="137" font-size="16" font-weight="bold" fill="#34d399">02 ReAct Agent（骨架篇）</text>
+    <text x="416" y="172" font-size="13" font-weight="bold" fill="#e2e8f0">initialize_agent + Tool</text>
+    <text x="416" y="196" font-size="12" fill="#94a3b8">ReAct 四要素循环：Thought</text>
+    <text x="416" y="216" font-size="12" fill="#94a3b8">→ Action → Observation → AI</text>
+    <rect x="416" y="234" width="268" height="34" rx="4" fill="#7f1d1d"/>
+    <text x="424" y="248" font-size="11" fill="#fca5a5">教材自带 bug："20"*7.25</text>
+    <text x="424" y="262" font-size="11" fill="#fca5a5">TypeError → 显式 float() 转换</text>
+    <text x="416" y="292" font-size="11" fill="#34d399">工作流 vs Agent 的选型起点</text>
+    <circle cx="680" cy="124" r="5" fill="#34d399"/>
+
+    <path d="M 700 215 L 736 215" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrowCyan)"/>
+
+    <!-- 03 -->
+    <rect x="740" y="110" width="300" height="210" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="740" y="110" width="300" height="40" rx="10" fill="#312e2f"/>
+    <rect x="740" y="138" width="300" height="12" fill="#312e2f"/>
+    <text x="756" y="137" font-size="16" font-weight="bold" fill="#22d3ee">03 +框架托管记忆</text>
+    <text x="756" y="172" font-size="13" font-weight="bold" fill="#e2e8f0">ConversationBufferMemory</text>
+    <text x="756" y="196" font-size="12" fill="#94a3b8">省略主语成为可能</text>
+    <text x="756" y="216" font-size="12" fill="#94a3b8">（"它"指什么，记忆替模型记住）</text>
+    <rect x="756" y="234" width="268" height="34" rx="4" fill="#064e3b"/>
+    <text x="764" y="256" font-size="12" fill="#34d399">无隐藏 bug，改写后直接跑通</text>
+    <circle cx="1020" cy="124" r="5" fill="#34d399"/>
+
+    <path d="M 1040 215 L 1076 215" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrowCyan)"/>
+
+    <!-- 04 -->
+    <rect x="1080" y="110" width="300" height="210" rx="10" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <rect x="1080" y="110" width="300" height="40" rx="10" fill="#78350f"/>
+    <rect x="1080" y="138" width="300" height="12" fill="#78350f"/>
+    <text x="1096" y="137" font-size="16" font-weight="bold" fill="#fbbf24">04 +沙箱三道防线</text>
+    <text x="1096" y="172" font-size="13" font-weight="bold" fill="#e2e8f0">受限 eval 安全执行</text>
+    <text x="1096" y="196" font-size="12" fill="#94a3b8">防线1 限时（3秒）｜防线2 字符白名单</text>
+    <text x="1096" y="216" font-size="12" fill="#94a3b8">防线3 空 builtins（双保险实测拦截）</text>
+    <rect x="1096" y="234" width="268" height="34" rx="4" fill="#78350f"/>
+    <text x="1104" y="248" font-size="11" fill="#fde68a">平台硬伤：SIGALRM Unix 专属</text>
+    <text x="1104" y="262" font-size="11" fill="#fde68a">Windows 抛 AttributeError → 线程限时</text>
+    <circle cx="1360" cy="124" r="5" fill="#fbbf24"/>
+  </g>
+
+  <!-- 换行箭头（04 → 05 走第二行） -->
+  <path d="M 1230 320 L 1230 360 L 210 360 L 210 400" stroke="#22d3ee" stroke-width="2.5" fill="none" marker-end="url(#arrowCyan)"/>
+  <text x="720" y="352" text-anchor="middle" font-size="12" fill="#94a3b8">继续演进（第二行）</text>
+
+  <!-- 第二行：05 → 06 → 07 -->
+  <g>
+    <!-- 05 -->
+    <rect x="60" y="400" width="400" height="220" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <rect x="60" y="400" width="400" height="40" rx="10" fill="#064e3b"/>
+    <rect x="60" y="428" width="400" height="12" fill="#064e3b"/>
+    <text x="76" y="427" font-size="16" font-weight="bold" fill="#34d399">05 +新式工具定义（多工具协同）</text>
+    <text x="76" y="462" font-size="13" font-weight="bold" fill="#e2e8f0">@tool 装饰器（docstring 即说明书）</text>
+    <text x="76" y="486" font-size="12" fill="#94a3b8">实测两路径：1 个工具时模型"抄近路"</text>
+    <text x="76" y="506" font-size="12" fill="#94a3b8">直接算结果；2 个工具时理性跳过第 3 步</text>
+    <rect x="76" y="524" width="368" height="34" rx="4" fill="#064e3b"/>
+    <text x="84" y="546" font-size="12" fill="#34d399">无隐藏 bug —— LangChain 1.x 推荐写法</text>
+    <text x="76" y="588" font-size="11" fill="#94a3b8">对照意义：模型决策随工具数量自适应</text>
+    <circle cx="440" cy="414" r="5" fill="#34d399"/>
+
+    <path d="M 460 510 L 496 510" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrowCyan)"/>
+
+    <!-- 06 -->
+    <rect x="500" y="400" width="400" height="220" rx="10" fill="#1e293b" stroke="#f472b6" stroke-width="2"/>
+    <rect x="500" y="400" width="400" height="40" rx="10" fill="#831843"/>
+    <rect x="500" y="428" width="400" height="12" fill="#831843"/>
+    <text x="516" y="427" font-size="16" font-weight="bold" fill="#f472b6">06 +自定义提示词（定制灵魂）</text>
+    <text x="516" y="462" font-size="13" font-weight="bold" fill="#e2e8f0">prefix（人格+规则）/ suffix（输出格式）</text>
+    <text x="516" y="486" font-size="12" fill="#94a3b8">ReAct 模板四段组装：prefix + 工具清单</text>
+    <text x="516" y="506" font-size="12" fill="#94a3b8">+ 格式指令 + suffix，可定制区只有两端</text>
+    <rect x="516" y="524" width="368" height="46" rx="4" fill="#7f1d1d"/>
+    <text x="524" y="544" font-size="11" fill="#fca5a5">教材最深 bug：custom_prompt 是概念代码</text>
+    <text x="524" y="562" font-size="11" fill="#fca5a5">0.x 同样不生效（查源码实证）→ 走官方通道</text>
+    <circle cx="880" cy="414" r="5" fill="#f472b6"/>
+
+    <path d="M 900 510 L 936 510" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrowCyan)"/>
+
+    <!-- 07 -->
+    <rect x="940" y="400" width="440" height="220" rx="10" fill="#1e293b" stroke="#22d3ee" stroke-width="3"/>
+    <rect x="940" y="400" width="440" height="40" rx="10" fill="#0c4a6e"/>
+    <rect x="940" y="428" width="440" height="12" fill="#0c4a6e"/>
+    <text x="956" y="427" font-size="16" font-weight="bold" fill="#7dd3fc">07 跨轮工具链（05+03 合体收官）</text>
+    <text x="956" y="462" font-size="13" font-weight="bold" fill="#e2e8f0">搜书 → 记住第一本 → 查详情（跨轮接力）</text>
+    <text x="956" y="486" font-size="12" fill="#94a3b8">SearchBooks + GetBookDetails 双工具</text>
+    <text x="956" y="506" font-size="12" fill="#94a3b8">模型自主动态规划调用顺序与次数</text>
+    <rect x="956" y="524" width="408" height="64" rx="4" fill="#7f1d1d"/>
+    <text x="964" y="544" font-size="11" fill="#fca5a5">最隐蔽 bug：memory_key="history" 与模板 {chat_history}</text>
+    <text x="964" y="562" font-size="11" fill="#fca5a5">不匹配 → 不报错但"失忆" → 跨轮接力断裂</text>
+    <text x="964" y="580" font-size="11" fill="#fca5a5">另有 openlibrary 超时无兜底 → 打崩 AgentExecutor</text>
+    <circle cx="1360" cy="414" r="5" fill="#22d3ee"/>
+  </g>
+
+  <!-- ============ 两条跨章关联 ============ -->
+  <g>
+    <rect x="60" y="660" width="1320" height="120" rx="12" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <text x="80" y="690" font-size="16" font-weight="bold" fill="#a78bfa">两条跨章关联（char04 不是孤岛）</text>
+
+    <rect x="90" y="708" width="600" height="52" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="106" y="730" font-size="13" fill="#e2e8f0">04 沙箱 ← char02-07 exec 警示的落地实现</text>
+    <text x="106" y="750" font-size="12" fill="#94a3b8">char03-08 安全观（输入过滤/白名单）的延续</text>
+
+    <rect x="720" y="708" width="630" height="52" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="736" y="730" font-size="13" fill="#e2e8f0">06 prefix/suffix ← char02 system_message 概念的入口迁移</text>
+    <text x="736" y="750" font-size="12" fill="#94a3b8">手写循环里的"人格注入"在 ReAct 模板中的官方通道</text>
+  </g>
+
+  <!-- ============ 底部：方法论条 ============ -->
+  <g>
+    <rect x="60" y="800" width="1320" height="160" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="836" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">演进线背后的教学设计（新人怎么看这张图）</text>
+
+    <text x="100" y="872" font-size="14" fill="#d1fae5">1. 每张卡片 = 一个增量概念：02 是骨架（ReAct 循环），03-06 各加一块能力板，07 把 05+03 合体收官</text>
+    <text x="100" y="900" font-size="14" fill="#d1fae5">2. 红黄标记 = 教材 bug 现场位置：每篇 HTML 第六节都有实测复现过程，bug 本身就是教学素材</text>
+    <text x="100" y="928" font-size="14" fill="#d1fae5">3. 先 char02 手写看透原理，再 char04 框架享受效率 —— "用声明换控制权"不是魔法，是黑盒换白盒</text>
+    <text x="100" y="952" font-size="12" fill="#94a3b8">衔接：char05 LangGraph 把 initialize_agent 黑盒拆开重写（State + 节点 + 边），控制权重新回到开发者手里</text>
+  </g>
+
+  <!-- ============ 箭头 marker ============ -->
+  <defs>
+    <marker id="arrowCyan" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#22d3ee"/>
+    </marker>
+  </defs>
+</svg>

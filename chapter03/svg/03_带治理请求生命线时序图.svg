@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1150" viewBox="0 0 1440 1150" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1150" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char03 灵魂时序图 —— 一次"带治理的对话请求"完整生命线</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">治理不是独立模块，而是嵌在请求生命线上的两道关卡（08 硬边界 + 09 软预警）</text>
+
+  <!-- ============ 泳道头部 ============ -->
+  <g>
+    <rect x="60" y="100" width="240" height="44" rx="8" fill="#0c4a6e" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="180" y="128" text-anchor="middle" font-size="15" font-weight="bold" fill="#7dd3fc">客户端</text>
+
+    <rect x="340" y="100" width="250" height="44" rx="8" fill="#1e293b" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="465" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#7dd3fc">协议层（05 / 06）</text>
+    <text x="465" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">/v1/chat/completions + tools</text>
+
+    <rect x="630" y="100" width="240" height="44" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="750" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#fbbf24">输入过滤（08）</text>
+    <text x="750" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">Trie 前缀树扫描 · 硬边界</text>
+
+    <rect x="910" y="100" width="220" height="44" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="1020" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#34d399">大模型</text>
+    <text x="1020" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">qwen-plus + logprobs</text>
+
+    <rect x="1170" y="100" width="210" height="44" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="1275" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#fbbf24">输出审查（08 + 09）</text>
+    <text x="1275" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">敏感词 + 置信度 · 双闸</text>
+  </g>
+
+  <!-- 泳道竖线 -->
+  <line x1="180" y1="144" x2="180" y2="1000" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="465" y1="144" x2="465" y2="1000" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="750" y1="144" x2="750" y2="1000" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="1020" y1="144" x2="1020" y2="1000" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="1275" y1="144" x2="1275" y2="1000" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+
+  <!-- ============ 主流程 ============ -->
+  <g>
+    <!-- 1 客户端 → 协议层 -->
+    <line x1="180" y1="176" x2="457" y2="176" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrBlue)"/>
+    <text x="318" y="168" text-anchor="middle" font-size="12" fill="#7dd3fc">POST /v1/chat/completions</text>
+
+    <!-- 2 协议层 → 输入过滤 -->
+    <line x1="465" y1="204" x2="742" y2="204" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrYellow)"/>
+    <text x="604" y="196" text-anchor="middle" font-size="12" fill="#fbbf24">Trie 扫描用户输入（生成前第一道闸）</text>
+
+    <!-- 分支：命中敏感词 -->
+    <rect x="490" y="228" width="520" height="66" rx="8" fill="#7f1d1d" stroke="#f87171" stroke-width="2"/>
+    <text x="506" y="252" font-size="13" font-weight="bold" fill="#fca5a5">分支 A：命中敏感词 → input_blocked（零成本拒绝）</text>
+    <text x="506" y="276" font-size="12" fill="#fecaca">模型根本不被调用 —— 把危险挡在最便宜的位置（生成前）</text>
+
+    <!-- 分支：未命中 -->
+    <rect x="490" y="312" width="520" height="44" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="506" y="330" font-size="13" font-weight="bold" fill="#34d399">分支 B：未命中 → 放行进入推理</text>
+    <text x="506" y="350" font-size="12" fill="#d1fae5">第一道闸通过，请求继续向上游流动</text>
+
+    <!-- 3 输入过滤 → 模型 -->
+    <line x1="750" y1="384" x2="1012" y2="384" stroke="#34d399" stroke-width="2" marker-end="url(#arrGreen)"/>
+    <text x="882" y="376" text-anchor="middle" font-size="12" fill="#34d399">messages + tools 说明书（+ logprobs 请求）</text>
+
+    <!-- 4 模型内部 -->
+    <rect x="870" y="408" width="300" height="72" rx="8" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+    <text x="886" y="432" font-size="13" font-weight="bold" fill="#34d399">模型推理（06 三件套在此生效）</text>
+    <text x="886" y="454" font-size="12" fill="#94a3b8">自主决策：直接回答 / 返回 tool_calls</text>
+    <text x="886" y="472" font-size="12" fill="#94a3b8">逐 token 输出 + 每个 token 的概率</text>
+
+    <!-- 5 模型 → 输出审查 -->
+    <line x1="1020" y1="504" x2="1267" y2="504" stroke="#34d399" stroke-width="2" marker-end="url(#arrGreen)"/>
+    <text x="1145" y="496" text-anchor="middle" font-size="12" fill="#34d399">回答 + 逐 token 概率（logprobs）</text>
+
+    <!-- 输出三分支 -->
+    <rect x="890" y="528" width="510" height="72" rx="8" fill="#7f1d1d" stroke="#f87171" stroke-width="2"/>
+    <text x="906" y="552" font-size="13" font-weight="bold" fill="#fca5a5">分支 C：输出命中敏感词 → output_blocked</text>
+    <text x="906" y="574" font-size="12" fill="#fecaca">第二层兜底：模型自己生成的内容也要过闸（生成后）</text>
+    <text x="906" y="592" font-size="12" fill="#94a3b8">"暴 力带空格"实验：单靠第一层必漏</text>
+
+    <rect x="890" y="612" width="510" height="72" rx="8" fill="#78350f" stroke="#fbbf24" stroke-width="2"/>
+    <text x="906" y="636" font-size="13" font-weight="bold" fill="#fde68a">分支 D：低置信 token 超阈值 → ok + 预警标注</text>
+    <text x="906" y="658" font-size="12" fill="#fde68a">09 篇：低概率 token 是幻觉预警而非判决（软处理）</text>
+    <text x="906" y="676" font-size="12" fill="#94a3b8">回答照常返回，附加"仅供参考"置信度标注</text>
+
+    <rect x="890" y="696" width="510" height="72" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+    <text x="906" y="720" font-size="13" font-weight="bold" fill="#34d399">分支 E：正常 → ok（流式逐块返回）</text>
+    <text x="906" y="742" font-size="12" fill="#d1fae5">07 篇实测：44 块逐块推送 + [DONE] 终止符</text>
+    <text x="906" y="760" font-size="12" fill="#94a3b8">首字 0.43s —— 流式优化的是"人的感受"</text>
+
+    <!-- 6 回到客户端 -->
+    <path d="M 890 796 L 465 796 L 465 824 L 188 824" stroke="#7dd3fc" stroke-width="2" fill="none" marker-end="url(#arrBlue)"/>
+    <text x="500" y="816" text-anchor="middle" font-size="12" fill="#7dd3fc">四种终态之一返回客户端（blocked / blocked / ok+预警 / ok）</text>
+  </g>
+
+  <!-- ============ 底部要点 ============ -->
+  <g>
+    <rect x="60" y="856" width="1320" height="250" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="892" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">这张时序图回答的三个核心问题</text>
+
+    <text x="100" y="928" font-size="14" fill="#d1fae5">Q1 治理为什么是"两道关卡"而不是一个模块？ —— 输入闸（生成前）挡用户恶意，输出闸（生成后）挡模型幻觉语料 —— 位置不同，缺一不可</text>
+    <text x="100" y="958" font-size="14" fill="#d1fae5">Q2 硬边界与软预警怎么分工？ —— 08 敏感词是硬边界（命中即拦截，零容忍）；09 置信度是软预警（只标注不拦截，把判断权留给用户）</text>
+    <text x="100" y="988" font-size="14" fill="#d1fae5">Q3 一张图怎么串起 5 篇？ —— 05 协议入口 / 06 工具决策 / 07 流式交付 / 08 双层过滤 / 09 置信度 —— 全部嵌在这一次请求的生命线上</text>
+    <text x="100" y="1022" font-size="12" fill="#94a3b8">对照 char04：char04 治理靠"工具入参清洗 + 沙箱"（执行层防御）；char03 治理靠"内容闸门 + 置信度"（服务层防御）—— 两个章节是同一安全观的两层落地</text>
+    <text x="100" y="1048" font-size="12" fill="#94a3b8">生产差距：教学版 Trie 黑名单只有 4 词、logprobs 只做汇总 —— 生产要语义分类模型 / 多模态审核 / RAG 锚定 / 裁判模型 / 引用溯源</text>
+  </g>
+
+  <defs>
+    <marker id="arrBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="arrYellow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#34d399"/>
+    </marker>
+  </defs>
+</svg>

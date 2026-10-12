@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="720" viewBox="0 0 1180 720" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect width="1180" height="720" fill="#0f172a"/>
+  <text x="590" y="46" text-anchor="middle" font-size="25" font-weight="bold" fill="#22d3ee">char07 四阶段闭环全景图：上下文工程的生命周期</text>
+  <text x="590" y="74" text-anchor="middle" font-size="13" fill="#94a3b8">七篇文件按"进 → 出 → 存 → 选"四个阶段闭环：上下文从哪来、交给谁、怎么留、怎么挑</text>
+
+  <!-- ① 进 -->
+  <rect x="60" y="120" width="250" height="240" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5"/>
+  <text x="185" y="156" text-anchor="middle" font-size="20" font-weight="bold" fill="#38bdf8">① 进：表示 + 组装</text>
+  <text x="185" y="182" text-anchor="middle" font-size="13" fill="#94a3b8">上下文怎么长什么样、多源怎么入池</text>
+  <rect x="85" y="200" width="200" height="56" rx="6" fill="#020617" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="185" y="224" text-anchor="middle" font-size="14" fill="#bae6fd">01 上下文段结构化表示</text>
+  <text x="185" y="246" text-anchor="middle" font-size="12" fill="#7dd3fc">五字段结构 + 解读工具</text>
+  <rect x="85" y="268" width="200" height="56" rx="6" fill="#020617" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="185" y="292" text-anchor="middle" font-size="14" fill="#bae6fd">02 多段标注的智能体系统</text>
+  <text x="185" y="314" text-anchor="middle" font-size="12" fill="#7dd3fc">四类标注组装入池</text>
+  <text x="185" y="348" text-anchor="middle" font-size="12" fill="#64748b">灵魂资产：build_segment</text>
+
+  <!-- ② 出 -->
+  <rect x="330" y="120" width="250" height="240" rx="14" fill="#1e293b" stroke="#a78bfa" stroke-width="2.5"/>
+  <text x="455" y="156" text-anchor="middle" font-size="20" font-weight="bold" fill="#a78bfa">② 出：路由 + 分发</text>
+  <text x="455" y="182" text-anchor="middle" font-size="13" fill="#94a3b8">请求交给谁处理</text>
+  <rect x="355" y="200" width="200" height="56" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="455" y="224" text-anchor="middle" font-size="14" fill="#ddd6fe">03 多路由控制策略</text>
+  <text x="455" y="246" text-anchor="middle" font-size="12" fill="#c4b5fd">四级关键词路由 1→1 交换机</text>
+  <rect x="355" y="268" width="200" height="56" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="455" y="292" text-anchor="middle" font-size="14" fill="#ddd6fe">04 模型分支路由与入口决策</text>
+  <text x="455" y="314" text-anchor="middle" font-size="12" fill="#c4b5fd">any() 写法 + hybrid 1→2 融合</text>
+  <text x="455" y="348" text-anchor="middle" font-size="12" fill="#f87171">学费：tool/hybrid 死代码（截胡）</text>
+
+  <!-- ③ 存 -->
+  <rect x="600" y="120" width="250" height="240" rx="14" fill="#1e293b" stroke="#fbbf24" stroke-width="2.5"/>
+  <text x="725" y="156" text-anchor="middle" font-size="20" font-weight="bold" fill="#fbbf24">③ 存：持久化 + 缓存</text>
+  <text x="725" y="182" text-anchor="middle" font-size="13" fill="#94a3b8">怎么留痕（审计）、怎么省算（性能）</text>
+  <rect x="625" y="200" width="200" height="56" rx="6" fill="#020617" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="725" y="224" text-anchor="middle" font-size="14" fill="#fde68a">05 持久化日志记录</text>
+  <text x="725" y="246" text-anchor="middle" font-size="12" fill="#fde68a">JSONL 追加写 + 七字段</text>
+  <rect x="625" y="268" width="200" height="56" rx="6" fill="#020617" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="725" y="292" text-anchor="middle" font-size="14" fill="#fde68a">06 提示词缓存与快速回放</text>
+  <text x="725" y="314" text-anchor="middle" font-size="12" fill="#fde68a">MD5 精确匹配 + JSON 覆盖写</text>
+  <text x="725" y="348" text-anchor="middle" font-size="12" fill="#64748b">01 篇"可追溯可恢复"在此兑现</text>
+
+  <!-- ④ 选 -->
+  <rect x="870" y="120" width="250" height="240" rx="14" fill="#134e4a" stroke="#34d399" stroke-width="2.5"/>
+  <text x="995" y="156" text-anchor="middle" font-size="20" font-weight="bold" fill="#34d399">④ 选：合并 + 压缩</text>
+  <text x="995" y="182" text-anchor="middle" font-size="13" fill="#94a3b8">不是都塞，挑着塞（Token 预算）</text>
+  <rect x="895" y="200" width="200" height="56" rx="6" fill="#020617" stroke="#34d399" stroke-width="1.2"/>
+  <text x="995" y="224" text-anchor="middle" font-size="14" fill="#d1fae5">07 动态上下文合并策略</text>
+  <text x="995" y="246" text-anchor="middle" font-size="12" fill="#86efac">三级筛选：system 全留 → tool 最新1</text>
+  <rect x="895" y="268" width="200" height="40" rx="6" fill="#020617" stroke="#34d399" stroke-width="1.2"/>
+  <text x="995" y="293" text-anchor="middle" font-size="12" fill="#86efac">→ 历史最近 4 条</text>
+  <text x="995" y="332" text-anchor="middle" font-size="12" fill="#f87171">学费：锯齿效应（答留问丢）</text>
+  <text x="995" y="352" text-anchor="middle" font-size="12" fill="#64748b">char08-05 预算装填的前奏</text>
+
+  <!-- 阶段间箭头 -->
+  <line x1="310" y1="240" x2="322" y2="240" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+  <line x1="580" y1="240" x2="592" y2="240" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+  <line x1="850" y1="240" x2="862" y2="240" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+
+  <!-- 底部闭环：④ → ① 回流 -->
+  <path d="M 995 368 C 995 480 185 480 185 368" fill="none" stroke="#22d3ee" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#arC)"/>
+  <text x="590" y="465" text-anchor="middle" font-size="14" fill="#22d3ee">闭环回流：07 合并后的上下文喂给 LLM，回答再经 01 结构化、05 落盘——循环往复</text>
+
+  <!-- 底部三笔学费 -->
+  <rect x="60" y="510" width="1060" height="170" rx="12" fill="#020617" stroke="#f87171" stroke-width="2"/>
+  <text x="590" y="545" text-anchor="middle" font-size="17" font-weight="bold" fill="#f87171">char07 三笔学费（实测数据）</text>
+
+  <rect x="90" y="565" width="320" height="90" rx="8" fill="#1e293b" stroke="#b45309" stroke-width="1.5"/>
+  <text x="250" y="592" text-anchor="middle" font-size="14" fill="#fbbf24" font-weight="bold">学费 1：路由死代码谱系</text>
+  <text x="250" y="615" text-anchor="middle" font-size="12.5" fill="#e2e8f0">03 篇 tool 分支、04 篇 hybrid 分支永不触发</text>
+  <text x="250" y="637" text-anchor="middle" font-size="12.5" fill="#e2e8f0">根因：if/elif 顺序即隐式优先级</text>
+
+  <rect x="430" y="565" width="320" height="90" rx="8" fill="#1e293b" stroke="#b45309" stroke-width="1.5"/>
+  <text x="590" y="592" text-anchor="middle" font-size="14" fill="#fbbf24" font-weight="bold">学费 2：timestamp 暴露耗时</text>
+  <text x="590" y="615" text-anchor="middle" font-size="12.5" fill="#e2e8f0">05 篇：前三段 2ms 落盘，response 段晚 6.5s</text>
+  <text x="590" y="637" text-anchor="middle" font-size="12.5" fill="#e2e8f0">时间戳 = 免费性能探针</text>
+
+  <rect x="770" y="565" width="320" height="90" rx="8" fill="#1e293b" stroke="#b45309" stroke-width="1.5"/>
+  <text x="930" y="592" text-anchor="middle" font-size="14" fill="#fbbf24" font-weight="bold">学费 3：缓存的精确匹配前提</text>
+  <text x="930" y="615" text-anchor="middle" font-size="12.5" fill="#e2e8f0">06 篇：13.8s → 0.78s（17.7x 加速）</text>
+  <text x="930" y="637" text-anchor="middle" font-size="12.5" fill="#e2e8f0">前提：full_prompt 一字不差（MD5 非语义）</text>
+
+  <defs>
+    <marker id="arW" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#475569"/></marker>
+    <marker id="arC" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#22d3ee"/></marker>
+  </defs>
+</svg>

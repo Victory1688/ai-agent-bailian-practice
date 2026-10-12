@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03_具备异常处理能力的Agent - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>03_具备异常处理能力的Agent - 代码解析</h1>
+<div class="meta">对应文件：char08/03_具备异常处理能力的Agent.py | 教材出处：第8章 单智能体系统构建实战 例8-3 | 环境实测：两条路径均验证（降级路径 3 次随机命中 + 正常路径 monkeypatch 确定性复现）| 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char08 第三篇——<strong>给 Agent 装上"备胎"</strong>。01 篇管状态、02 篇管输入，本篇管<strong>故障</strong>：工具可能因网络波动、API 限流、参数错误而失败，这是现实世界无法避免的。<code class="inline">RiskyEconomicTool</code> 用 random 模拟 50% 失败率，失败时返回 <code class="inline">[ERROR]...</code> 字符串（而不是抛异常）；<code class="inline">RobustAgent</code> 检测到错误标记后<strong>不崩溃、不重试、直接切换</strong>——把 prompt 换成"工具失败，请模型基于常识直接预测"。这就是<strong>优雅降级（Graceful Degradation）</strong>：依赖挂了，服务还在，只是质量从"数据支撑"降到"模型常识"。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、双路径设计速查表</h2>
+<table>
+  <tr><th>路径</th><th>触发条件</th><th>prompt 内容</th><th>LLM 的角色</th><th>输出质量</th></tr>
+  <tr><td><strong>正常路径</strong></td><td>工具返回不带 [ERROR]</td><td>"根据工具输出生成分析总结"</td><td>数据解读者（忠实于工具数据）</td><td>有数据支撑</td></tr>
+  <tr><td><strong>降级路径</strong></td><td>工具返回含 [ERROR]</td><td>"工具调用失败，基于常识直接预测"</td><td>独立预测者（用自己的知识）</td><td>无数据支撑但服务可用</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">分支判断的信号约定：字符串魔法值</div>
+  <pre>
+if "[ERROR]" in tool_response:      # 降级
+    prompt = "注意：外部工具调用失败..."
+else:                                # 正常
+    prompt = "根据以下数据生成分析总结..."
+  </pre>
+  <p>工具失败信号是<strong>字符串前缀 [ERROR]</strong>——这是 char02 惯例的延伸（"工具永不抛异常，失败也返回字符串"）。好处是 Agent 层处理极简（一次 in 判断）；代价是<strong>字符串魔法值是脆弱契约</strong>：如果工具的错误信息恰好包含别的格式、或者正常结果里意外含有 "[ERROR]" 字样，分支就判断错了。生产环境应该用结构化信号（char05 降级链三部曲的结论：status 字段 > 字符串比对）。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程图</h2>
+<pre>
+用户输入 "请预测2024年美国的GDP增长趋势"
+        │
+        ▼
+RobustAgent.process()
+  ├─ 参数提取：region = "美国" if "美国" in input else "中国"
+  │
+  ▼
+RiskyEconomicTool.call({"region": "美国"})
+  ├─ try:
+  │    ├─ region 缺失 → raise ValueError
+  │    ├─ random.random() < 0.5 → raise ConnectionError（50% 概率）
+  │    └─ 成功 → return "[DeepSeek-V1] 预测：美国...5.3%"
+  │  except Exception as e:
+  │    └─ return "[ERROR] 工具执行失败：..."（永不向上抛）
+  │
+  ▼
+分支判断
+  ├─ [正常] prompt="根据工具输出 5.3% 生成分析总结"
+  └─ [降级] prompt="工具失败，基于常识直接预测"
+        │
+        ▼
+dashscope.Generation.call(qwen-plus) → 最终回答
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、逐段代码讲解</h2>
+<h3>4.1 RiskyEconomicTool：异常在工具内部"消化"（原样保留）</h3>
+<pre>
+def call(self, inputs: Dict[str, Any]) -> str:
+    try:
+        region = inputs.get("region")
+        if not region:
+            raise ValueError("缺少region字段")
+        if random.random() < 0.5:
+            raise ConnectionError("远程API调用失败：连接超时")
+        return f"[DeepSeek-V1] 预测：{region} 2024年GDP增长预计为5.3%"
+    except Exception as e:
+        return f"[ERROR] 工具执行失败：{str(e)}"
+</pre>
+<p>三层失败源都在 try 里：① 参数校验失败（ValueError）② 远程调用失败（ConnectionError，random 模拟）③ 任何其他意外。<strong>except 兜住所有异常转成错误字符串</strong>——这个设计让调用方（Agent 层）永远不需要 try/except，只需要判断返回值。这延续并强化了 char02 建立的"工具永不抛异常"惯例，把健壮性封装在离故障最近的一层。</p>
+<h3>4.2 RobustAgent.__init__：去掉虚构 Agent 包装</h3>
+<pre>
+# 原写法：self.agent = Agent(tools=[tool])  ← 虚构 qwen_agent
+# 改写：直接删（同 01 篇——StatefulAgent 也是去掉这层无意义包装）
+self.tool = tool
+</pre>
+<p>与 01 篇同款处理：原代码"Agent 持有工具"的抽象从未被真正使用（process 里直接 tool.call 和模型调用），改写后删掉 <code class="inline">self.agent</code>，LLM 调用直接写在 process 里。</p>
+<h3>4.3 降级分支：prompt 的"话题切换"（本篇核心教学资产，原样保留）</h3>
+<pre>
+if "[ERROR]" in tool_response:
+    print("→ 进入降级流程，切换为模型直接生成")
+    prompt = f"""注意：外部工具调用失败，请直接基于常识与历史数据，
+预测{region}在2024年的经济走势，并给出简明解释。"""
+</pre>
+<p>降级的本质是<strong>换一个 prompt，而不是换一个流程</strong>——两条路径最终都走同一个 dashscope 调用，区别只在喂给模型的内容：正常时喂"工具数据 + 总结要求"，降级时喂"失败告知 + 直接预测要求"。<strong>LLM 自己就是最好的降级通道</strong>：它有预训练知识，数据断了它也能给出合理的回答（只是失去了实时数据的支撑）。</p>
+<h3>4.4 一个值得注意的细节：降级 prompt 没有"简洁"约束</h3>
+<p>正常路径的 prompt 要求"语言简洁、观点明确"，降级路径只说"给出简明解释"——实测输出差异明显：降级路径的回答更长更结构化（带分节、emoji、风险清单），正常路径的回答更紧凑。<strong>降级不只是数据来源变了，输出风格也悄悄变了</strong>——生产系统的降级 prompt 应该保持与正常路径一致的风格约束，避免用户体验跳变。</p>
+
+<!-- ========== 五 ========== -->
+<h2>五、实测验证：两条路径全部跑通</h2>
+<div class="ok">
+  <div class="ok-title">降级路径（3 次随机运行均命中）</div>
+  <pre>
+→ 工具返回结果：[ERROR] 工具执行失败：远程API调用失败：连接超时
+→ 进入降级流程，切换为模型直接生成
+--- Qwen3.0 最终输出 ---
+预计2024年美国实际GDP增长约2.1%–2.3%（高于潜在增速约1.8%...），
+CPI同比涨幅从2023年底的3.4%进一步回落至2.5%–2.7%...
+（美联储降息预期、劳动力市场韧性、通胀回落、尾部风险等分节论述）
+  </pre>
+  <p>工具挂了，但用户依然得到了一份<strong>专业级预测</strong>——qwen-plus 用自己的预训练知识给出了 2.1%-2.3% 的判断，还附上了 IMF/OECD/美联储的机构共识。服务没有中断。</p>
+</div>
+<div class="ok">
+  <div class="ok-title">正常路径（monkeypatch random 强制命中，确定性验证）</div>
+  <pre>
+→ 工具返回结果：[DeepSeek-V1] 预测：美国 2024年GDP增长预计为5.3%
+--- Qwen3.0 最终输出 ---
+美国2024年GDP增长预测达5.3%，显著高于历史趋势（近十年均值约2.3%）
+和主流机构预期（约2.1%），反映当前经济韧性超预期...但需警惕
+高基数下的可持续性风险...
+  </pre>
+  <p>复现方法（测试正常路径不必赌运气）：</p>
+  <pre>
+python -c "import random, runpy; random.random = lambda: 0.99; \
+runpy.run_path(r'03_具备异常处理能力的Agent.py', run_name='__main__')"
+  </pre>
+</div>
+<div class="warn">
+  <div class="warn-title">实测发现：假数据的讽刺一幕——LLM 会"质疑"工具</div>
+  <p>对比两条路径的数字：工具（假数据）给 5.3%，qwen-plus 自己判断 2.1%-2.3%。正常路径里 LLM 拿到 5.3% 后没有照单全收，而是<strong>主动指出"显著高于历史趋势和主流机构预期"</strong>并附上可持续性警告——现代 LLM 的知识足以对不可信的工具数据做交叉校验。但注意：这不是可靠的保障（模型也可能顺着错误数据编故事），<strong>数据质量必须从源头保证，不能指望下游 LLM 兜底</strong>。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、char08 章内演进：01 → 02 → 03 的递进</h2>
+<table>
+  <tr><th>篇目</th><th>解决什么问题</th><th>核心资产</th><th>一句话</th></tr>
+  <tr><td>01 状态感知单Agent</td><td>Agent 怎么<strong>看得见自己</strong></td><td>AgentState 六态 + 状态流转</td><td>生命周期可观测</td></tr>
+  <tr><td>02 参数解析与封装</td><td>Agent 怎么<strong>听懂用户</strong></td><td>parse_input 规则解析器</td><td>NL→结构化的翻译桥</td></tr>
+  <tr><td><strong>03 异常处理（本篇）</strong></td><td>Agent 怎么<strong>扛住故障</strong></td><td>工具自捕获 + [ERROR] 信号 + 降级 prompt</td><td>优雅降级：依赖挂了服务还在</td></tr>
+</table>
+<p>三篇合体就是一个"能看、能听、能扛"的完整单 Agent。注意本篇与 01 篇的结合点：如果加上状态机，工具失败时应流转到 FAILED 或新增 DEGRADED 状态（而不是现在的隐式无状态降级）——动手练习第 4 题做这个融合。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、架构视角：容错的三级策略谱系</h2>
+<table>
+  <tr><th>级别</th><th>策略</th><th>本篇实现？</th><th>说明</th></tr>
+  <tr><td>L1 重试</td><td>失败后重调（可能加退避）</td><td>否</td><td>瞬时故障（网络抖动）重试大概率成功；本篇跳过直接降级</td></tr>
+  <tr><td><strong>L2 降级</strong></td><td>切换到备用通道（本篇：LLM 常识）</td><td><strong>是</strong></td><td>持续故障时保住服务可用性，牺牲数据质量</td></tr>
+  <tr><td>L3 熔断</td><td>连续失败 N 次后直接走降级，不再试工具</td><td>否</td><td>避免每次请求都撞一遍死掉的工具（浪费超时时间）</td></tr>
+</table>
+<p>生产级容错是三级叠加：<strong>先重试（L1）→ 重试穷尽降级（L2）→ 降级次数多了熔断（L3）</strong>。本篇只实现了 L2——这是教学的最小可用切片，但它恰恰是最核心的一级：L1/L3 优化的是"什么时候放弃"，L2 解决的是"放弃之后怎么办"。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学版 vs 生产版差距</h2>
+<table>
+  <tr><th>教学简化</th><th>生产要求</th></tr>
+  <tr><td>失败信号 = 字符串 "[ERROR]" 魔法值</td><td>结构化信号（char05 结论）：返回 {"status": "error", "data": ...} 或抛类型化异常</td></tr>
+  <tr><td>失败直接降级，无重试</td><td>指数退避重试（L1）+ 熔断器（L3），瞬时故障不轻易降级</td></tr>
+  <tr><td>random 50% 模拟失败</td><td>真实网络异常 + 超时控制（char06 惯例：requests timeout）</td></tr>
+  <tr><td>降级无痕迹</td><td>降级事件落日志（char07-05 惯例）+ 输出标注"本回答基于模型常识，非实时数据"</td></tr>
+  <tr><td>降级 prompt 风格约束弱于正常路径</td><td>两条路径统一风格约束，用户体验无跳变</td></tr>
+  <tr><td>单一降级通道（LLM 常识）</td><td>多级降级链（char05-06 的教训）：主工具→备工具→缓存旧数据→LLM 常识→道歉话术</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习（巩固本篇技能）</h2>
+<ol>
+  <li><strong>确定性复现两条路径</strong>：用 monkeypatch 技巧分别强制走降级路径（<code class="inline">random.random = lambda: 0.1</code>）和正常路径（<code class="inline">lambda: 0.99</code>），对比两条路径的输出风格差异——验证 4.4 节的观察。</li>
+  <li><strong>升级为结构化信号</strong>：把工具返回值从字符串改成字典 <code class="inline">{"status": "ok"/"error", "data": ...}</code>，Agent 层改用 <code class="inline">resp["status"]</code> 判断——体验 char05 降级链三部曲的结论（字符串比对 → 结构化字段）。</li>
+  <li><strong>加 L1 重试</strong>：在 RobustAgent 里给工具调用加最多 2 次重试（每次失败 sleep 1 秒再试），重试穷尽才降级——观察 50% 失败率下重试后的降级概率从 50% 降到 12.5%。</li>
+  <li><strong>融合 01 篇状态机</strong>：给 RobustAgent 加 AgentState（复用 01 篇枚举），工具失败时流转到新状态 DEGRADED，成功时走 RUNNING→COMPLETED——让降级在状态机上可见。</li>
+  <li><strong>加 L3 熔断</strong>：用实例变量记录连续失败次数，连续 3 次失败后直接走降级不再调工具，成功后计数清零——体会熔断器模式（Circuit Breaker）的最小实现。</li>
+</ol>
+
+</div>
+</body>
+</html>

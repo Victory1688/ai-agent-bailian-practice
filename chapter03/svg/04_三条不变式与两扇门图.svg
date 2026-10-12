@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1080" viewBox="0 0 1440 1080" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1080" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char03 三条不变式与"一平台两扇门"图 —— 贯穿 9 篇的底层规律</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">改写范式统一 / build_prompt 消失 / 原生 SDK 与 OpenAI 兼容模式双门并存</text>
+
+  <!-- ============ 上半：三条不变式（三列） ============ -->
+  <g>
+    <!-- 不变式 1 -->
+    <rect x="60" y="100" width="420" height="270" rx="12" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <rect x="60" y="100" width="420" height="44" rx="12" fill="#064e3b"/>
+    <rect x="60" y="132" width="420" height="12" fill="#064e3b"/>
+    <text x="80" y="129" font-size="17" font-weight="bold" fill="#34d399">不变式一：统一的钥匙与改写范式</text>
+
+    <text x="80" y="172" font-size="13" fill="#94a3b8">原教材困境：本地 GPU / 虚构 API 无法运行</text>
+
+    <rect x="80" y="188" width="380" height="120" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="96" y="214" font-size="13" fill="#e2e8f0">步骤 1：原代码全部注释保留</text>
+    <text x="96" y="240" font-size="13" fill="#e2e8f0">步骤 2：环境变量读 DASHSCOPE_API_KEY</text>
+    <text x="96" y="266" font-size="13" fill="#e2e8f0">步骤 3：推理替换为 dashscope 云端调用</text>
+    <text x="96" y="292" font-size="12" fill="#34d399">铁律：只动"模型怎么调"，不动业务逻辑</text>
+
+    <text x="80" y="336" font-size="13" fill="#d1fae5">价值：9 篇架构思想与教材完全同构</text>
+    <text x="80" y="356" font-size="12" fill="#94a3b8">char01-08 全系列沿用同一范式（跨章可复用）</text>
+  </g>
+
+  <!-- 不变式 2 -->
+  <g>
+    <rect x="510" y="100" width="420" height="270" rx="12" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+    <rect x="510" y="100" width="420" height="44" rx="12" fill="#0c4a6e"/>
+    <rect x="510" y="132" width="420" height="12" fill="#0c4a6e"/>
+    <text x="530" y="129" font-size="17" font-weight="bold" fill="#7dd3fc">不变式二：build_prompt 的消失</text>
+
+    <text x="530" y="172" font-size="13" fill="#94a3b8">教材前作：手动拼提示词格式（客户端格式工程）</text>
+
+    <rect x="530" y="188" width="380" height="120" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="546" y="212" font-size="13" fill="#fca5a5">旧：build_prompt 手动拼</text>
+    <text x="560" y="234" font-size="12" fill="#94a3b8" font-family="Consolas, monospace">"[用户]：xxx</text>
+    <text x="560" y="254" font-size="12" fill="#94a3b8" font-family="Consolas, monospace"> [助手]：yyy"</text>
+    <text x="546" y="282" font-size="13" fill="#34d399">新：messages 直接透传</text>
+    <text x="560" y="300" font-size="12" fill="#94a3b8" font-family="Consolas, monospace">[{"role":"user","content":"..."}]</text>
+
+    <text x="530" y="336" font-size="13" fill="#d1fae5">规律：接口越智能，客户端格式工程越少</text>
+    <text x="530" y="356" font-size="12" fill="#94a3b8">云端 Chat 模型原生理解 role/content 结构</text>
+  </g>
+
+  <!-- 不变式 3 -->
+  <g>
+    <rect x="960" y="100" width="420" height="270" rx="12" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <rect x="960" y="100" width="420" height="44" rx="12" fill="#78350f"/>
+    <rect x="960" y="132" width="420" height="12" fill="#78350f"/>
+    <text x="980" y="129" font-size="17" font-weight="bold" fill="#fde68a">不变式三：一平台两扇门（选型规律）</text>
+
+    <text x="980" y="172" font-size="13" fill="#94a3b8">同一百炼平台，两种调用通道并存：</text>
+
+    <rect x="980" y="188" width="380" height="120" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="996" y="212" font-size="13" fill="#e2e8f0">原生 SDK：简单易用，能力子集</text>
+    <text x="996" y="238" font-size="13" fill="#e2e8f0">兼容模式：功能完整（logprobs 等）</text>
+    <text x="996" y="266" font-size="13" font-weight="bold" fill="#fbbf24">经验法则：SDK 缺能力，先去兼容模式找</text>
+    <text x="996" y="290" font-size="12" fill="#94a3b8">09 篇 logprobs 实测验证此法则</text>
+
+    <text x="980" y="336" font-size="13" fill="#d1fae5">详表见下半区"两扇门对照"</text>
+    <text x="980" y="356" font-size="12" fill="#94a3b8">05/06/09 三篇依赖兼容模式（功能更全）</text>
+  </g>
+
+  <!-- ============ 下半：两扇门对照表 ============ -->
+  <g>
+    <rect x="60" y="400" width="1320" height="330" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <rect x="60" y="400" width="1320" height="44" rx="12" fill="#312e81"/>
+    <rect x="60" y="432" width="1320" height="12" fill="#312e81"/>
+    <text x="80" y="429" font-size="18" font-weight="bold" fill="#c7d2fe">一平台两扇门：dashscope 原生 SDK vs OpenAI 兼容模式（9 篇实际使用分布）</text>
+
+    <!-- 门 1 -->
+    <rect x="90" y="460" width="620" height="240" rx="10" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+    <text x="106" y="490" font-size="16" font-weight="bold" fill="#34d399">门 1：原生 SDK（dashscope.Generation.call）</text>
+    <text x="106" y="518" font-size="13" fill="#94a3b8">特点：简单易用、参数直观，但能力是子集</text>
+    <text x="106" y="540" font-size="12" fill="#fca5a5">缺口：不返回 logprobs（09 篇被迫换门）</text>
+
+    <rect x="106" y="556" width="588" height="34" rx="4" fill="#064e3b"/>
+    <text x="118" y="578" font-size="13" fill="#d1fae5">使用篇目：01 / 02 / 03 / 04 / 06（基础调用与工具协议）</text>
+
+    <text x="106" y="616" font-size="13" fill="#94a3b8">适用场景：快速验证、无特殊能力需求的推理调用</text>
+    <text x="106" y="640" font-size="12" fill="#64748b">char01-02 系列也统一走此门（跨章一致性）</text>
+    <text x="106" y="664" font-size="12" fill="#94a3b8">注意：Generation.call 是文本补全形态，Chat 场景建议 messages 格式</text>
+    <text x="106" y="688" font-size="12" fill="#64748b">（各篇 HTML 均有改写细节与原代码对照）</text>
+
+    <!-- 门 2 -->
+    <rect x="730" y="460" width="620" height="240" rx="10" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="746" y="490" font-size="16" font-weight="bold" fill="#22d3ee">门 2：OpenAI 兼容模式（compatible-mode/v1）</text>
+    <text x="746" y="518" font-size="13" fill="#94a3b8">特点：功能完整 —— logprobs / 工具协议 / 标准流式</text>
+    <text x="746" y="540" font-size="12" fill="#34d399">价值：换 base_url 即可让 OpenAI 生态客户端无缝迁移</text>
+
+    <rect x="746" y="556" width="588" height="34" rx="4" fill="#0c4a6e"/>
+    <text x="758" y="578" font-size="13" fill="#7dd3fc">使用篇目：05（协议实现）/ 06（工具协议）/ 09（logprobs）</text>
+
+    <text x="746" y="616" font-size="13" fill="#94a3b8">适用场景：需要 OpenAI 生态互操作 / 高级能力（置信度）</text>
+    <text x="746" y="640" font-size="12" fill="#94a3b8">05 篇实测：真流式 44 块 + [DONE]，与官方 API 行为一致</text>
+    <text x="746" y="664" font-size="12" fill="#94a3b8">09 篇实测：逐 token 概率拿到 0.9365 vs 0.8763 对比数据</text>
+    <text x="746" y="688" font-size="12" fill="#64748b">协议即标准：客户端代码与模型供应商解耦</text>
+  </g>
+
+  <!-- ============ 底部：学习路径 6 步 ============ -->
+  <g>
+    <rect x="60" y="760" width="1320" height="280" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="796" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">新人学习路径 6 步（每步带自测标准，详见 arch_汇总说明.md 第八节）</text>
+
+    <rect x="90" y="820" width="200" height="190" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="106" y="848" font-size="14" font-weight="bold" fill="#22d3ee">1. 会调模型</text>
+    <text x="106" y="872" font-size="12" fill="#e2e8f0">01→02</text>
+    <text x="106" y="896" font-size="12" fill="#94a3b8">自测：不看资料写出</text>
+    <text x="106" y="916" font-size="12" fill="#94a3b8">最小调用函数；说清</text>
+    <text x="106" y="936" font-size="12" fill="#94a3b8">本地/云端四维取舍</text>
+
+    <rect x="310" y="820" width="200" height="190" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="326" y="848" font-size="14" font-weight="bold" fill="#22d3ee">2. 懂定制</text>
+    <text x="326" y="872" font-size="12" fill="#e2e8f0">03</text>
+    <text x="326" y="896" font-size="12" fill="#94a3b8">自测：讲清"为什么</text>
+    <text x="326" y="916" font-size="12" fill="#94a3b8">235B 跑不动而 LoRA</text>
+    <text x="326" y="936" font-size="12" fill="#94a3b8">权重很小"</text>
+
+    <rect x="530" y="820" width="200" height="190" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="546" y="848" font-size="14" font-weight="bold" fill="#22d3ee">3. 能扛流量</text>
+    <text x="546" y="872" font-size="12" fill="#e2e8f0">04→07</text>
+    <text x="546" y="896" font-size="12" fill="#94a3b8">自测：画串行 vs 并发</text>
+    <text x="546" y="916" font-size="12" fill="#94a3b8">时间线；说清批处理</text>
+    <text x="546" y="936" font-size="12" fill="#94a3b8">与流式各优化谁</text>
+
+    <rect x="750" y="820" width="200" height="190" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="766" y="848" font-size="14" font-weight="bold" fill="#22d3ee">4. 通协议</text>
+    <text x="766" y="872" font-size="12" fill="#e2e8f0">05→06</text>
+    <text x="766" y="896" font-size="12" fill="#94a3b8">自测：手写 tools</text>
+    <text x="766" y="916" font-size="12" fill="#94a3b8">JSON Schema；解释</text>
+    <text x="766" y="936" font-size="12" fill="#94a3b8">"换 base_url 不换代码"</text>
+
+    <rect x="970" y="820" width="200" height="190" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="986" y="848" font-size="14" font-weight="bold" fill="#22d3ee">5. 会治理</text>
+    <text x="986" y="872" font-size="12" fill="#e2e8f0">08→09</text>
+    <text x="986" y="896" font-size="12" fill="#94a3b8">自测：用"暴 力带空格"</text>
+    <text x="986" y="916" font-size="12" fill="#94a3b8">说清双层必要性；低概率</text>
+    <text x="986" y="936" font-size="12" fill="#94a3b8">token 是预警非判决</text>
+
+    <rect x="1190" y="820" width="160" height="190" rx="8" fill="#0f172a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="1206" y="848" font-size="14" font-weight="bold" fill="#22d3ee">6. 串成体系</text>
+    <text x="1206" y="872" font-size="12" fill="#e2e8f0">重读总图</text>
+    <text x="1206" y="896" font-size="12" fill="#94a3b8">自测：向别人复述</text>
+    <text x="1206" y="916" font-size="12" fill="#94a3b8">"迷你模型服务公司"</text>
+    <text x="1206" y="936" font-size="12" fill="#94a3b8">的四层分工</text>
+
+    <text x="720" y="1032" text-anchor="middle" font-size="13" fill="#d1fae5">三章连读：char01（提示词内圈）→ char02（Agent 外圈）→ char03（服务化基础设施）= "从调用模型到运营模型服务"完整课程线</text>
+  </g>
+</svg>

@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="760" viewBox="0 0 1180 760" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect width="1180" height="760" fill="#0f172a"/>
+  <text x="590" y="46" text-anchor="middle" font-size="25" font-weight="bold" fill="#22d3ee">char06 五段演进线全景图：从检索零件到异构融合</text>
+  <text x="590" y="74" text-anchor="middle" font-size="13" fill="#94a3b8">九篇文件的教学递进：零件（向量化/切片/检索）→ 预处理（清洗）→ 引擎（嵌入+向量库）→ 显式形态（完整 RAG）→ 异构融合（双通道）</text>
+
+  <!-- 第一段：检索零件 -->
+  <rect x="40" y="115" width="215" height="230" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5"/>
+  <text x="147" y="148" text-anchor="middle" font-size="17" font-weight="bold" fill="#38bdf8">第一段：检索零件</text>
+  <text x="147" y="170" text-anchor="middle" font-size="12" fill="#94a3b8">LangChain 三件套入门</text>
+  <rect x="58" y="185" width="180" height="44" rx="6" fill="#020617" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="148" y="204" text-anchor="middle" font-size="12.5" fill="#bae6fd">01 中文向量化入 FAISS</text>
+  <text x="148" y="222" text-anchor="middle" font-size="11" fill="#7dd3fc">FAISS.from_documents</text>
+  <rect x="58" y="237" width="180" height="44" rx="6" fill="#020617" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="148" y="256" text-anchor="middle" font-size="12.5" fill="#bae6fd">03 语义找回"Agent"</text>
+  <text x="148" y="274" text-anchor="middle" font-size="11" fill="#f87171">假标题：没有 Agent</text>
+  <text x="147" y="322" text-anchor="middle" font-size="12" fill="#64748b">认知：向量化 = 文本变坐标</text>
+
+  <!-- 第二段：预处理 -->
+  <rect x="270" y="115" width="215" height="230" rx="12" fill="#1e293b" stroke="#f87171" stroke-width="2.5"/>
+  <text x="377" y="148" text-anchor="middle" font-size="17" font-weight="bold" fill="#f87171">第二段：预处理</text>
+  <text x="377" y="170" text-anchor="middle" font-size="12" fill="#94a3b8">垃圾进垃圾出的守门员</text>
+  <rect x="288" y="185" width="180" height="44" rx="6" fill="#020617" stroke="#f87171" stroke-width="1.2"/>
+  <text x="378" y="204" text-anchor="middle" font-size="12.5" fill="#fecaca">02 文档切片实现</text>
+  <text x="378" y="222" text-anchor="middle" font-size="11" fill="#f87171">默认分隔符对中文不友好</text>
+  <rect x="288" y="237" width="180" height="44" rx="6" fill="#020617" stroke="#f87171" stroke-width="1.2"/>
+  <text x="378" y="256" text-anchor="middle" font-size="12.5" fill="#fecaca">04 清洗与句元切分</text>
+  <text x="378" y="274" text-anchor="middle" font-size="11" fill="#f87171">re.split 末尾空串陷阱</text>
+  <text x="377" y="322" text-anchor="middle" font-size="12" fill="#64748b">认知：切片粒度 = 检索精度上限</text>
+
+  <!-- 第三段：引擎 -->
+  <rect x="500" y="115" width="215" height="230" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2.5"/>
+  <text x="607" y="148" text-anchor="middle" font-size="17" font-weight="bold" fill="#a78bfa">第三段：检索引擎</text>
+  <text x="607" y="170" text-anchor="middle" font-size="12" fill="#94a3b8">抛开封装看底层</text>
+  <rect x="518" y="185" width="180" height="44" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="608" y="204" text-anchor="middle" font-size="12.5" fill="#ddd6fe">05 Qwen-Embedding 编码</text>
+  <text x="608" y="222" text-anchor="middle" font-size="11" fill="#f87171">requests API 已死→封装复活</text>
+  <rect x="518" y="237" width="180" height="44" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="608" y="256" text-anchor="middle" font-size="12.5" fill="#ddd6fe">06 三种向量库实测</text>
+  <text x="608" y="274" text-anchor="middle" font-size="11" fill="#86efac">FAISS+Chroma 跑通/Weaviate 缓</text>
+  <text x="607" y="322" text-anchor="middle" font-size="12" fill="#64748b">认知：封装 = 黑盒，必须拆开看一次</text>
+
+  <!-- 第四段：显式形态 -->
+  <rect x="730" y="115" width="215" height="230" rx="12" fill="#1e293b" stroke="#34d399" stroke-width="2.5"/>
+  <text x="837" y="148" text-anchor="middle" font-size="17" font-weight="bold" fill="#34d399">第四段：显式形态</text>
+  <text x="837" y="170" text-anchor="middle" font-size="12" fill="#94a3b8">完整 RAG 流水线</text>
+  <rect x="748" y="185" width="180" height="44" rx="6" fill="#020617" stroke="#34d399" stroke-width="1.2"/>
+  <text x="838" y="204" text-anchor="middle" font-size="12.5" fill="#d1fae5">07 RetrievalQA 问答</text>
+  <text x="838" y="222" text-anchor="middle" font-size="11" fill="#86efac">实测：答案精确引用法条</text>
+  <rect x="748" y="237" width="180" height="44" rx="6" fill="#020617" stroke="#34d399" stroke-width="1.2"/>
+  <text x="838" y="256" text-anchor="middle" font-size="12.5" fill="#d1fae5">08 Top-K 融合 Agent</text>
+  <text x="838" y="274" text-anchor="middle" font-size="11" fill="#86efac">k=5 多段召回上下文</text>
+  <text x="837" y="322" text-anchor="middle" font-size="12" fill="#64748b">认知：检索→拼 prompt→生成</text>
+
+  <!-- 第五段：异构融合 -->
+  <rect x="960" y="115" width="185" height="230" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="3"/>
+  <text x="1052" y="148" text-anchor="middle" font-size="17" font-weight="bold" fill="#22d3ee">第五段：异构融合</text>
+  <text x="1052" y="170" text-anchor="middle" font-size="12" fill="#94a3b8">单通道的尽头</text>
+  <rect x="978" y="185" width="150" height="44" rx="6" fill="#020617" stroke="#22d3ee" stroke-width="1.2"/>
+  <text x="1053" y="204" text-anchor="middle" font-size="12.5" fill="#a5f3fc">09 双通道混合检索</text>
+  <text x="1053" y="222" text-anchor="middle" font-size="11" fill="#f87171">"DeepSeek"是假标题</text>
+  <rect x="978" y="237" width="150" height="44" rx="6" fill="#020617" stroke="#22d3ee" stroke-width="1.2"/>
+  <text x="1053" y="256" text-anchor="middle" font-size="12.5" fill="#a5f3fc">FAISS + pandas</text>
+  <text x="1053" y="274" text-anchor="middle" font-size="11" fill="#f87171">数据通道是硬编码</text>
+  <text x="1052" y="322" text-anchor="middle" font-size="12" fill="#6ee7b7">语义 + 结构化双路融合</text>
+
+  <!-- 段间箭头 -->
+  <line x1="255" y1="230" x2="262" y2="230" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+  <line x1="485" y1="230" x2="492" y2="230" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+  <line x1="715" y1="230" x2="722" y2="230" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+  <line x1="945" y1="230" x2="952" y2="230" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+
+  <!-- 中部：两条认知主线 -->
+  <rect x="40" y="385" width="1105" height="120" rx="12" fill="#020617" stroke="#334155" stroke-width="1.5"/>
+  <text x="590" y="415" text-anchor="middle" font-size="15" font-weight="bold" fill="#22d3ee">贯穿五段的两条认知主线</text>
+  <text x="590" y="443" text-anchor="middle" font-size="13.5" fill="#e2e8f0">主线一（技术）：文本 → 向量 → 索引 → 检索 → 融合，每一步都可以被拆开替换（可插拔的零件化设计）</text>
+  <text x="590" y="470" text-anchor="middle" font-size="13.5" fill="#e2e8f0">主线二（教训）：教材三处假标题 + 一次 API 失效 + 一个正则陷阱——实测是唯一的真相来源</text>
+
+  <!-- 底部：与相邻章的衔接 -->
+  <rect x="40" y="535" width="1105" height="185" rx="12" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+  <text x="590" y="566" text-anchor="middle" font-size="15" font-weight="bold" fill="#e2e8f0">跨章衔接：char06 在课程中的枢纽位置</text>
+
+  <rect x="75" y="590" width="320" height="100" rx="8" fill="#020617" stroke="#475569" stroke-width="1.5"/>
+  <text x="235" y="618" text-anchor="middle" font-size="13.5" fill="#94a3b8" font-weight="bold">← 上承 char05 图编排</text>
+  <text x="235" y="642" text-anchor="middle" font-size="12.5" fill="#e2e8f0">char05 的 RetrievalQA 节点</text>
+  <text x="235" y="664" text-anchor="middle" font-size="12.5" fill="#e2e8f0">在 char06 被拆开重造</text>
+
+  <rect x="430" y="590" width="320" height="100" rx="8" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+  <text x="590" y="618" text-anchor="middle" font-size="13.5" fill="#6ee7b7" font-weight="bold">★ char06 本篇：RAG 工程化</text>
+  <text x="590" y="642" text-anchor="middle" font-size="12.5" fill="#d1fae5">零件化 + 显式化 + 异构融合</text>
+  <text x="590" y="664" text-anchor="middle" font-size="12.5" fill="#d1fae5">嵌入签名固定 = 可插拔</text>
+
+  <rect x="785" y="590" width="330" height="100" rx="8" fill="#020617" stroke="#475569" stroke-width="1.5"/>
+  <text x="950" y="618" text-anchor="middle" font-size="13.5" fill="#94a3b8" font-weight="bold">→ 下启 char07 上下文工程</text>
+  <text x="950" y="642" text-anchor="middle" font-size="12.5" fill="#e2e8f0">检索成果 → 结构化上下文段</text>
+  <text x="950" y="664" text-anchor="middle" font-size="12.5" fill="#e2e8f0">07 篇五字段是下一章的底座</text>
+
+  <defs>
+    <marker id="arW" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#475569"/></marker>
+  </defs>
+</svg>

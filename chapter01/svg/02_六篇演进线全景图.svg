@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1030" viewBox="0 0 1440 1030" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1030" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char01 六篇演进线全景图 —— 从"会说话"到"会引导"（通向 char02 的两座桥）</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">主线：最小闭环 → 框架化 → 两种建模对照 → 契约 → 上下文引导（Agent 雏形）</text>
+
+  <!-- ============ 第一行：01 → 02 → 03 ============ -->
+  <g>
+    <rect x="60" y="100" width="420" height="180" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2.5"/>
+    <rect x="60" y="100" width="420" height="38" rx="10" fill="#064e3b"/>
+    <rect x="60" y="126" width="420" height="12" fill="#064e3b"/>
+    <text x="76" y="126" font-size="16" font-weight="bold" fill="#34d399">01 文本摘要 textSummarization（起点）</text>
+    <text x="76" y="162" font-size="13" font-weight="bold" fill="#e2e8f0">最小调用闭环 + 提示词三要素</text>
+    <text x="76" y="186" font-size="12" fill="#94a3b8">角色（你是谁）/ 任务（做什么）/ 约束（怎么算好）</text>
+    <text x="76" y="206" font-size="12" fill="#94a3b8">占位符模板手拼字符串 + dashscope 直调</text>
+    <rect x="76" y="224" width="388" height="34" rx="4" fill="#064e3b"/>
+    <text x="86" y="246" font-size="12" fill="#34d399">实测：一次跑通 —— 80% 调不动问题在建模不在代码</text>
+
+    <path d="M 480 190 L 516 190" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="520" y="100" width="420" height="180" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <rect x="520" y="100" width="420" height="38" rx="10" fill="#064e3b"/>
+    <rect x="520" y="126" width="420" height="12" fill="#064e3b"/>
+    <text x="536" y="126" font-size="16" font-weight="bold" fill="#34d399">02 提示词驱动的 Agent（框架化）</text>
+    <text x="536" y="162" font-size="13" font-weight="bold" fill="#e2e8f0">PromptTemplate + LCEL 管道</text>
+    <text x="536" y="186" font-size="12" fill="#94a3b8">template | llm | StrOutputParser() 三段管道</text>
+    <text x="536" y="206" font-size="12" fill="#94a3b8">唯一用 LangChain 的篇 —— ChatTongyi 底座</text>
+    <rect x="536" y="224" width="388" height="34" rx="4" fill="#064e3b"/>
+    <text x="546" y="246" font-size="12" fill="#34d399">实测：管道通 —— 模板原样保留只换底层模型</text>
+
+    <path d="M 940 190 L 976 190" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="980" y="100" width="400" height="180" rx="10" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <rect x="980" y="100" width="400" height="38" rx="10" fill="#312e81"/>
+    <rect x="980" y="126" width="400" height="12" fill="#312e81"/>
+    <text x="996" y="126" font-size="16" font-weight="bold" fill="#a78bfa">03 生成SQL语句的任务建模</text>
+    <text x="996" y="162" font-size="13" font-weight="bold" fill="#e2e8f0">生成类建模：无中生有</text>
+    <text x="996" y="186" font-size="12" fill="#94a3b8">要求逐条列出 + 只输出 SQL 不执行</text>
+    <text x="996" y="206" font-size="12" fill="#94a3b8">温度偏低（严谨）· 风险：幻觉编表</text>
+    <rect x="996" y="224" width="368" height="34" rx="4" fill="#312e81"/>
+    <text x="1006" y="246" font-size="12" fill="#c7d2fe">实测：SQL 正确生成 —— 只打印不执行</text>
+  </g>
+
+  <!-- 换行箭头 03 → 04 -->
+  <path d="M 1180 280 L 1180 316 L 270 316 L 270 352" stroke="#22d3ee" stroke-width="2.5" fill="none" marker-end="url(#arrCyan)"/>
+
+  <!-- ============ 第二行：04 ←→ 03 对照 + 05 + 06 ============ -->
+  <g>
+    <rect x="60" y="352" width="420" height="180" rx="10" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <rect x="60" y="352" width="420" height="38" rx="10" fill="#312e81"/>
+    <rect x="60" y="378" width="420" height="12" fill="#312e81"/>
+    <text x="76" y="378" font-size="16" font-weight="bold" fill="#a78bfa">04 文本抽取任务建模</text>
+    <text x="76" y="414" font-size="13" font-weight="bold" fill="#e2e8f0">抽取类建模：原文提取</text>
+    <text x="76" y="438" font-size="12" fill="#94a3b8">JSON 样例锚定输出结构 + 字段枚举</text>
+    <text x="76" y="458" font-size="12" fill="#94a3b8">温度极低（事实性）· 风险：漏抽跑偏</text>
+    <rect x="76" y="476" width="388" height="34" rx="4" fill="#312e81"/>
+    <text x="86" y="498" font-size="12" fill="#c7d2fe">与 03 同壳不同范式 —— 对照实验</text>
+
+    <!-- 03↔04 对照连线（双向虚线） -->
+    <path d="M 1180 280 L 1180 298 L 270 298" stroke="#f472b6" stroke-width="2" stroke-dasharray="6,4" fill="none"/>
+    <text x="720" y="290" text-anchor="middle" font-size="13" font-weight="bold" fill="#f472b6">03 ↔ 04 同一段调用壳的两种建模范式（生成 vs 抽取）</text>
+
+    <path d="M 480 442 L 516 442" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="520" y="352" width="420" height="180" rx="10" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <rect x="520" y="352" width="420" height="38" rx="10" fill="#78350f"/>
+    <rect x="520" y="378" width="420" height="12" fill="#78350f"/>
+    <text x="536" y="378" font-size="16" font-weight="bold" fill="#fbbf24">05 接口模式设计（契约）</text>
+    <text x="536" y="414" font-size="13" font-weight="bold" fill="#e2e8f0">system / user 双角色分工</text>
+    <text x="536" y="438" font-size="12" fill="#94a3b8">"你是谁"与"你干什么"分离 —— 接口契约</text>
+    <text x="536" y="458" font-size="12" fill="#94a3b8">temperature / max_tokens 参数语义</text>
+    <rect x="536" y="476" width="388" height="34" rx="4" fill="#78350f"/>
+    <text x="546" y="498" font-size="12" fill="#fde68a">实测：6 篇共用此契约 —— 学一遍用全章</text>
+
+    <path d="M 940 442 L 976 442" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="980" y="352" width="400" height="180" rx="10" fill="#1e293b" stroke="#22d3ee" stroke-width="2.5"/>
+    <rect x="980" y="352" width="400" height="38" rx="10" fill="#0c4a6e"/>
+    <rect x="980" y="378" width="400" height="12" fill="#0c4a6e"/>
+    <text x="996" y="378" font-size="16" font-weight="bold" fill="#7dd3fc">06 通过上下文的行为引导 LLM</text>
+    <text x="996" y="414" font-size="13" font-weight="bold" fill="#e2e8f0">对话史注入引导多步任务（Agent 雏形）</text>
+    <text x="996" y="438" font-size="12" fill="#94a3b8">把上一步结果放回上下文 → 引导"下一步"</text>
+    <text x="996" y="458" font-size="12" fill="#94a3b8">手工版 Function Calling</text>
+    <rect x="996" y="476" width="368" height="34" rx="4" fill="#0c4a6e"/>
+    <text x="1006" y="498" font-size="12" fill="#7dd3fc">实测：多步引导通 —— char02 的前身</text>
+  </g>
+
+  <!-- ============ 两座桥通向 char02 ============ -->
+  <g>
+    <rect x="60" y="562" width="1320" height="150" rx="12" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <text x="80" y="592" font-size="16" font-weight="bold" fill="#34d399">两座桥：char01 的痛点如何通向 char02 的解法（教学顺序的精心设计）</text>
+
+    <rect x="90" y="610" width="600" height="84" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="106" y="636" font-size="14" font-weight="bold" fill="#fbbf24">桥 1：03 SQL 只生成不执行 → char02-06 SQLite 工具落地</text>
+    <text x="106" y="660" font-size="12" fill="#94a3b8">char01 只让模型"说出 SQL"，执行交给谁？—— char02 的数据库工具回答</text>
+    <text x="106" y="682" font-size="12" fill="#94a3b8">先体会"生成≠执行"的缺口，再学 Agent 工具执行闭环</text>
+
+    <rect x="720" y="610" width="630" height="84" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="736" y="636" font-size="14" font-weight="bold" fill="#7dd3fc">桥 2：06 手工上下文引导 → char02 Function Calling 协议</text>
+    <text x="736" y="660" font-size="12" fill="#94a3b8">06 用对话史"哄"模型做下一步 —— 简单但不可靠（模型偶尔不守约）</text>
+    <text x="736" y="682" font-size="12" fill="#94a3b8">当"引导"从手工拼上下文进化为 tools 协议 = char02 的 Function Calling</text>
+  </g>
+
+  <!-- ============ 底部方法论 ============ -->
+  <g>
+    <rect x="60" y="742" width="1320" height="240" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="778" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">演进线背后的教学设计（新人怎么看这张图）</text>
+
+    <text x="100" y="814" font-size="14" fill="#d1fae5">1. 01→02 是"从脚本到工程"：手拼字符串 → 变量化模板 + 管道 —— 换底层模型时模板与管道代码零改动（改写实证）</text>
+    <text x="100" y="844" font-size="14" fill="#d1fae5">2. 03↔04 是"同一壳的两种范式"：生成类赌模型的创造力（防幻觉），抽取类赌模型的服从性（防跑偏）—— 参数策略也不同</text>
+    <text x="100" y="874" font-size="14" fill="#d1fae5">3. 05→06 是"从契约到引导"：先定下双角色契约，再用对话史引导行为 —— 引导协议化之后就是 char02 的 Agent 循环</text>
+    <text x="100" y="906" font-size="13" fill="#94a3b8">结构化输出的时代局限：03/04 的 JSON/SQL 全靠提示词约定"哄"出来，没有 Function Calling 的 schema 强制 —— 先体会痛点再学解法</text>
+    <text x="100" y="934" font-size="13" fill="#94a3b8">改写范式：原教材 qwen-agent 虚构 API 全部注释保留，01 直调 Generation.call / 02 走 ChatTongyi —— 两种姿势覆盖后续所有章节</text>
+    <text x="100" y="962" font-size="12" fill="#64748b">诚实标注：所有 6 篇均已真机运行验证；原教材的 Colab 专属片段与本地不可运行部分已在各篇 HTML 中标注改写细节</text>
+  </g>
+
+  <defs>
+    <marker id="arrCyan" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#22d3ee"/>
+    </marker>
+  </defs>
+</svg>

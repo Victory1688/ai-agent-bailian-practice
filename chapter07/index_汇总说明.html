@@ -41,6 +41,18 @@
 <h1>char07 汇总说明 - 上下文工程与MCP协议技能总览</h1>
 <div class="meta">对应目录：char07（7 个 py 文件，全部改写验证于 dashscope qwen-plus）| 配套文档：<a href="arch_汇总说明.md">arch_汇总说明.md</a>（含 Mermaid 架构图）| 生成日期：2026-10-12</div>
 
+<!-- ========== SVG 架构图速查 ========== -->
+<div class="card">
+  <div class="card-title">SVG 独立架构图速查（点击跳转，浏览器直接打开）</div>
+  <table>
+    <tr><th>#</th><th>架构图</th><th>视角</th><th>核心内容</th></tr>
+    <tr><td>1</td><td><a href="svg/01_MCP五字段核心结构图.svg">01_MCP五字段核心结构图</a></td><td>数据结构</td><td>上下文段五字段 {role, content, type, task_id, meta} + 四类标注（system/memory/input/tool）</td></tr>
+    <tr><td>2</td><td><a href="svg/02_四阶段闭环全景图.svg">02_四阶段闭环全景图</a></td><td>学习路线</td><td>进(01/02 表示+组装)→出(03/04 路由+分发)→存(05/06 持久化+缓存)→选(07 合并+压缩) 7 篇闭环</td></tr>
+    <tr><td>3</td><td><a href="svg/03_分层架构总图.svg">03_分层架构总图</a></td><td>分层结构</td><td>表示层→路由层→持久化层→合并层四层围绕上下文池运转 + 7 篇落位 + 跨章关联</td></tr>
+    <tr><td>4</td><td><a href="svg/04_请求生命线时序图.svg">04_请求生命线时序图</a></td><td>运行时序</td><td>灵魂图：路由→落盘→查缓存(17.7x 加速)→三级筛选合并→LLM 五层全链路时序</td></tr>
+  </table>
+</div>
+
 <!-- ========== 一 ========== -->
 <h2>一、char07 在课程体系中的定位</h2>
 <p><strong>核心命题：上下文是 Agent 系统的"数据血液"——怎么表示、怎么进出、怎么存、怎么选，决定了 Agent 的上限。</strong></p>
@@ -164,6 +176,14 @@
 </pre>
 <p><strong>前置</strong>：char01-06 学完（char06 的 DashScopeEmbeddings + FAISS 是 07 篇进阶练习的依赖）</p>
 <p><strong>后续衔接</strong>：char08（MCP 真实协议实现）——01/02 篇的数据结构和标注思想就是真实 MCP 协议的教学简化版本</p>
+
+<div class="card">
+  <div class="card-title">配套架构资源</div>
+  <ul>
+    <li><a href="arch_汇总说明.md">arch_汇总说明.md</a> — 架构版汇总（Mermaid 关联图，VSCode/Typora/GitHub 可渲染）</li>
+    <li><a href="svg/01_MCP五字段核心结构图.svg">svg/</a> — SVG 独立架构图 4 张（MCP五字段核心结构图 / 四阶段闭环全景图 / 分层架构总图 / 请求生命线时序图，浏览器直接打开）</li>
+  </ul>
+</div>
 
 </div>
 </body>

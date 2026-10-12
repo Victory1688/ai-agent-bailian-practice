@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="820" viewBox="0 0 1180 820" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect width="1180" height="820" fill="#0f172a"/>
+  <text x="590" y="46" text-anchor="middle" font-size="25" font-weight="bold" fill="#22d3ee">char05 四段演进线全景图：LangGraph 图编排技能总览（10 篇落位）</text>
+  <text x="590" y="74" text-anchor="middle" font-size="13" fill="#94a3b8">核心命题：执行流从"代码逻辑"搬到"图声明"——节点+边全显式，既看得见又改得动</text>
+
+  <!-- 第一段：图的积木 -->
+  <rect x="40" y="110" width="260" height="250" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5"/>
+  <text x="170" y="142" text-anchor="middle" font-size="17" font-weight="bold" fill="#38bdf8">① 图的积木（01-02）</text>
+  <text x="170" y="164" text-anchor="middle" font-size="12" fill="#94a3b8">最简骨架：节点 + 边</text>
+  <rect x="58" y="180" width="224" height="52" rx="6" fill="#020617" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="170" y="201" text-anchor="middle" font-size="12.5" fill="#bae6fd">01 定义两个节点（顺序图）</text>
+  <text x="170" y="222" text-anchor="middle" font-size="11" fill="#f87171">学费：State 裸 dict → invoke 返回 None</text>
+  <rect x="58" y="240" width="224" height="52" rx="6" fill="#020617" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="170" y="261" text-anchor="middle" font-size="12.5" fill="#bae6fd">02 条件边（路由三件套）</text>
+  <text x="170" y="282" text-anchor="middle" font-size="11" fill="#7dd3fc">路由函数 + 边映射表 + 入口</text>
+  <text x="170" y="334" text-anchor="middle" font-size="12" fill="#64748b">认知：State 是 schema 即契约</text>
+
+  <!-- 第二段：组件入图 -->
+  <rect x="315" y="110" width="260" height="250" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2.5"/>
+  <text x="445" y="142" text-anchor="middle" font-size="17" font-weight="bold" fill="#a78bfa">② 组件入图（03-04）</text>
+  <text x="445" y="164" text-anchor="middle" font-size="12" fill="#94a3b8">LangChain 零件装进图节点</text>
+  <rect x="333" y="180" width="224" height="52" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="445" y="201" text-anchor="middle" font-size="12.5" fill="#ddd6fe">03 检索工具入图（链入图）</text>
+  <text x="445" y="222" text-anchor="middle" font-size="11" fill="#86efac">RetrievalQA+FAISS 真实跑通</text>
+  <rect x="333" y="240" width="224" height="52" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="445" y="261" text-anchor="middle" font-size="12.5" fill="#ddd6fe">04 函数工具入图</text>
+  <text x="445" y="282" text-anchor="middle" font-size="11" fill="#f87171">学费：@tool 无 docstring 必炸</text>
+  <text x="445" y="334" text-anchor="middle" font-size="12" fill="#64748b">认知：节点 = 任意可调用组件</text>
+
+  <!-- 第三段：业务流水线 -->
+  <rect x="590" y="110" width="260" height="250" rx="12" fill="#1e293b" stroke="#fbbf24" stroke-width="2.5"/>
+  <text x="720" y="142" text-anchor="middle" font-size="17" font-weight="bold" fill="#fbbf24">③ 业务流水线（05-07）</text>
+  <text x="720" y="164" text-anchor="middle" font-size="12" fill="#94a3b8">降级链三部曲（实证专题）</text>
+  <rect x="608" y="180" width="224" height="44" rx="6" fill="#020617" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="720" y="199" text-anchor="middle" font-size="12.5" fill="#fde68a">05 四工位任务流</text>
+  <text x="720" y="217" text-anchor="middle" font-size="11" fill="#86efac">降级链·活（信号整体替换）</text>
+  <rect x="608" y="232" width="224" height="44" rx="6" fill="#020617" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="720" y="251" text-anchor="middle" font-size="12.5" fill="#fde68a">06 科研助手五工位</text>
+  <text x="720" y="269" text-anchor="middle" font-size="11" fill="#f87171">降级链·断（信号被格式加工）</text>
+  <rect x="608" y="284" width="224" height="44" rx="6" fill="#020617" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="720" y="303" text-anchor="middle" font-size="12.5" fill="#fde68a">07 外部数据库检索</text>
+  <text x="720" y="321" text-anchor="middle" font-size="11" fill="#f87171">降级链·幸运活（未被 replace 命中）</text>
+  <text x="720" y="350" text-anchor="middle" font-size="12" fill="#64748b">结论：生产用结构化 status 字段</text>
+
+  <!-- 第四段：通信与并行 -->
+  <rect x="865" y="110" width="260" height="250" rx="12" fill="#134e4a" stroke="#34d399" stroke-width="2.5"/>
+  <text x="995" y="142" text-anchor="middle" font-size="17" font-weight="bold" fill="#34d399">④ 通信与并行（08-10）</text>
+  <text x="995" y="164" text-anchor="middle" font-size="12" fill="#94a3b8">多 Agent 协作与协议辨析</text>
+  <rect x="883" y="180" width="224" height="44" rx="6" fill="#020617" stroke="#34d399" stroke-width="1.2"/>
+  <text x="995" y="199" text-anchor="middle" font-size="12.5" fill="#d1fae5">08 假 MCP 辨析</text>
+  <text x="995" y="217" text-anchor="middle" font-size="11" fill="#f87171">覆盖型存储：双 invoke 互相冲掉</text>
+  <rect x="883" y="232" width="224" height="44" rx="6" fill="#020617" stroke="#34d399" stroke-width="1.2"/>
+  <text x="995" y="251" text-anchor="middle" font-size="12.5" fill="#d1fae5">09 假 A2A 辨析</text>
+  <text x="995" y="269" text-anchor="middle" font-size="11" fill="#f87171">新坑：schema 裁剪输入键（更危险）</text>
+  <rect x="883" y="284" width="224" height="44" rx="6" fill="#020617" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="995" y="303" text-anchor="middle" font-size="12.5" fill="#a5f3fc">10 广播 + 并行图（灵魂篇）</text>
+  <text x="995" y="321" text-anchor="middle" font-size="11" fill="#f87171">教材输出造假顶点：键名不存在</text>
+  <text x="995" y="350" text-anchor="middle" font-size="12" fill="#6ee7b7">扇出-汇聚 = 并行图的标准拓扑</text>
+
+  <!-- 段间箭头 -->
+  <line x1="300" y1="235" x2="308" y2="235" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+  <line x1="575" y1="235" x2="583" y2="235" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+  <line x1="850" y1="235" x2="858" y2="235" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+
+  <!-- 中部：能力递进对照 -->
+  <rect x="40" y="390" width="1085" height="105" rx="12" fill="#020617" stroke="#334155" stroke-width="1.5"/>
+  <text x="590" y="420" text-anchor="middle" font-size="15" font-weight="bold" fill="#22d3ee">四种编排形态的能力递进（顺序 → 条件 → 并行 → 循环）</text>
+  <text x="590" y="448" text-anchor="middle" font-size="13" fill="#e2e8f0">char01 无循环无分支 → char02 有循环但硬编码 → char04 有循环有决策但不可见</text>
+  <text x="590" y="474" text-anchor="middle" font-size="13" fill="#34d399" font-weight="bold">→ char05 四种形状全部显式声明，既看得见又改得动（改流程 = 改声明，不动节点函数）</text>
+
+  <!-- 底部：跨章定位 -->
+  <rect x="40" y="520" width="1085" height="120" rx="12" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+  <text x="590" y="550" text-anchor="middle" font-size="15" font-weight="bold" fill="#e2e8f0">char05 在课程中的定位：对 char04 黑盒的"显式化回应"</text>
+
+  <rect x="75" y="568" width="320" height="56" rx="8" fill="#020617" stroke="#475569" stroke-width="1.5"/>
+  <text x="235" y="590" text-anchor="middle" font-size="12.5" fill="#94a3b8">← char04 initialize_agent</text>
+  <text x="235" y="611" text-anchor="middle" font-size="12" fill="#e2e8f0">有循环有决策，但全在框架黑盒里</text>
+
+  <rect x="430" y="568" width="320" height="56" rx="8" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+  <text x="590" y="590" text-anchor="middle" font-size="12.5" fill="#6ee7b7" font-weight="bold">★ char05 LangGraph 显式图</text>
+  <text x="590" y="611" text-anchor="middle" font-size="12" fill="#d1fae5">add_node + add_edge 全声明，可观测可改造</text>
+
+  <rect x="785" y="568" width="320" height="56" rx="8" fill="#020617" stroke="#475569" stroke-width="1.5"/>
+  <text x="945" y="590" text-anchor="middle" font-size="12.5" fill="#94a3b8">→ char08 单Agent 实战集成的地基</text>
+  <text x="945" y="611" text-anchor="middle" font-size="12" fill="#e2e8f0">02 篇条件边+回边 = Agent 循环的图版本</text>
+
+  <!-- 底部：三条不变式 -->
+  <rect x="40" y="665" width="1085" height="130" rx="12" fill="#020617" stroke="#334155" stroke-width="1.5"/>
+  <text x="590" y="695" text-anchor="middle" font-size="15" font-weight="bold" fill="#22d3ee">贯穿十篇的三条不变式（图编排的思维地基）</text>
+  <text x="590" y="722" text-anchor="middle" font-size="13" fill="#e2e8f0">不变式一：节点 = 纯函数（入参整个 State 只读，返回增量字典部分更新）——十篇全部如此</text>
+  <text x="590" y="748" text-anchor="middle" font-size="13" fill="#e2e8f0">不变式二：图结构 = 显式声明（add_node + add_edge + set_entry_point）——05→06→07 换实现骨架零改动</text>
+  <text x="590" y="774" text-anchor="middle" font-size="13" fill="#e2e8f0">不变式三：State 生命周期 = 单次 invoke（跨执行共享必须外置）——08 双 invoke 覆盖实证</text>
+
+  <defs>
+    <marker id="arW" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#475569"/></marker>
+  </defs>
+</svg>

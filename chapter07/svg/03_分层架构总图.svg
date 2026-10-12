@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="880" viewBox="0 0 1180 880" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect width="1180" height="880" fill="#0f172a"/>
+  <text x="590" y="46" text-anchor="middle" font-size="25" font-weight="bold" fill="#22d3ee">char07 分层架构总图：四层能力围绕同一个上下文池</text>
+  <text x="590" y="74" text-anchor="middle" font-size="13" fill="#94a3b8">每层解决一个独立问题，层间通过"上下文段五字段结构"衔接；所有层最终服务于同一次 LLM 调用</text>
+
+  <!-- 中央上下文池 -->
+  <rect x="440" y="330" width="300" height="180" rx="16" fill="#134e4a" stroke="#22d3ee" stroke-width="3"/>
+  <text x="590" y="372" text-anchor="middle" font-size="20" font-weight="bold" fill="#6ee7b7">上下文池 Context Pool</text>
+  <text x="590" y="400" text-anchor="middle" font-size="14" fill="#d1fae5">List[ContextSegment]</text>
+  <text x="590" y="428" text-anchor="middle" font-size="13" fill="#a7f3d0">五字段：role / content / type</text>
+  <text x="590" y="450" text-anchor="middle" font-size="13" fill="#a7f3d0">task_id / meta</text>
+  <text x="590" y="484" text-anchor="middle" font-size="13" fill="#6ee7b7">七篇全部读写这同一个池子</text>
+
+  <!-- L1 表示层（左上） -->
+  <rect x="80" y="120" width="400" height="150" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5"/>
+  <text x="280" y="152" text-anchor="middle" font-size="18" font-weight="bold" fill="#38bdf8">L1 表示层 —— 01 / 02</text>
+  <text x="280" y="178" text-anchor="middle" font-size="13.5" fill="#bae6fd">定义上下文长什么样：五字段结构体</text>
+  <text x="280" y="200" text-anchor="middle" font-size="13.5" fill="#bae6fd">多源组装：system / memory / input / tool 四类标注</text>
+  <text x="280" y="224" text-anchor="middle" font-size="12.5" fill="#64748b">01 定义结构 → 02 四类标注全部实测生效</text>
+  <text x="280" y="248" text-anchor="middle" font-size="12.5" fill="#64748b">（专业=system / 简明=memory / 有依据=tool）</text>
+  <line x1="340" y1="270" x2="470" y2="330" stroke="#38bdf8" stroke-width="2" marker-end="url(#arB)"/>
+  <text x="380" y="292" text-anchor="middle" font-size="12" fill="#38bdf8">写入段</text>
+
+  <!-- L2 路由层（右上） -->
+  <rect x="700" y="120" width="400" height="150" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2.5"/>
+  <text x="900" y="152" text-anchor="middle" font-size="18" font-weight="bold" fill="#a78bfa">L2 路由层 —— 03 / 04</text>
+  <text x="900" y="178" text-anchor="middle" font-size="13.5" fill="#ddd6fe">决定请求交给谁：determine_route / route_decision</text>
+  <text x="900" y="200" text-anchor="middle" font-size="13.5" fill="#ddd6fe">03 一对一交换机 → 04 hybrid 一对多融合</text>
+  <text x="900" y="224" text-anchor="middle" font-size="12.5" fill="#f87171">学费：tool / hybrid 分支是死代码</text>
+  <text x="900" y="244" text-anchor="middle" font-size="12.5" fill="#f87171">（if/elif 顺序截胡，组合类分支须最高优先级）</text>
+  <line x1="840" y1="270" x2="710" y2="330" stroke="#a78bfa" stroke-width="2" marker-end="url(#arA)"/>
+  <text x="800" y="292" text-anchor="middle" font-size="12" fill="#a78bfa">路由读池</text>
+
+  <!-- L3 持久化层（左下） -->
+  <rect x="80" y="570" width="400" height="150" rx="12" fill="#1e293b" stroke="#fbbf24" stroke-width="2.5"/>
+  <text x="280" y="602" text-anchor="middle" font-size="18" font-weight="bold" fill="#fbbf24">L3 持久化层 —— 05 / 06</text>
+  <text x="280" y="628" text-anchor="middle" font-size="13.5" fill="#fde68a">05 JSONL 追加写 = 审计回溯（越攒越多不能删）</text>
+  <text x="280" y="650" text-anchor="middle" font-size="13.5" fill="#fde68a">06 JSON 覆盖写 = 性能优化（MD5 命中即回放）</text>
+  <text x="280" y="674" text-anchor="middle" font-size="12.5" fill="#64748b">同为 JSON 操作，数据生命周期完全相反</text>
+  <text x="280" y="696" text-anchor="middle" font-size="12.5" fill="#fbbf24">06 实测：13.8s → 0.78s（17.7x 加速）</text>
+  <line x1="340" y1="570" x2="470" y2="510" stroke="#fbbf24" stroke-width="2" marker-end="url(#arY)"/>
+  <text x="380" y="548" text-anchor="middle" font-size="12" fill="#fbbf24">落盘段</text>
+
+  <!-- L4 合并层（右下） -->
+  <rect x="700" y="570" width="400" height="150" rx="12" fill="#1e293b" stroke="#34d399" stroke-width="2.5"/>
+  <text x="900" y="602" text-anchor="middle" font-size="18" font-weight="bold" fill="#34d399">L4 合并层 —— 07</text>
+  <text x="900" y="628" text-anchor="middle" font-size="13.5" fill="#d1fae5">dynamic_merge_context 三级筛选：</text>
+  <text x="900" y="650" text-anchor="middle" font-size="13.5" fill="#d1fae5">system 全保留 → tool 留最新 1 条 → 历史最近 4 条</text>
+  <text x="900" y="674" text-anchor="middle" font-size="12.5" fill="#f87171">学费：按条截断不按轮，产生"孤儿答"（答留问丢）</text>
+  <text x="900" y="696" text-anchor="middle" font-size="12.5" fill="#86efac">实测：7 段进 → 6 段出，LLM 正确引用工具数据</text>
+  <line x1="840" y1="570" x2="710" y2="510" stroke="#34d399" stroke-width="2" marker-end="url(#arG)"/>
+  <text x="800" y="548" text-anchor="middle" font-size="12" fill="#34d399">筛选读池</text>
+
+  <!-- 侧向：LLM 基底 -->
+  <rect x="440" y="770" width="300" height="70" rx="12" fill="#020617" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="590" y="800" text-anchor="middle" font-size="17" font-weight="bold" fill="#e2e8f0">LLM 调用基底</text>
+  <text x="590" y="824" text-anchor="middle" font-size="13" fill="#94a3b8">dashscope.Generation.call（qwen-plus）</text>
+  <line x1="590" y1="510" x2="590" y2="762" stroke="#e2e8f0" stroke-width="2" stroke-dasharray="8 6" marker-end="url(#arW)"/>
+  <text x="700" y="745" text-anchor="middle" font-size="12.5" fill="#e2e8f0">合并后的 prompt 送入</text>
+
+  <!-- 右侧演进注记 -->
+  <rect x="60" y="330" width="330" height="180" rx="12" fill="#020617" stroke="#334155" stroke-width="1.5"/>
+  <text x="225" y="360" text-anchor="middle" font-size="14" font-weight="bold" fill="#22d3ee">char07 的本质定位</text>
+  <text x="225" y="386" text-anchor="middle" font-size="12.5" fill="#e2e8f0">第一次把"上下文"当作独立工程对象</text>
+  <text x="225" y="410" text-anchor="middle" font-size="12.5" fill="#e2e8f0">表示 → 路由 → 持久化 → 合并</text>
+  <text x="225" y="434" text-anchor="middle" font-size="12.5" fill="#94a3b8">上承 char05 图调度 / char06 检索</text>
+  <text x="225" y="456" text-anchor="middle" font-size="12.5" fill="#94a3b8">下通 char08 单Agent 集成 / char09 多Agent</text>
+  <text x="225" y="486" text-anchor="middle" font-size="12.5" fill="#6ee7b7">07 篇七段进六段出 = Token 预算管理雏形</text>
+
+  <defs>
+    <marker id="arB" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#38bdf8"/></marker>
+    <marker id="arA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#a78bfa"/></marker>
+    <marker id="arY" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#fbbf24"/></marker>
+    <marker id="arG" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#34d399"/></marker>
+    <marker id="arW" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#e2e8f0"/></marker>
+  </defs>
+</svg>

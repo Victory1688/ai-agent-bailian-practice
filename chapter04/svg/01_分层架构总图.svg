@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1040" viewBox="0 0 1440 1040" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1040" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char04 分层架构总图 —— LangChain 框架化开发（7 篇落位）</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">核心命题：用声明换控制权 —— 把 char02 手写的循环/工具/记忆全部交给 LangChain 组件</text>
+
+  <!-- ============ L1 任务编排层 ============ -->
+  <g>
+    <rect x="60" y="100" width="1320" height="150" rx="12" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+    <text x="80" y="130" font-size="17" font-weight="bold" fill="#22d3ee">L1 任务编排层（怎么组织多步任务）</text>
+
+    <rect x="90" y="148" width="600" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="106" y="174" font-size="15" font-weight="bold" fill="#e2e8f0">01 多段链式处理 —— 固定流水线</text>
+    <text x="106" y="198" font-size="13" fill="#94a3b8">SequentialChain + PromptTemplate</text>
+    <text x="106" y="220" font-size="13" fill="#94a3b8">开发者写死步骤顺序，变量自动接力（工作流思维）</text>
+
+    <rect x="720" y="148" width="630" height="84" rx="8" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+    <text x="736" y="174" font-size="15" font-weight="bold" fill="#34d399">02 / 05 / 07 ReAct Agent —— 模型现场规划</text>
+    <text x="736" y="198" font-size="13" fill="#94a3b8">initialize_agent + zero-shot / conversational ReAct</text>
+    <text x="736" y="220" font-size="13" fill="#94a3b8">模型自己决定调用哪个工具、什么顺序（Agent 思维）</text>
+  </g>
+
+  <path d="M 720 254 L 720 284" stroke="#475569" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+  <!-- ============ L2 Agent 能力组件层 ============ -->
+  <g>
+    <rect x="60" y="290" width="1320" height="150" rx="12" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <text x="80" y="320" font-size="17" font-weight="bold" fill="#fbbf24">L2 Agent 能力组件层（每篇增量学一个概念）</text>
+
+    <rect x="90" y="338" width="400" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="106" y="364" font-size="15" font-weight="bold" fill="#e2e8f0">03 框架托管记忆</text>
+    <text x="106" y="388" font-size="13" fill="#94a3b8">ConversationBufferMemory</text>
+    <text x="106" y="410" font-size="13" fill="#94a3b8">省略主语成为可能（"它"指什么模型知道）</text>
+
+    <rect x="510" y="338" width="440" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="526" y="364" font-size="15" font-weight="bold" fill="#e2e8f0">04 沙箱三道防线（工具安全执行）</text>
+    <text x="526" y="388" font-size="13" fill="#94a3b8">限时（线程版） + 字符白名单 + 空 builtins</text>
+    <text x="526" y="410" font-size="13" fill="#94a3b8">SIGALRM 是 Unix 专属 → Windows 换线程限时</text>
+
+    <rect x="970" y="338" width="380" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="986" y="364" font-size="15" font-weight="bold" fill="#e2e8f0">06 自定义提示词（定制灵魂）</text>
+    <text x="986" y="388" font-size="13" fill="#94a3b8">prefix（人格+规则）/ suffix（输出格式）</text>
+    <text x="986" y="410" font-size="13" fill="#94a3b8">教材 custom_prompt 是概念代码（源码实证）</text>
+  </g>
+
+  <path d="M 720 444 L 720 474" stroke="#475569" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+  <!-- ============ L3 工具定义层 ============ -->
+  <g>
+    <rect x="60" y="480" width="1320" height="150" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <text x="80" y="510" font-size="17" font-weight="bold" fill="#a78bfa">L3 工具定义层（新旧两种定义并存）</text>
+
+    <rect x="90" y="528" width="600" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="106" y="554" font-size="15" font-weight="bold" fill="#e2e8f0">旧式 Tool 类（02 / 03 / 04 / 07）</text>
+    <text x="106" y="578" font-size="13" fill="#94a3b8" font-family="Consolas, monospace">Tool(name=, func=, description=)</text>
+    <text x="106" y="600" font-size="13" fill="#fbbf24">0.x 遗产，已废弃 —— 保留是为了对照演化方向</text>
+
+    <rect x="720" y="528" width="630" height="84" rx="8" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+    <text x="736" y="554" font-size="15" font-weight="bold" fill="#34d399">新式 @tool 装饰器（05）</text>
+    <text x="736" y="578" font-size="13" fill="#94a3b8" font-family="Consolas, monospace">@tool  # docstring 即说明书</text>
+    <text x="736" y="600" font-size="13" fill="#34d399">LangChain 1.x 推荐写法，自动生成 StructuredTool</text>
+  </g>
+
+  <path d="M 720 634 L 720 664" stroke="#475569" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+  <!-- ============ L4 模型适配层 ============ -->
+  <g>
+    <rect x="60" y="670" width="1320" height="120" rx="12" fill="#0c4a6e" stroke="#22d3ee" stroke-width="2"/>
+    <text x="80" y="700" font-size="17" font-weight="bold" fill="#7dd3fc">L4 模型适配层（7 篇统一）</text>
+
+    <rect x="90" y="716" width="600" height="56" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="106" y="740" font-size="14" font-weight="bold" fill="#e2e8f0" font-family="Consolas, monospace">ChatTongyi(model="qwen-plus", temperature=0)</text>
+    <text x="106" y="762" font-size="12" fill="#94a3b8">原教材 OpenAI 类国内不可直连 → 全部换百炼平台</text>
+
+    <rect x="720" y="716" width="630" height="56" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="736" y="740" font-size="14" font-weight="bold" fill="#e2e8f0" font-family="Consolas, monospace">DASHSCOPE_API_KEY 环境变量</text>
+    <text x="736" y="762" font-size="12" fill="#94a3b8">换模型不动 Agent 代码 —— char03-05"协议即标准"的框架层兑现</text>
+  </g>
+
+  <!-- ============ 三条不变式 ============ -->
+  <g>
+    <rect x="60" y="820" width="1320" height="180" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="856" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">贯穿 7 篇的三条不变式</text>
+
+    <rect x="90" y="876" width="400" height="100" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="106" y="902" font-size="15" font-weight="bold" fill="#22d3ee">不变式一：一个骨架</text>
+    <text x="106" y="928" font-size="13" fill="#e2e8f0">02-07 六篇共用 llm + tools + memory</text>
+    <text x="106" y="950" font-size="13" fill="#e2e8f0">+ initialize_agent + run</text>
+
+    <rect x="510" y="876" width="400" height="100" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="526" y="902" font-size="15" font-weight="bold" fill="#22d3ee">不变式二：两种工具定义并存</text>
+    <text x="526" y="928" font-size="13" fill="#e2e8f0">旧式 Tool（已废弃） vs 新式 @tool（1.x 推荐）</text>
+    <text x="526" y="950" font-size="13" fill="#e2e8f0">新旧对照 = 理解 LangChain 演化的钥匙</text>
+
+    <rect x="930" y="876" width="420" height="100" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="946" y="902" font-size="15" font-weight="bold" fill="#22d3ee">不变式三：一个模型适配层</text>
+    <text x="946" y="928" font-size="13" fill="#e2e8f0">ChatTongyi(qwen-plus) + 环境变量</text>
+    <text x="946" y="950" font-size="13" fill="#e2e8f0">模型抽象兑现"换模型不动 Agent"</text>
+  </g>
+
+  <!-- ============ 箭头 marker ============ -->
+  <defs>
+    <marker id="arrowGray" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#475569"/>
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1120" viewBox="0 0 1440 1120" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1120" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char01 两种建模范式与三条不变式图 —— 同一调用壳下的方法论分野</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">生成类赌创造力（防幻觉）vs 抽取类赌服从性（防跑偏）+ 贯穿 6 篇的底层纪律</text>
+
+  <!-- ============ 上半：生成类 vs 抽取类对照 ============ -->
+  <g>
+    <rect x="60" y="100" width="1320" height="360" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <rect x="60" y="100" width="1320" height="44" rx="12" fill="#312e81"/>
+    <rect x="60" y="132" width="1320" height="12" fill="#312e81"/>
+    <text x="80" y="129" font-size="18" font-weight="bold" fill="#c7d2fe">两种建模范式对照（char01 的方法论核心 —— 03↔04 同壳不同范式）</text>
+
+    <!-- 表头 -->
+    <rect x="90" y="158" width="240" height="40" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="106" y="184" font-size="14" font-weight="bold" fill="#94a3b8">维度</text>
+    <rect x="330" y="158" width="500" height="40" rx="6" fill="#064e3b" stroke="#34d399"/>
+    <text x="346" y="184" font-size="15" font-weight="bold" fill="#34d399">生成类（03 SQL）—— 无中生有</text>
+    <rect x="830" y="158" width="520" height="40" rx="6" fill="#312e81" stroke="#a78bfa"/>
+    <text x="846" y="184" font-size="15" font-weight="bold" fill="#a78bfa">抽取类（04 JSON）—— 原文提取</text>
+
+    <!-- 行 1 -->
+    <rect x="90" y="204" width="240" height="58" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="106" y="238" font-size="13" font-weight="bold" fill="#e2e8f0">任务本质</text>
+    <rect x="330" y="204" width="500" height="58" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="346" y="228" font-size="13" fill="#e2e8f0">产出新内容（模型生成 SQL 语句）</text>
+    <text x="346" y="250" font-size="12" fill="#94a3b8">重心：要求逐条列出 + 边界约束（"只输出 SQL"）</text>
+    <rect x="830" y="204" width="520" height="58" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="846" y="228" font-size="13" fill="#e2e8f0">提取既有信息（从原文抽字段）</text>
+    <text x="846" y="250" font-size="12" fill="#94a3b8">重心：JSON 样例锚定输出结构 + 字段枚举</text>
+
+    <!-- 行 2 -->
+    <rect x="90" y="268" width="240" height="58" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="106" y="302" font-size="13" font-weight="bold" fill="#e2e8f0">主要风险</text>
+    <rect x="330" y="268" width="500" height="58" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="346" y="292" font-size="13" fill="#f87171">幻觉 —— 编造不存在的表 / 字段</text>
+    <text x="346" y="314" font-size="12" fill="#94a3b8">生产加固：表结构白名单 + 语法校验后才执行</text>
+    <rect x="830" y="268" width="520" height="58" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="846" y="292" font-size="13" fill="#f87171">漏抽、格式跑偏</text>
+    <text x="846" y="314" font-size="12" fill="#94a3b8">生产加固：Pydantic 严格解析 + 低置信重试</text>
+
+    <!-- 行 3 -->
+    <rect x="90" y="332" width="240" height="58" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="106" y="366" font-size="13" font-weight="bold" fill="#e2e8f0">温度策略</text>
+    <rect x="330" y="332" width="500" height="58" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="346" y="356" font-size="13" fill="#e2e8f0">偏低（SQL 要严谨）</text>
+    <text x="346" y="378" font-size="12" fill="#94a3b8">参数跟着任务性质走，不是全局常数</text>
+    <rect x="830" y="332" width="520" height="58" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="846" y="356" font-size="13" fill="#e2e8f0">极低（事实性任务）</text>
+    <text x="846" y="378" font-size="12" fill="#94a3b8">05 篇的 temperature 语义在此落地为选型依据</text>
+
+    <!-- 行 4 -->
+    <rect x="90" y="396" width="240" height="50" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="106" y="426" font-size="13" font-weight="bold" fill="#e2e8f0">通向 char02</text>
+    <rect x="330" y="396" width="500" height="50" rx="6" fill="#0f172a" stroke="#fbbf24"/>
+    <text x="346" y="426" font-size="13" fill="#fde68a">SQL 只生成不执行 → char02-06 数据库工具落地执行</text>
+    <rect x="830" y="396" width="520" height="50" rx="6" fill="#0f172a" stroke="#22d3ee"/>
+    <text x="846" y="426" font-size="13" fill="#7dd3fc">JSON 靠提示词约定 → char02-06 tools schema 强制输出</text>
+  </g>
+
+  <!-- ============ 中半：三条不变式 ============ -->
+  <g>
+    <rect x="60" y="490" width="440" height="220" rx="12" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <rect x="60" y="490" width="440" height="44" rx="12" fill="#064e3b"/>
+    <rect x="60" y="522" width="440" height="12" fill="#064e3b"/>
+    <text x="80" y="519" font-size="16" font-weight="bold" fill="#34d399">不变式一：system + user 双角色契约</text>
+    <text x="80" y="560" font-size="13" fill="#e2e8f0">system 定"你是谁"（角色与规则）</text>
+    <text x="80" y="584" font-size="13" fill="#e2e8f0">user 装"你干什么"（具体任务）</text>
+    <text x="80" y="616" font-size="13" fill="#d1fae5">这是接口契约而非语法规定 ——</text>
+    <text x="80" y="640" font-size="13" fill="#d1fae5">同一角色可复用到千百个任务上</text>
+    <text x="80" y="672" font-size="12" fill="#94a3b8">6 篇全部遵循（05 篇定标准）</text>
+    <text x="80" y="696" font-size="12" fill="#64748b">char07 沿用并升级为 [ROLE-TYPE] 标注</text>
+  </g>
+
+  <g>
+    <rect x="520" y="490" width="440" height="220" rx="12" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <rect x="520" y="490" width="440" height="44" rx="12" fill="#78350f"/>
+    <rect x="520" y="522" width="440" height="12" fill="#78350f"/>
+    <text x="540" y="519" font-size="16" font-weight="bold" fill="#fde68a">不变式二：结构化输出靠提示词约定</text>
+    <text x="540" y="560" font-size="13" fill="#e2e8f0">03 的 SQL / 04 的 JSON 全靠"哄"：</text>
+    <text x="540" y="584" font-size="13" fill="#e2e8f0">逐条列出要求 + 输出样例锚定</text>
+    <text x="540" y="616" font-size="13" fill="#fca5a5">简单但不可靠 —— 模型偶尔不守约</text>
+    <text x="540" y="640" font-size="13" fill="#d1fae5">char02-06 的 tools 协议是官方解法</text>
+    <text x="540" y="672" font-size="12" fill="#94a3b8">教学顺序精心设计：先体会痛点</text>
+    <text x="540" y="696" font-size="12" fill="#64748b">再学解法 —— 痛点记忆比直接给答案更牢</text>
+  </g>
+
+  <g>
+    <rect x="980" y="490" width="400" height="220" rx="12" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+    <rect x="980" y="490" width="400" height="44" rx="12" fill="#0c4a6e"/>
+    <rect x="980" y="522" width="400" height="12" fill="#0c4a6e"/>
+    <text x="1000" y="519" font-size="16" font-weight="bold" fill="#7dd3fc">不变式三：原代码保留 + 统一调用</text>
+    <text x="1000" y="560" font-size="13" fill="#e2e8f0">原教材调用代码全部注释保留</text>
+    <text x="1000" y="584" font-size="13" fill="#e2e8f0">改写为 dashscope 两种姿势：</text>
+    <text x="1000" y="616" font-size="13" fill="#d1fae5">01 直调 Generation.call</text>
+    <text x="1000" y="640" font-size="13" fill="#d1fae5">02 走 LangChain ChatTongyi 管道</text>
+    <text x="1000" y="672" font-size="12" fill="#94a3b8">实证：模板与管道代码零改动，</text>
+    <text x="1000" y="696" font-size="12" fill="#64748b">只换底层模型 —— 后续章节沿用此范式</text>
+  </g>
+
+  <!-- ============ 下半：教学简化 vs 生产差距 + 学习路径 ============ -->
+  <g>
+    <rect x="60" y="740" width="640" height="340" rx="12" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+    <rect x="60" y="740" width="640" height="44" rx="12" fill="#7f1d1d"/>
+    <rect x="60" y="772" width="640" height="12" fill="#7f1d1d"/>
+    <text x="80" y="769" font-size="16" font-weight="bold" fill="#fca5a5">教学简化 vs 生产差距（每篇要补的第一课）</text>
+
+    <text x="90" y="812" font-size="13" fill="#e2e8f0">01 手拼模板 → 输出校验 + 重试</text>
+    <text x="90" y="842" font-size="13" fill="#e2e8f0">02 单次调用 → 批量 / 流式 / 失败重试</text>
+    <text x="90" y="872" font-size="13" fill="#e2e8f0">03 SQL 只打印 → 白名单 + 只读账号 + 人工确认后执行</text>
+    <text x="90" y="902" font-size="13" fill="#e2e8f0">04 JSON 靠约定 → Pydantic 严格解析 + 解析失败重试</text>
+    <text x="90" y="932" font-size="13" fill="#e2e8f0">05 固定参数演示 → 按任务分级的参数策略与配置管理</text>
+    <text x="90" y="962" font-size="13" fill="#e2e8f0">06 手工拼上下文 → 会话管理 + 窗口预算 + Function Calling</text>
+
+    <text x="90" y="1000" font-size="12" fill="#94a3b8">规律：教学版演示"能力边界"，生产版补"可靠性工程" ——</text>
+    <text x="90" y="1024" font-size="12" fill="#94a3b8">校验、重试、白名单、参数管理 —— 这四件事贯穿后续所有章节</text>
+    <text x="90" y="1052" font-size="12" fill="#64748b">char03-08 篇（治理层）与 char04-03（异常处理）都是这条规律的延续</text>
+  </g>
+
+  <g>
+    <rect x="730" y="740" width="650" height="340" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="1055" y="776" text-anchor="middle" font-size="17" font-weight="bold" fill="#22d3ee">新人学习路径 6 步（每步带自测标准）</text>
+
+    <rect x="756" y="796" width="190" height="120" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="770" y="822" font-size="13" font-weight="bold" fill="#22d3ee">1. 会调模型（01）</text>
+    <text x="770" y="846" font-size="11" fill="#94a3b8">自测：不看资料写出最小调用；</text>
+    <text x="770" y="866" font-size="11" fill="#94a3b8">说出三要素各管什么</text>
+
+    <rect x="960" y="796" width="190" height="120" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="974" y="822" font-size="13" font-weight="bold" fill="#22d3ee">2. 会用模板（02）</text>
+    <text x="974" y="846" font-size="11" fill="#94a3b8">自测：把 01 手拼字符串改写为</text>
+    <text x="974" y="866" font-size="11" fill="#94a3b8">PromptTemplate + LCEL 管道</text>
+
+    <rect x="1164" y="796" width="190" height="120" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="1178" y="822" font-size="13" font-weight="bold" fill="#22d3ee">3. 两种建模（03↔04）</text>
+    <text x="1178" y="846" font-size="11" fill="#94a3b8">自测：新任务能判断用生成类</text>
+    <text x="1178" y="866" font-size="11" fill="#94a3b8">还是抽取类；说出重心差异</text>
+
+    <rect x="756" y="932" width="190" height="120" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="770" y="958" font-size="13" font-weight="bold" fill="#22d3ee">4. 懂契约（05）</text>
+    <text x="770" y="982" font-size="11" fill="#94a3b8">自测：解释 system/user 分工；</text>
+    <text x="770" y="1002" font-size="11" fill="#94a3b8">temperature 大小各适合什么</text>
+
+    <rect x="960" y="932" width="190" height="120" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="974" y="958" font-size="13" font-weight="bold" fill="#22d3ee">5. 会引导（06）</text>
+    <text x="974" y="982" font-size="11" fill="#94a3b8">自测：演示对话史引导"下一步"；</text>
+    <text x="974" y="1002" font-size="11" fill="#94a3b8">说清与 Function Calling 的差距</text>
+
+    <rect x="1164" y="932" width="190" height="120" rx="8" fill="#0f172a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="1178" y="958" font-size="13" font-weight="bold" fill="#22d3ee">6. 串成体系</text>
+    <text x="1178" y="982" font-size="11" fill="#94a3b8">自测：复述"对模型说什么 vs</text>
+    <text x="1178" y="1002" font-size="11" fill="#94a3b8">让模型做什么"分界；指出 03</text>
+    <text x="1178" y="1022" font-size="11" fill="#94a3b8">和 06 各通向 char02 哪一篇</text>
+
+    <text x="1055" y="1072" text-anchor="middle" font-size="12" fill="#d1fae5">三章连读：char01（提示词内圈）→ char02（Agent 外圈）→ char03（服务化基础设施）—— char01 是所有复杂架构的地基：会跟模型说话</text>
+  </g>
+</svg>

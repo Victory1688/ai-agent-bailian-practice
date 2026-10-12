@@ -1,0 +1,188 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1080" viewBox="0 0 1440 1080" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1080" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char02 三条不变式与工具能力矩阵图 —— 手臂从近到远，危险步步紧逼</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">贯穿 8 篇的底层纪律 + 工具触达范围阶梯 + 生产第一课对照</text>
+
+  <!-- ============ 上半：三条不变式 ============ -->
+  <g>
+    <rect x="60" y="100" width="440" height="240" rx="12" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <rect x="60" y="100" width="440" height="44" rx="12" fill="#064e3b"/>
+    <rect x="60" y="132" width="440" height="12" fill="#064e3b"/>
+    <text x="80" y="129" font-size="16" font-weight="bold" fill="#34d399">不变式一：决策权在模型，执行权在本地</text>
+    <rect x="80" y="160" width="400" height="96" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="96" y="186" font-size="12" fill="#d1fae5" font-family="Consolas, monospace">call['function']['name']     → 取工具名</text>
+    <text x="96" y="212" font-size="12" fill="#d1fae5" font-family="Consolas, monospace">json.loads(...['arguments']) → 取参数</text>
+    <text x="96" y="238" font-size="12" fill="#d1fae5" font-family="Consolas, monospace">tool_registry.get(fn_name)   → 本地执行</text>
+    <text x="80" y="284" font-size="13" fill="#d1fae5">模型是"动嘴的"，本地是"动手的" ——</text>
+    <text x="80" y="306" font-size="13" fill="#d1fae5">tool_calls 是 dict 列表，不是字符串</text>
+    <text x="80" y="328" font-size="12" fill="#94a3b8">char03-06 揭晓其标准协议形态</text>
+  </g>
+
+  <g>
+    <rect x="520" y="100" width="440" height="240" rx="12" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <rect x="520" y="100" width="440" height="44" rx="12" fill="#78350f"/>
+    <rect x="520" y="132" width="440" height="12" fill="#78350f"/>
+    <text x="540" y="129" font-size="16" font-weight="bold" fill="#fde68a">不变式二：工具函数的纪律 —— 永不抛异常</text>
+    <rect x="540" y="160" width="400" height="96" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="556" y="186" font-size="12" fill="#d1fae5">所有工具执行体以字符串返回结果</text>
+    <text x="556" y="212" font-size="12" fill="#fca5a5">出错也返回 "失败：xxx"（不抛异常）</text>
+    <text x="556" y="238" font-size="12" fill="#94a3b8">因为结果要作为 role=tool 回流给模型</text>
+    <text x="540" y="284" font-size="13" fill="#d1fae5">把错误当数据喂回去，模型才知道</text>
+    <text x="540" y="306" font-size="13" fill="#d1fae5">"换个办法" —— 抛异常会打断整个循环</text>
+    <text x="540" y="328" font-size="12" fill="#94a3b8">char07-07 超时打崩 Executor 是反例实证</text>
+  </g>
+
+  <g>
+    <rect x="980" y="100" width="400" height="240" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <rect x="980" y="100" width="400" height="44" rx="12" fill="#312e81"/>
+    <rect x="980" y="132" width="400" height="12" fill="#312e81"/>
+    <text x="1000" y="129" font-size="16" font-weight="bold" fill="#c7d2fe">不变式三：memory 是唯一的对话记忆</text>
+    <rect x="1000" y="160" width="360" height="96" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="1016" y="186" font-size="12" fill="#d1fae5" font-family="Consolas, monospace">reply, memory = agent_chat(</text>
+    <text x="1016" y="210" font-size="12" fill="#d1fae5" font-family="Consolas, monospace">    config, input, memory)</text>
+    <text x="1016" y="238" font-size="12" fill="#94a3b8">记什么、记多久、存哪里全部显式可见</text>
+    <text x="1000" y="284" font-size="13" fill="#d1fae5">02 的 task_state 是业务状态，</text>
+    <text x="1000" y="306" font-size="13" fill="#d1fae5">memory 是对话记忆 —— 分工不混用</text>
+    <text x="1000" y="328" font-size="12" fill="#94a3b8">03 落盘 / 04 注销 都作用在这份记忆上</text>
+  </g>
+
+  <!-- ============ 中半：工具能力矩阵（手臂从近到远） ============ -->
+  <g>
+    <rect x="60" y="370" width="1320" height="360" rx="12" fill="#1e293b" stroke="#f472b6" stroke-width="2"/>
+    <rect x="60" y="370" width="1320" height="44" rx="12" fill="#831843"/>
+    <rect x="60" y="402" width="1320" height="12" fill="#831843"/>
+    <text x="80" y="399" font-size="18" font-weight="bold" fill="#f9a8d4">工具能力矩阵 —— 8 篇的工具"手臂"从近到远（越远越强，也越危险）</text>
+
+    <!-- 阶梯 8 卡 -->
+    <rect x="90" y="440" width="150" height="130" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="106" y="466" font-size="13" font-weight="bold" fill="#e2e8f0">01 本机时间</text>
+    <text x="106" y="490" font-size="11" fill="#94a3b8">get_current_time</text>
+    <text x="106" y="508" font-size="11" fill="#94a3b8">startup_check</text>
+    <rect x="106" y="524" width="118" height="26" rx="4" fill="#064e3b"/>
+    <text x="115" y="542" font-size="11" fill="#34d399">风险：零</text>
+    <text x="106" y="566" font-size="10" fill="#64748b">生产：并发会话隔离</text>
+
+    <rect x="250" y="440" width="150" height="130" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="266" y="466" font-size="13" font-weight="bold" fill="#e2e8f0">02 内存字典</text>
+    <text x="266" y="490" font-size="11" fill="#94a3b8">schedule_meeting</text>
+    <text x="266" y="508" font-size="11" fill="#94a3b8">task_state 跨轮</text>
+    <rect x="266" y="524" width="118" height="26" rx="4" fill="#064e3b"/>
+    <text x="275" y="542" font-size="11" fill="#34d399">风险：零</text>
+    <text x="266" y="566" font-size="10" fill="#64748b">生产：状态持久化(03)</text>
+
+    <rect x="410" y="440" width="150" height="130" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="426" y="466" font-size="13" font-weight="bold" fill="#e2e8f0">03 JSON 文件</text>
+    <text x="426" y="490" font-size="11" fill="#94a3b8">log_user_input</text>
+    <text x="426" y="508" font-size="11" fill="#94a3b8">PersistentJSON</text>
+    <rect x="426" y="524" width="118" height="26" rx="4" fill="#312e81"/>
+    <text x="435" y="542" font-size="11" fill="#a5b4fc">风险：低</text>
+    <text x="426" y="566" font-size="10" fill="#64748b">生产：数据库+写锁</text>
+
+    <rect x="570" y="440" width="150" height="130" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="586" y="466" font-size="13" font-weight="bold" fill="#e2e8f0">04 进程资源</text>
+    <text x="586" y="490" font-size="11" fill="#94a3b8">handle_task</text>
+    <text x="586" y="508" font-size="11" fill="#94a3b8">shutdown 三步退场</text>
+    <rect x="586" y="524" width="118" height="26" rx="4" fill="#312e81"/>
+    <text x="595" y="542" font-size="11" fill="#a5b4fc">风险：低</text>
+    <text x="586" y="566" font-size="10" fill="#64748b">生产：超时强杀信号</text>
+
+    <rect x="730" y="440" width="150" height="130" rx="8" fill="#0f172a" stroke="#fbbf24"/>
+    <text x="746" y="466" font-size="13" font-weight="bold" fill="#e2e8f0">05 外网 HTTP</text>
+    <text x="746" y="490" font-size="11" fill="#94a3b8">get_weather</text>
+    <text x="746" y="508" font-size="11" fill="#94a3b8">wttr.in 四层防御</text>
+    <rect x="746" y="524" width="118" height="26" rx="4" fill="#78350f"/>
+    <text x="755" y="542" font-size="11" fill="#fde68a">风险：中</text>
+    <text x="746" y="566" font-size="10" fill="#64748b">生产：缓存限流重试</text>
+
+    <rect x="890" y="440" width="150" height="130" rx="8" fill="#0f172a" stroke="#fbbf24"/>
+    <text x="906" y="466" font-size="13" font-weight="bold" fill="#e2e8f0">06 SQLite</text>
+    <text x="906" y="490" font-size="11" fill="#94a3b8">add/query_employee</text>
+    <text x="906" y="508" font-size="11" fill="#94a3b8">? 占位符防注入</text>
+    <rect x="906" y="524" width="118" height="26" rx="4" fill="#78350f"/>
+    <text x="915" y="542" font-size="11" fill="#fde68a">风险：中</text>
+    <text x="906" y="566" font-size="10" fill="#64748b">生产：连接池+权限</text>
+
+    <rect x="1050" y="440" width="150" height="130" rx="8" fill="#0f172a" stroke="#f87171" stroke-width="1.5"/>
+    <text x="1066" y="466" font-size="13" font-weight="bold" fill="#e2e8f0">07 文件系统</text>
+    <text x="1066" y="490" font-size="11" fill="#94a3b8">read/write_file</text>
+    <text x="1066" y="508" font-size="11" fill="#f87171">exec_code 最危险</text>
+    <rect x="1066" y="524" width="118" height="26" rx="4" fill="#7f1d1d"/>
+    <text x="1075" y="542" font-size="11" fill="#fca5a5">风险：高</text>
+    <text x="1066" y="566" font-size="10" fill="#64748b">生产：白名单+沙箱</text>
+
+    <rect x="1210" y="440" width="150" height="130" rx="8" fill="#0f172a" stroke="#f87171" stroke-width="1.5"/>
+    <text x="1226" y="466" font-size="13" font-weight="bold" fill="#e2e8f0">08 智能体自身</text>
+    <text x="1226" y="490" font-size="11" fill="#94a3b8">add_record 记账</text>
+    <text x="1226" y="508" font-size="11" fill="#94a3b8">FastAPI 交付入口</text>
+    <rect x="1226" y="524" width="118" height="26" rx="4" fill="#7f1d1d"/>
+    <text x="1235" y="542" font-size="11" fill="#fca5a5">风险：高</text>
+    <text x="1226" y="566" font-size="10" fill="#64748b">生产：鉴权限流HTTPS</text>
+
+    <!-- 危险递进箭头 -->
+    <path d="M 90 590 L 1360 590" stroke="#f472b6" stroke-width="2" marker-end="url(#arrPink)"/>
+    <text x="720" y="612" text-anchor="middle" font-size="13" font-weight="bold" fill="#f9a8d4">触达范围递进：本机 → 内存 → 文件 → 进程 → 外网 → 数据库 → 文件系统 → 服务入口（安全投入要跟着风险走）</text>
+    <text x="90" y="646" font-size="12" fill="#94a3b8">四层防御模板（05 篇）：入参校验 → 超时限制 → 状态码检查 → 异常兜底 —— 之后所有外部接口调用都套用（char03-05/07、char06 全章均沿用）</text>
+    <text x="90" y="670" font-size="12" fill="#94a3b8">exec 警示（07 篇）：模型可生成任意代码 → 四条加固路：白名单目录 / 沙箱隔离 / AST 检查 / 干脆不给 —— char04-04 用"三道防线沙箱"给出落地答案</text>
+    <text x="90" y="700" font-size="12" fill="#94a3b8">诚实差距：08 的 session_id 收了没用（教学留白）—— 生产第一课：接上 03 的 PersistentJSONMemory 实现多用户会话隔离 + API Key 鉴权</text>
+  </g>
+
+  <!-- ============ 底部：学习路径 ============ -->
+  <g>
+    <rect x="60" y="760" width="1320" height="280" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="796" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">新人学习路径 6 步（每步带自测标准，详见 arch_汇总说明.md 第八节）</text>
+
+    <rect x="90" y="820" width="200" height="180" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="106" y="848" font-size="14" font-weight="bold" fill="#22d3ee">1. 看懂骨架</text>
+    <text x="106" y="872" font-size="12" fill="#e2e8f0">01</text>
+    <text x="106" y="896" font-size="12" fill="#94a3b8">自测：不看资料手写</text>
+    <text x="106" y="916" font-size="12" fill="#94a3b8">agent_chat 的 while True；</text>
+    <text x="106" y="936" font-size="12" fill="#94a3b8">说清"决策权在模型、</text>
+    <text x="106" y="956" font-size="12" fill="#94a3b8">执行权在本地"</text>
+
+    <rect x="310" y="820" width="200" height="180" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="326" y="848" font-size="14" font-weight="bold" fill="#22d3ee">2. 会写工具</text>
+    <text x="326" y="872" font-size="12" fill="#e2e8f0">02</text>
+    <text x="326" y="896" font-size="12" fill="#94a3b8">自测：独立新增带参工具</text>
+    <text x="326" y="916" font-size="12" fill="#94a3b8">（说明书 + 执行体 +</text>
+    <text x="326" y="936" font-size="12" fill="#94a3b8">注册表三件齐）</text>
+
+    <rect x="530" y="820" width="200" height="180" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="546" y="848" font-size="14" font-weight="bold" fill="#22d3ee">3. 管住记忆</text>
+    <text x="546" y="872" font-size="12" fill="#e2e8f0">03→04</text>
+    <text x="546" y="896" font-size="12" fill="#94a3b8">自测：说清 save/clear/log</text>
+    <text x="546" y="916" font-size="12" fill="#94a3b8">各自作用；解释</text>
+    <text x="546" y="936" font-size="12" fill="#94a3b8">"注销不是直接删"</text>
+
+    <rect x="750" y="820" width="200" height="180" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="766" y="848" font-size="14" font-weight="bold" fill="#22d3ee">4. 伸长手臂</text>
+    <text x="766" y="872" font-size="12" fill="#e2e8f0">05→06→07</text>
+    <text x="766" y="896" font-size="12" fill="#94a3b8">自测：给新工具套四层防御；</text>
+    <text x="766" y="916" font-size="12" fill="#94a3b8">解释 ? 占位符防注入；</text>
+    <text x="766" y="936" font-size="12" fill="#94a3b8">说出 exec 风险与加固路</text>
+
+    <rect x="970" y="820" width="200" height="180" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="986" y="848" font-size="14" font-weight="bold" fill="#22d3ee">5. 包成服务</text>
+    <text x="986" y="872" font-size="12" fill="#e2e8f0">08</text>
+    <text x="986" y="896" font-size="12" fill="#94a3b8">自测：画 UI↔中间API↔智能体</text>
+    <text x="986" y="916" font-size="12" fill="#94a3b8">三段式图；解释前端为什么</text>
+    <text x="986" y="936" font-size="12" fill="#94a3b8">不能直调大模型</text>
+
+    <rect x="1190" y="820" width="160" height="180" rx="8" fill="#0f172a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="1206" y="848" font-size="14" font-weight="bold" fill="#22d3ee">6. 串成体系</text>
+    <text x="1206" y="872" font-size="12" fill="#e2e8f0">重读总图</text>
+    <text x="1206" y="896" font-size="12" fill="#94a3b8">自测：对照六层总图，</text>
+    <text x="1206" y="916" font-size="12" fill="#94a3b8">把 8 篇放回</text>
+    <text x="1206" y="936" font-size="12" fill="#94a3b8">各自的楼层</text>
+
+    <text x="720" y="1024" text-anchor="middle" font-size="13" fill="#d1fae5">三章连读：char01（提示词内圈）→ char02（Agent 外圈）→ char03（服务化基础设施）—— char02 学完你能"造一个会办事的智能体"</text>
+  </g>
+
+  <defs>
+    <marker id="arrPink" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#f472b6"/>
+    </marker>
+  </defs>
+</svg>

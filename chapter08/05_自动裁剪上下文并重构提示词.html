@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05_自动裁剪上下文并重构提示词 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>05_自动裁剪上下文并重构提示词 - 代码解析</h1>
+<div class="meta">对应文件：char08/05_自动裁剪上下文并重构提示词.py | 教材出处：第8章 单智能体系统构建实战 例8-5 | 环境实测：qwen-plus 真实调用 + 贪心装填算法全链路 | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char08 第五篇——<strong>显式引入 Token 预算管理的剪辑策略</strong>。04 篇的 Memory 窗口是"按轮数截断"（k=3），本篇升级为"按 Token 预算装填"：<code class="inline">dynamic_clip_context()</code> 给每段上下文估一个 token 成本（length 字段），按<strong>优先级 + 新鲜度</strong>排序后贪心装填——预算内能装多少装多少，装不下的直接丢弃。这是从"规则窗口"到"预算装填"的算法跃迁，与 char07-07 的三级筛选合并形成上下文压缩的两个互补流派。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、build_segment 六字段结构速查表</h2>
+<table>
+  <tr><th>字段</th><th>含义</th><th>取值逻辑</th><th>服务什么</th></tr>
+  <tr><td>role</td><td>角色</td><td>user / assistant / system / tool</td><td>标注信息来源</td></tr>
+  <tr><td>content</td><td>内容</td><td>文本</td><td>信息本体</td></tr>
+  <tr><td>type</td><td>段类型</td><td>system / input / response / tool</td><td>分类筛选</td></tr>
+  <tr><td>timestamp</td><td>时间戳</td><td>time.time()（构建时刻）</td><td><strong>新鲜度排序</strong></td></tr>
+  <tr><td>priority</td><td>优先级</td><td>system=1.0，其他=0.5</td><td><strong>重要性排序</strong></td></tr>
+  <tr><td>length</td><td>token 成本</td><td>len(content) // 2（中文粗估：2 字符≈1 token）</td><td><strong>预算装填计量</strong></td></tr>
+</table>
+<div class="card">
+  <div class="card-title">与 char07-01 五字段结构的对比</div>
+  <p>char07-01：{role, content, type, <strong>task_id, meta</strong>}——为"跨任务隔离 + 元信息扩展"服务。</p>
+  <p>本篇（char08-05）：{role, content, type, <strong>timestamp, priority, length</strong>}——为"排序 + 装填"服务。</p>
+  <p>字段设计跟着用途走（char07 汇总结论的重演）：本篇要按时间和优先级排序、要计量 token，所以砍掉 task_id/meta，换上三个"排序与计量"字段。<strong>没有万能的上下文结构，只有匹配当前策略的结构</strong>。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程图</h2>
+<pre>
+9 段上下文构建（system 1 + user 4 + assistant 3 + tool 1）
+        │
+        ▼
+dynamic_clip_context(pool, token_limit=100)
+  ├─ 排序：priority 降序 → timestamp 降序
+  │   system 段（priority=1.0）排最前
+  │   其余段（priority=0.5）按时间新→旧
+  │
+  ├─ 贪心装填：预算 100，逐段累加
+  │   装得下 → 收入 clipped
+  │   装不下 → 跳过（注意：不终止，继续看下一段！）
+  │
+  └─ 拼接：[ROLE-TYPE] 标注前缀（char07-07 同款）
+        │
+        ▼
+dashscope.Generation.call(qwen-plus) → 回答
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、逐段代码讲解</h2>
+<h3>4.1 dynamic_clip_context：贪心装填算法（本篇核心教学资产，原样保留）</h3>
+<pre>
+def dynamic_clip_context(segments, token_limit=150):
+    # 1. 排序：优先级降序 + 时间戳降序
+    segments.sort(key=lambda x: (-x["priority"], -x["timestamp"]))
+
+    # 2. 贪心装填：预算内尽量多装
+    total = 0
+    clipped = []
+    for seg in segments:
+        if total + seg["length"] <= token_limit:
+            clipped.append(seg)
+            total += seg["length"]
+
+    # 3. 拼接 [ROLE-TYPE] 标注
+    merged = ""
+    for seg in clipped:
+        merged += f"[{seg['role']}-{seg['type']}] {seg['content']}\n"
+    return merged
+</pre>
+<p>三步式：排序 → 装填 → 拼接。注意两个细节：</p>
+<ul>
+  <li><strong>排序用双重 key</strong>：<code class="inline">(-priority, -timestamp)</code>——先按优先级（system 永远排最前），同优先级内按时间（最新的在前）。负号是 Python 排序"降序"的惯用技巧。</li>
+  <li><strong>装填是"跳过"不是"终止"</strong>：装不下的段被跳过后，循环继续——后面可能有更短的段能塞进剩余空间。这是背包问题的贪心解法特征：<strong>不保证全局最优，但保证高价值段优先入选</strong>。</li>
+</ul>
+<h3>4.2 length 的粗估：len(content) // 2（原样保留）</h3>
+<p>用"字符数除以 2"模拟 token 数——对中文内容这是个粗略估计（qwen 系 tokenizer 大约 1 汉字 ≈ 0.6-1 token，取决于内容）。教学场景够用，但生产系统必须用真实 tokenizer（tiktoken / transformers tokenizer）计数。<strong>粗估的风险：估少了 → 超预算被 API 拒绝；估多了 → 白白丢弃有价值的内容</strong>。</p>
+<h3>4.3 教材内容错位的小笔误（原样保留 + 标注）</h3>
+<p>注意 62-63 行：用户问"那2023年呢？"，assistant 回答的却是"2025年为5.2%"——问 2023 答 2025，明显是教材笔误（response 内容与提问轮次错位）。改写时保留原样并在注释里标注，因为<strong>这不影响本篇的教学重点（剪辑算法）</strong>，但新人读上下文时会困惑，需要点破。</p>
+<h3>4.4 与 04 篇 WindowMemory 的对比（重要认知）</h3>
+<table>
+  <tr><th>维度</th><th>04 篇 ConversationBufferWindowMemory(k=3)</th><th><strong>本篇 dynamic_clip_context</strong></th></tr>
+  <tr><td>截断单位</td><td>轮（1 轮 = 1 user + 1 AI）</td><td>段（任意粒度，system/tool/input/response 各自独立）</td></tr>
+  <tr><td>计量方式</td><td>条数（k 轮 = 2k 条）</td><td>token 估算值（length 字段）</td></tr>
+  <tr><td>重要性</td><td>无差别——每轮等价</td><td><strong>priority 字段——system 永远保留</strong></td></tr>
+  <tr><td>截断策略</td><td>滑窗丢弃（只留最近 k 轮）</td><td>贪心装填（价值高的先装，装不下跳过）</td></tr>
+  <tr><td>框架依赖</td><td>LangChain Memory 组件（已废弃警告）</td><td>纯 Python 函数（零依赖）</td></tr>
+</table>
+<p>本篇的剪辑策略本质上是一个<strong>微型的"上下文价值函数"实现</strong>：priority（重要性）× timestamp（新鲜度）× length（成本）三维度综合决策。这三个维度正是所有上下文压缩算法的核心变量——后面 06 篇如果有更高级的策略，也只是在这三个维度上做文章。</p>
+
+<!-- ========== 五 ========== -->
+<h2>五、实测验证：贪心装填的真实剪出效果</h2>
+<div class="ok">
+  <div class="ok-title">实测：token_limit=100，9 段进 9 段出（预算刚好够）</div>
+  <pre>
+--- 剪辑后上下文结构 ---
+[system-system] 你是资深经济顾问，语言需精准、简洁    ← priority=1.0，排最前
+[user-input] 主要依据有哪些？                        ← 最新，时间降序开始
+[assistant-response] 预计增长可达5.4%
+[user-input] 2026年会不会更高？
+[tool-tool] [DeepSeek-V1] 分析完成：2026年预测...
+[assistant-response] 2025年为5.2%
+[user-input] 那2023年呢？
+[assistant-response] 2024年增长为3.0%
+[user-input] 2024年GDP是多少？                      ← 最老，排最后
+
+--- Qwen3.0 响应输出 ---
+2024年GDP总量为126.06万亿元（人民币，初步核算值）。
+  </pre>
+  <p>排序完全符合预期：system 段优先级最高排第一，其余段按时间新→旧。9 段总 token 数（粗估）约 94，在 100 预算内全部装入——<strong>预算宽松时贪心装填 = 全量保留</strong>，只有预算紧了才会看到"跳过"效果。</p>
+</div>
+<div class="warn">
+  <div class="warn-title">把 token_limit 收紧到 30，观察"跳过"效果</div>
+  <p>预算 30 时，system 段（约 11 token）+ 最新两三段就满了，老段全部被跳过——注意被跳过的可能是<strong>中间某段</strong>而非尾部（因为贪心是逐段判断，不是一刀切）。动手练习第 1 题让你亲手跑这个实验。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、char08 章内演进：01 → 05 的递进</h2>
+<table>
+  <tr><th>篇目</th><th>解决什么问题</th><th>核心资产</th></tr>
+  <tr><td>01 状态感知</td><td>Agent 怎么<strong>看得见自己</strong></td><td>AgentState 六态</td></tr>
+  <tr><td>02 参数解析</td><td>Agent 怎么<strong>听懂用户</strong></td><td>parse_input 规则解析</td></tr>
+  <tr><td>03 异常处理</td><td>Agent 怎么<strong>扛住故障</strong></td><td>[ERROR] 信号 + 降级 prompt</td></tr>
+  <tr><td>04 Memory 使用</td><td>Agent 怎么<strong>记住对话</strong></td><td>WindowMemory(k=3) 窗口截断</td></tr>
+  <tr><td><strong>05 动态剪辑（本篇）</strong></td><td>Agent 怎么<strong>精打细算</strong></td><td>priority + timestamp + length 贪心装填</td></tr>
+</table>
+<p>04→05 的递进特别值得注意：<strong>04 的 k=3 窗口是"一刀切"（不管内容价值，轮数一到全丢），05 的贪心装填是"按价值保留"（高价值段哪怕很老也优先装）</strong>。如果给 04 篇的对话历史加上 priority 字段，WindowMemory 就能升级为 ValueMemory——这正是动手练习第 4 题的内容。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、架构视角：上下文压缩的两流派（char07-07 vs 本篇）</h2>
+<table>
+  <tr><th>流派</th><th>代表</th><th>决策依据</th><th>优点</th><th>缺点</th></tr>
+  <tr><td>规则窗口</td><td>char07-07 dynamic_merge_context</td><td>type 分类硬规则（system 全留/tool 最新1/历史最近4）</td><td>可解释、可预测</td><td>规则写死，不适应内容变化</td></tr>
+  <tr><td><strong>预算装填</strong></td><td><strong>本篇 dynamic_clip_context</strong></td><td>priority+timestamp+length 三维打分</td><td>软性权衡，token 成本可控</td><td>贪心不保证最优，length 估算粗糙</td></tr>
+  <tr><td>语义压缩</td><td>char06 RAG / LLM 摘要</td><td>语义相似度 / LLM 重写</td><td>保留语义而非字面</td><td>额外 LLM 调用成本</td></tr>
+</table>
+<p>生产级系统通常<strong>三流派叠加</strong>：规则窗口做粗筛（char07-07）→ 预算装填做精筛（本篇）→ 摘要压缩做兜底（超长历史压成一段）。本篇教的是中间层的最小实现。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学版 vs 生产版差距</h2>
+<table>
+  <tr><th>教学简化</th><th>生产要求</th></tr>
+  <tr><td>len(content)//2 估 token</td><td>真实 tokenizer 计数（tiktoken / transformers）</td></tr>
+  <tr><td>priority 硬编码（system=1 其他=0.5）</td><td>可配置优先级矩阵（如 tool 结果按置信度分级）</td></tr>
+  <tr><td>贪心装填不回溯</td><td>背包 DP 或按"价值密度"（priority/length）排序装填</td></tr>
+  <tr><td>被跳过的段直接丢弃</td><td>降级为摘要压缩后再尝试装入，或记录到日志供审计</td></tr>
+  <tr><td>EconomicSummaryTool 返回假数据</td><td>真实 API + 超时兜底（char06 惯例）</td></tr>
+  <tr><td>剪辑无日志留痕</td><td>记录"装入了哪些段、跳过了哪些段、预算利用率"（char07-05 惯例）</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习（巩固本篇技能）</h2>
+<ol>
+  <li><strong>收紧预算看"跳过"</strong>：把 token_limit=100 改成 30，跑一次——观察哪些段被跳过、system 段是否依然保留，验证贪心算法的"跳过不终止"特性。</li>
+  <li><strong>真实 tokenizer 计数</strong>：用 <code class="inline">tiktoken.get_encoding("cl100k_base")</code> 替换 len(content)//2，对比两种估算的差距——体会"粗估"在真实 tokenizer 面前误差有多大。</li>
+  <li><strong>按价值密度装填</strong>：把排序 key 改成 <code class="inline">-priority/length</code>（价值密度 = 每单位 token 换取的优先级），对比原排序在 token_limit=30 下的装入结果——体验背包问题"按密度贪心"的经典改进。</li>
+  <li><strong>给 04 篇 WindowMemory 加优先级</strong>：把本篇的 build_segment（带 priority/length）套进 04 篇的对话循环，实现"system + 最近 2 轮 + 高优先级段"的混合剪辑——完成从"窗口"到"价值"的升级。</li>
+  <li><strong>接上 03 篇状态机</strong>：给剪辑过程加状态——排序阶段转 RUNNING、装填阶段转 WAITING_TOOL（如果 tool 段需要实时生成）、拼接完成转 COMPLETED——融合 char08 前五篇的全部技能。</li>
+</ol>
+
+</div>
+</body>
+</html>

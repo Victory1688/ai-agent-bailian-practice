@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1010" viewBox="0 0 1180 1010" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect width="1180" height="1010" fill="#0f172a"/>
+  <text x="590" y="44" text-anchor="middle" font-size="25" font-weight="bold" fill="#22d3ee">char07 灵魂图：一次完整请求的上下文全链路（七篇合一）</text>
+  <text x="590" y="72" text-anchor="middle" font-size="13" fill="#94a3b8">路由决策(03/04) → 段落组装(01/02) → 日志落盘(05) → 缓存检查(06) → 三级筛选(07) → LLM 生成 → 回写落盘</text>
+
+  <!-- 泳道参与者 -->
+  <g font-size="15" font-weight="bold" text-anchor="middle">
+    <rect x="50" y="100" width="120" height="42" rx="8" fill="#1e293b" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="110" y="127" fill="#e2e8f0">用户</text>
+
+    <rect x="210" y="100" width="160" height="42" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <text x="290" y="127" fill="#a78bfa">03/04 路由</text>
+
+    <rect x="410" y="100" width="160" height="42" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+    <text x="490" y="127" fill="#38bdf8">01/02 组装</text>
+
+    <rect x="610" y="100" width="140" height="42" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <text x="680" y="127" fill="#fbbf24">05 日志</text>
+
+    <rect x="790" y="100" width="150" height="42" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <text x="865" y="127" fill="#34d399">06 缓存+07合并</text>
+
+    <rect x="990" y="100" width="140" height="42" rx="8" fill="#020617" stroke="#22d3ee" stroke-width="2"/>
+    <text x="1060" y="127" fill="#22d3ee">qwen-plus</text>
+  </g>
+
+  <!-- 生命线 -->
+  <g stroke="#334155" stroke-width="1.5" stroke-dasharray="5 5">
+    <line x1="110" y1="142" x2="110" y2="960"/>
+    <line x1="290" y1="142" x2="290" y2="960"/>
+    <line x1="490" y1="142" x2="490" y2="960"/>
+    <line x1="680" y1="142" x2="680" y2="960"/>
+    <line x1="865" y1="142" x2="865" y2="960"/>
+    <line x1="1060" y1="142" x2="1060" y2="960"/>
+  </g>
+
+  <g font-size="13" fill="#e2e8f0">
+    <!-- 1 请求 -->
+    <line x1="110" y1="180" x2="290" y2="180" stroke="#e2e8f0" stroke-width="2" marker-end="url(#arW)"/>
+    <text x="200" y="172" text-anchor="middle">提问</text>
+
+    <!-- 2 路由 self -->
+    <rect x="300" y="200" width="380" height="66" rx="6" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="490" y="224" text-anchor="middle" fill="#ddd6fe">determine_route：四级关键词路由</text>
+    <text x="490" y="246" text-anchor="middle" fill="#f87171">死代码坑：hybrid/tool 分支永不触发（顺序截胡）</text>
+
+    <!-- 3 组装 -->
+    <line x1="290" y1="295" x2="490" y2="295" stroke="#38bdf8" stroke-width="2" marker-end="url(#arB)"/>
+    <text x="390" y="287" text-anchor="middle">路由结果 + 请求入池</text>
+
+    <!-- 4 组装 self -->
+    <rect x="500" y="315" width="360" height="66" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="680" y="339" text-anchor="middle" fill="#bae6fd">build_segment 五字段 + 四类标注</text>
+    <text x="680" y="361" text-anchor="middle" fill="#7dd3fc">system 风格 / memory 偏好 / input 提问 / tool 结果</text>
+
+    <!-- 5 落盘 -->
+    <line x1="490" y1="410" x2="680" y2="410" stroke="#fbbf24" stroke-width="2" marker-end="url(#arY)"/>
+    <text x="585" y="402" text-anchor="middle">段落落盘</text>
+
+    <!-- 6 日志 self -->
+    <rect x="490" y="430" width="370" height="66" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="675" y="454" text-anchor="middle" fill="#fde68a">persist_segment：JSONL 追加写（七字段）</text>
+    <text x="675" y="476" text-anchor="middle" fill="#f87171">实测：前三段 2ms 落盘，response 段晚 6.5s = LLM 耗时</text>
+
+    <!-- 7 缓存检查 -->
+    <line x1="490" y1="525" x2="865" y2="525" stroke="#34d399" stroke-width="2" marker-end="url(#arG)"/>
+    <text x="678" y="517" text-anchor="middle">full_prompt 送缓存检查</text>
+
+    <!-- 8 缓存分支框 -->
+    <rect x="600" y="545" width="520" height="150" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+    <text x="860" y="570" text-anchor="middle" fill="#94a3b8" font-weight="bold">alt 分支（06 篇核心）</text>
+    <line x1="615" y1="592" x2="865" y2="592" stroke="#34d399" stroke-width="2" marker-end="url(#arG)"/>
+    <text x="740" y="587" text-anchor="middle" fill="#86efac" font-size="12">MD5 命中 → 直接回放</text>
+    <text x="1030" y="587" text-anchor="middle" fill="#86efac" font-size="12" font-weight="bold">0.78s</text>
+    <line x1="615" y1="625" x2="865" y2="625" stroke="#fbbf24" stroke-width="2" marker-end="url(#arY)"/>
+    <text x="740" y="620" text-anchor="middle" fill="#fde68a" font-size="12">未命中 → 走 LLM</text>
+    <text x="1030" y="620" text-anchor="middle" fill="#fde68a" font-size="12" font-weight="bold">13.8s</text>
+    <text x="860" y="655" text-anchor="middle" fill="#34d399" font-weight="bold">实测加速比 17.7x</text>
+    <text x="860" y="680" text-anchor="middle" fill="#f87171" font-size="12">前提：prompt 一字不差（MD5 精确匹配，非语义）</text>
+
+    <!-- 9 三级筛选 self -->
+    <rect x="620" y="715" width="480" height="80" rx="6" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="860" y="740" text-anchor="middle" fill="#d1fae5">dynamic_merge_context 三级筛选（07 篇）</text>
+    <text x="860" y="762" text-anchor="middle" fill="#86efac">system 全留 → tool 最新 1 → 历史最近 4（实测 7 进 6 出）</text>
+    <text x="860" y="783" text-anchor="middle" fill="#f87171" font-size="12">锯齿效应：2022 提问被裁，其回答残留（答留问丢）</text>
+
+    <!-- 10 LLM 生成 -->
+    <line x1="865" y1="825" x2="1060" y2="825" stroke="#22d3ee" stroke-width="2" marker-end="url(#arC)"/>
+    <text x="962" y="817" text-anchor="middle">合并后 prompt</text>
+    <line x1="1060" y1="870" x2="490" y2="870" stroke="#22d3ee" stroke-width="2" marker-end="url(#arC)"/>
+    <text x="775" y="862" text-anchor="middle" fill="#7dd3fc">生成回答（回写为 response 段 + 再落盘）</text>
+
+    <!-- 11 返回 -->
+    <line x1="110" y1="920" x2="490" y2="920" stroke="#e2e8f0" stroke-width="2" marker-end="url(#arW)"/>
+    <text x="300" y="912" text-anchor="middle">最终回答</text>
+  </g>
+
+  <!-- 底部结论 -->
+  <rect x="50" y="950" width="1080" height="46" rx="8" fill="#020617" stroke="#334155" stroke-width="1.5"/>
+  <text x="590" y="979" text-anchor="middle" font-size="14" fill="#e2e8f0">七篇合一的结论：上下文不是 LLM 调用的附带品，而是被表示、路由、落盘、缓存、筛选的独立工程对象</text>
+
+  <defs>
+    <marker id="arW" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#e2e8f0"/></marker>
+    <marker id="arA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#a78bfa"/></marker>
+    <marker id="arB" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#38bdf8"/></marker>
+    <marker id="arY" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#fbbf24"/></marker>
+    <marker id="arG" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#34d399"/></marker>
+    <marker id="arC" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#22d3ee"/></marker>
+  </defs>
+</svg>

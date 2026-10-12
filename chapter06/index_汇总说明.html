@@ -38,6 +38,18 @@
 <h1>char06 架构汇总说明 - RAG 检索增强生成技能总览</h1>
 <div class="sub">配套文档：<a href="arch_汇总说明.md">arch_汇总说明.md</a>（Mermaid 版，可在 Typora/VSCode 渲染） | 生成日期：2026-10-12 | 范围：char06 全部 9 个 py 文件（01-09，全部改写验证）</div>
 
+<!-- ========== SVG 架构图速查 ========== -->
+<div class="card">
+  <div class="card-title">SVG 独立架构图速查（点击跳转，浏览器直接打开）</div>
+  <table>
+    <tr><th>#</th><th>架构图</th><th>视角</th><th>核心内容</th></tr>
+    <tr><td>1</td><td><a href="svg/01_RAG双链管道图.svg">01_RAG双链管道图</a></td><td>灵魂总览</td><td>离线入库链 + 在线查询链 + 9 篇落位 + 两条不变式</td></tr>
+    <tr><td>2</td><td><a href="svg/02_五段演进线全景图.svg">02_五段演进线全景图</a></td><td>学习路线</td><td>检索零件(01-03)→预处理(04)→闭环RAG(05-06)→显式RAG(07-08)→异构融合(09)</td></tr>
+    <tr><td>3</td><td><a href="svg/03_双通道混合检索时序图.svg">03_双通道混合检索时序图</a></td><td>运行时序</td><td>09 篇灵魂：FAISS 向量检索 + pandas 结构化数据检索双通道并行 + LLM 综合推理</td></tr>
+    <tr><td>4</td><td><a href="svg/04_四笔学费与三形态对照图.svg">04_四笔学费与三形态对照图</a></td><td>踩坑与方法</td><td>四笔学费（API 格式变更 / 黑盒封装 / 假标题 / 切片陷阱）+ 隐式/显式/混合三形态对照</td></tr>
+  </table>
+</div>
+
 <!-- ========== 一 ========== -->
 <h2>一、char06 在课程体系中的定位</h2>
 <p>**核心命题：把 char01-05 的零件拼成 RAG——让大模型能"检索到什么就答什么"，而不是"只凭训练记忆瞎编"。**</p>
@@ -195,6 +207,13 @@ char05 LangGraph 图编排       ──→ RAG 流水线可以声明为图（节
   <tr><td>08</td><td><a href="08_多段检索与Top-K融合的Agent.html">08_多段检索与Top-K融合的Agent.html</a></td></tr>
   <tr><td>09</td><td><a href="09_文本与结构化数据混合检索.html">09_文本与结构化数据混合检索.html</a></td></tr>
 </table>
+<div class="card">
+  <div class="card-title">配套架构资源</div>
+  <ul>
+    <li><a href="arch_汇总说明.md">arch_汇总说明.md</a> — 架构版汇总（Mermaid 关联图，VSCode/Typora/GitHub 可渲染）</li>
+    <li><a href="svg/01_RAG双链管道图.svg">svg/</a> — SVG 独立架构图 4 张（RAG双链管道图 / 五段演进线全景图 / 双通道混合检索时序图 / 四笔学费与三形态对照图，浏览器直接打开）</li>
+  </ul>
+</div>
 
 </div>
 </body>

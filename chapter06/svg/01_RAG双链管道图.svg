@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="920" viewBox="0 0 1180 920" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect width="1180" height="920" fill="#0f172a"/>
+  <text x="590" y="46" text-anchor="middle" font-size="25" font-weight="bold" fill="#22d3ee">char06 灵魂图：RAG 双链管道——离线入库链 + 在线查询链（九篇全部落位）</text>
+  <text x="590" y="74" text-anchor="middle" font-size="13" fill="#94a3b8">RAG 的全部秘密：知识离线变成向量入库，问题在线变成向量去捞——两条链共享同一个嵌入引擎</text>
+
+  <!-- ===== 离线入库链 ===== -->
+  <rect x="40" y="100" width="1100" height="290" rx="14" fill="#0b1220" stroke="#334155" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="590" y="130" text-anchor="middle" font-size="17" font-weight="bold" fill="#fbbf24">离线入库链（一次性构建，可重复执行）</text>
+
+  <rect x="70" y="155" width="185" height="130" rx="10" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+  <text x="162" y="185" text-anchor="middle" font-size="15" font-weight="bold" fill="#fca5a5">原始文档</text>
+  <text x="162" y="210" text-anchor="middle" font-size="12.5" fill="#fecaca">网页 / 法条 / 报告</text>
+  <text x="162" y="232" text-anchor="middle" font-size="12.5" fill="#fecaca">含脏数据：空行、乱码</text>
+  <text x="162" y="258" text-anchor="middle" font-size="11.5" fill="#f87171">04 篇学费：re.split</text>
+  <text x="162" y="276" text-anchor="middle" font-size="11.5" fill="#f87171">末尾空串陷阱</text>
+
+  <line x1="255" y1="220" x2="295" y2="220" stroke="#f87171" stroke-width="2.5" marker-end="url(#arR)"/>
+
+  <rect x="300" y="155" width="185" height="130" rx="10" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+  <text x="392" y="185" text-anchor="middle" font-size="15" font-weight="bold" fill="#fca5a5">02 清洗 + 切片</text>
+  <text x="392" y="210" text-anchor="middle" font-size="12.5" fill="#fecaca">RecursiveCharacter</text>
+  <text x="392" y="230" text-anchor="middle" font-size="12.5" fill="#fecaca">TextSplitter</text>
+  <text x="392" y="258" text-anchor="middle" font-size="11.5" fill="#f87171">学费：默认分隔符</text>
+  <text x="392" y="276" text-anchor="middle" font-size="11.5" fill="#f87171">对中文不友好</text>
+
+  <line x1="485" y1="220" x2="525" y2="220" stroke="#f87171" stroke-width="2.5" marker-end="url(#arR)"/>
+
+  <rect x="530" y="155" width="185" height="130" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <text x="622" y="185" text-anchor="middle" font-size="15" font-weight="bold" fill="#7dd3fc">03 语义编码（嵌入）</text>
+  <text x="622" y="210" text-anchor="middle" font-size="12.5" fill="#bae6fd">DashScopeEmbeddings</text>
+  <text x="622" y="230" text-anchor="middle" font-size="12.5" fill="#bae6fd">text-embedding-v3</text>
+  <text x="622" y="258" text-anchor="middle" font-size="11.5" fill="#f87171">学费：原生 requests 调</text>
+  <text x="622" y="276" text-anchor="middle" font-size="11.5" fill="#f87171">百炼端点已失效(400)</text>
+
+  <line x1="715" y1="220" x2="755" y2="220" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arB)"/>
+
+  <rect x="760" y="155" width="185" height="130" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <text x="852" y="185" text-anchor="middle" font-size="15" font-weight="bold" fill="#7dd3fc">04 向量入库</text>
+  <text x="852" y="210" text-anchor="middle" font-size="12.5" fill="#bae6fd">FAISS / Chroma / Weaviate</text>
+  <text x="852" y="232" text-anchor="middle" font-size="12.5" fill="#bae6fd">06 篇三库选型实测</text>
+  <text x="852" y="258" text-anchor="middle" font-size="11.5" fill="#f87171">Weaviate 需 Docker</text>
+  <text x="852" y="276" text-anchor="middle" font-size="11.5" fill="#f87171">（注释保留未跑）</text>
+
+  <line x1="945" y1="220" x2="985" y2="220" stroke="#34d399" stroke-width="2.5" marker-end="url(#arG)"/>
+
+  <rect x="990" y="155" width="130" height="130" rx="10" fill="#134e4a" stroke="#34d399" stroke-width="2.5"/>
+  <text x="1055" y="198" text-anchor="middle" font-size="15" font-weight="bold" fill="#6ee7b7">向量知识库</text>
+  <text x="1055" y="224" text-anchor="middle" font-size="12.5" fill="#d1fae5">IndexFlatL2</text>
+  <text x="1055" y="246" text-anchor="middle" font-size="12.5" fill="#d1fae5">向量 + 原文映射</text>
+  <text x="1055" y="270" text-anchor="middle" font-size="11.5" fill="#86efac">离线产物</text>
+
+  <!-- ===== 在线查询链 ===== -->
+  <rect x="40" y="420" width="1100" height="330" rx="14" fill="#0b1220" stroke="#334155" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="590" y="450" text-anchor="middle" font-size="17" font-weight="bold" fill="#34d399">在线查询链（每次提问都走一遍）</text>
+
+  <rect x="70" y="475" width="185" height="130" rx="10" fill="#1e293b" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="162" y="505" text-anchor="middle" font-size="15" font-weight="bold" fill="#e2e8f0">用户提问</text>
+  <text x="162" y="530" text-anchor="middle" font-size="12.5" fill="#cbd5e1">"2020年财政支出多少？"</text>
+  <text x="162" y="556" text-anchor="middle" font-size="11.5" fill="#94a3b8">自然语言</text>
+
+  <line x1="255" y1="540" x2="295" y2="540" stroke="#e2e8f0" stroke-width="2.5" marker-end="url(#arW)"/>
+
+  <rect x="300" y="475" width="185" height="130" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <text x="392" y="505" text-anchor="middle" font-size="15" font-weight="bold" fill="#7dd3fc">05 问题嵌入</text>
+  <text x="392" y="530" text-anchor="middle" font-size="12.5" fill="#bae6fd">同一个嵌入模型！</text>
+  <text x="392" y="552" text-anchor="middle" font-size="11.5" fill="#f87171">文档和问题必须同模型</text>
+  <text x="392" y="572" text-anchor="middle" font-size="11.5" fill="#f87171">否则向量空间不匹配</text>
+
+  <line x1="485" y1="540" x2="525" y2="540" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arB)"/>
+
+  <rect x="530" y="475" width="185" height="130" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+  <text x="622" y="505" text-anchor="middle" font-size="15" font-weight="bold" fill="#6ee7b7">06 相似检索</text>
+  <text x="622" y="530" text-anchor="middle" font-size="12.5" fill="#d1fae5">similarity_search(03)</text>
+  <text x="622" y="552" text-anchor="middle" font-size="12.5" fill="#d1fae5">Top-K 召回（08 篇 k=5）</text>
+  <text x="622" y="578" text-anchor="middle" font-size="11.5" fill="#f87171">学费：03 标题叫 Agent</text>
+  <text x="622" y="596" text-anchor="middle" font-size="11.5" fill="#f87171">实际没有 Agent（假标题）</text>
+
+  <line x1="715" y1="540" x2="755" y2="540" stroke="#34d399" stroke-width="2.5" marker-end="url(#arG)"/>
+
+  <rect x="760" y="475" width="185" height="130" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+  <text x="852" y="505" text-anchor="middle" font-size="15" font-weight="bold" fill="#6ee7b7">07 组装 Prompt</text>
+  <text x="852" y="530" text-anchor="middle" font-size="12.5" fill="#d1fae5">检索片段 + 问题拼接</text>
+  <text x="852" y="552" text-anchor="middle" font-size="12.5" fill="#d1fae5">硬切 vs 贪婪拼接（08）</text>
+  <text x="852" y="578" text-anchor="middle" font-size="11.5" fill="#94a3b8">显式 RAG 的核心一步：</text>
+  <text x="852" y="596" text-anchor="middle" font-size="11.5" fill="#94a3b8">知识显式写进 prompt</text>
+
+  <line x1="945" y1="540" x2="985" y2="540" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arC)"/>
+
+  <rect x="990" y="475" width="130" height="130" rx="10" fill="#020617" stroke="#22d3ee" stroke-width="2.5"/>
+  <text x="1055" y="518" text-anchor="middle" font-size="15" font-weight="bold" fill="#7dd3fc">LLM 生成</text>
+  <text x="1055" y="544" text-anchor="middle" font-size="12.5" fill="#a5f3fc">qwen-plus</text>
+  <text x="1055" y="570" text-anchor="middle" font-size="12.5" fill="#a5f3fc">07 篇实测：答案</text>
+  <text x="1055" y="590" text-anchor="middle" font-size="12.5" fill="#a5f3fc">精确引用法条</text>
+
+  <!-- 两条链的关联 -->
+  <path d="M 1055 290 L 1055 470" fill="none" stroke="#34d399" stroke-width="2.5" marker-end="url(#arG)"/>
+  <text x="1122" y="385" text-anchor="middle" font-size="12.5" fill="#34d399" transform="rotate(90 1122 385)">在线检索读离线库</text>
+  <path d="M 622 290 L 622 470" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arB)"/>
+  <text x="600" y="385" text-anchor="middle" font-size="12" fill="#38bdf8">同一个嵌入引擎（两条链的灵魂连接）</text>
+
+  <!-- 底部结论 -->
+  <rect x="40" y="780" width="1100" height="110" rx="12" fill="#020617" stroke="#334155" stroke-width="1.5"/>
+  <text x="590" y="812" text-anchor="middle" font-size="15" font-weight="bold" fill="#e2e8f0">九篇落位：01 向量化 → 02 切片 → 03 相似检索 → 04 清洗 → 05 嵌入引擎 → 06 三库选型 → 07 显式两步 → 08 Top-K 融合 → 09 双通道</text>
+  <text x="590" y="840" text-anchor="middle" font-size="13.5" fill="#94a3b8">RAG 认知三层次：向量检索只是"找相似"，显式拼 prompt 才是"给知识"，LLM 的回答质量取决于检索质量（garbage in, garbage out）</text>
+  <text x="590" y="866" text-anchor="middle" font-size="13.5" fill="#6ee7b7">char06 = RAG 的零件库（01-06）+ 成品装配线（07-09）；char07 把检索成果升级为可管理的"上下文段"</text>
+
+  <defs>
+    <marker id="arR" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#f87171"/></marker>
+    <marker id="arB" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#38bdf8"/></marker>
+    <marker id="arG" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#34d399"/></marker>
+    <marker id="arC" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#22d3ee"/></marker>
+    <marker id="arW" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#e2e8f0"/></marker>
+  </defs>
+</svg>

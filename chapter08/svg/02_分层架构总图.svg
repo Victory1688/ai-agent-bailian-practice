@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="920" viewBox="0 0 960 920" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- 背景 -->
+  <rect width="960" height="920" fill="#0f172a"/>
+  <text x="480" y="46" text-anchor="middle" font-size="26" font-weight="bold" fill="#22d3ee">char08 分层架构总图：单 Agent 五大能力层</text>
+  <text x="480" y="74" text-anchor="middle" font-size="13" fill="#94a3b8">五层能力独立成篇、共享同一个 LLM 调用基底；层间是能力叠加而非调用依赖</text>
+
+  <!-- L5 预算层 -->
+  <rect x="180" y="110" width="600" height="110" rx="12" fill="#134e4a" stroke="#34d399" stroke-width="2.5"/>
+  <text x="480" y="145" text-anchor="middle" font-size="19" font-weight="bold" fill="#6ee7b7">L5 预算层 —— 05 自动裁剪上下文（能省）</text>
+  <text x="480" y="172" text-anchor="middle" font-size="14" fill="#d1fae5">dynamic_clip_context：priority + timestamp + length 三维排序</text>
+  <text x="480" y="196" text-anchor="middle" font-size="14" fill="#d1fae5">贪心装填：token_limit 内尽量多装，装不下跳过不终止</text>
+
+  <line x1="480" y1="220" x2="480" y2="255" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- L4 记忆层 -->
+  <rect x="180" y="258" width="600" height="110" rx="12" fill="#1e293b" stroke="#fbbf24" stroke-width="2.5"/>
+  <text x="480" y="293" text-anchor="middle" font-size="19" font-weight="bold" fill="#fbbf24">L4 记忆层 —— 04 LangChain Memory（能记）</text>
+  <text x="480" y="320" text-anchor="middle" font-size="14" fill="#fde68a">ConversationBufferWindowMemory(k=3)</text>
+  <text x="480" y="344" text-anchor="middle" font-size="14" fill="#fde68a">chat_memory 全量存 / load_memory_variables 窗口取（读时过滤）</text>
+
+  <line x1="480" y1="368" x2="480" y2="403" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- L3 容错层 -->
+  <rect x="180" y="406" width="600" height="110" rx="12" fill="#1e293b" stroke="#f87171" stroke-width="2.5"/>
+  <text x="480" y="441" text-anchor="middle" font-size="19" font-weight="bold" fill="#f87171">L3 容错层 —— 03 异常处理（能扛）</text>
+  <text x="480" y="468" text-anchor="middle" font-size="14" fill="#fecaca">工具内部 try/except 自捕获，永不向上抛</text>
+  <text x="480" y="492" text-anchor="middle" font-size="14" fill="#fecaca">[ERROR] 字符串信号 → 检测到即切换降级 prompt（LLM 常识兜底）</text>
+
+  <line x1="480" y1="516" x2="480" y2="551" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- L2 输入层 -->
+  <rect x="180" y="554" width="600" height="110" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2.5"/>
+  <text x="480" y="589" text-anchor="middle" font-size="19" font-weight="bold" fill="#a78bfa">L2 输入层 —— 02 参数解析（能听）</text>
+  <text x="480" y="616" text-anchor="middle" font-size="14" fill="#ddd6fe">parse_input 三段式规则：分词+后缀 / 关键词包含 / if-elif 优先级</text>
+  <text x="480" y="640" text-anchor="middle" font-size="14" fill="#ddd6fe">自然语言 → {region, year, focus} 结构化参数（每个参数带默认值兜底）</text>
+
+  <line x1="480" y1="664" x2="480" y2="699" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- L1 状态层 -->
+  <rect x="180" y="702" width="600" height="110" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5"/>
+  <text x="480" y="737" text-anchor="middle" font-size="19" font-weight="bold" fill="#38bdf8">L1 状态层 —— 01 状态感知（能看）</text>
+  <text x="480" y="764" text-anchor="middle" font-size="14" fill="#bae6fd">AgentState 六态：INITIALIZED → READY → RUNNING → WAITING_TOOL</text>
+  <text x="480" y="788" text-anchor="middle" font-size="14" fill="#bae6fd">→ COMPLETED / FAILED；每次变更记录 timestamp（性能探针）</text>
+
+  <!-- 基底 -->
+  <rect x="180" y="842" width="600" height="60" rx="12" fill="#020617" stroke="#22d3ee" stroke-width="2.5"/>
+  <text x="480" y="879" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">LLM 调用基底：dashscope.Generation.call（qwen-plus）</text>
+
+  <!-- 降级直达虚线 -->
+  <path d="M 810 461 C 900 461 900 872 788 872" fill="none" stroke="#f87171" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrowRed)"/>
+  <text x="912" y="665" text-anchor="middle" font-size="13" fill="#f87171" transform="rotate(90 912 665)">降级直达 LLM</text>
+
+  <!-- 最终 prompt 虚线 -->
+  <path d="M 150 165 C 55 165 55 860 172 866" fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrowGreen)"/>
+  <text x="48" y="515" text-anchor="middle" font-size="13" fill="#34d399" transform="rotate(-90 48 515)">最终 prompt 送入 LLM</text>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#f87171"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#34d399"/>
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01_具有状态感知的单Agent - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>01_具有状态感知的单Agent - 代码解析</h1>
+<div class="meta">对应文件：char08/01_具有状态感知的单Agent.py | 教材出处：第8章 单智能体系统构建实战 例8-1 | 环境实测：qwen-plus 真实调用 + 六态状态机完整流转 | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char08 开篇——<strong>把状态管理引入智能体</strong>。char02-07 的 Agent 都是"一把梭"（调 LLM 拿结果返回），内部没有显式的"我现在在干什么"的意识。本篇定义了一个 <code class="inline">AgentState</code> 六态枚举（初始化→就绪→运行→等工具→完成/失败），<code class="inline">StatefulAgent.execute()</code> 在执行过程中按阶段切换状态、把每次变更记录到 <code class="inline">history</code> 列表，<code class="inline">try/except</code> 兜底把异常路径也纳入状态机（FAILED 状态）。这是"可靠 Agent"的第一步——<strong>能看见自己在干什么，出了错能恢复</strong>。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、AgentState 六态流转速查表</h2>
+<table>
+  <tr><th>状态</th><th>含义</th><th>谁触发</th><th>下一个状态</th><th>设计意图</th></tr>
+  <tr><td>INITIALIZED</td><td>刚创建对象，task_id 已分配</td><td>__init__ 自动</td><td>READY</td><td>对象刚出生</td></tr>
+  <tr><td>READY</td><td>准备好接收任务</td><td>execute 开头</td><td>RUNNING</td><td>任务开始前的预备态</td></tr>
+  <tr><td>RUNNING</td><td>正在执行（LLM 调用阶段）</td><td>工具调用前后各一次</td><td>WAITING_TOOL / COMPLETED / FAILED</td><td>主工作态</td></tr>
+  <tr><td>WAITING_TOOL</td><td>正在等外部工具返回</td><td>工具调用前</td><td>RUNNING（工具返回后）</td><td><strong>首次承认外部依赖等待</strong>——char02-07 都没显式建模这一步</td></tr>
+  <tr><td>COMPLETED</td><td>正常完成</td><td>execute 末尾</td><td>终态</td><td>全部 OK</td></tr>
+  <tr><td>FAILED</td><td>异常失败</td><td>except 兜底</td><td>终态</td><td>任一步骤抛异常都走这里</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">状态机流转图</div>
+  <pre>
+                    execute() 开头
+  INITIALIZED ──────────────────► READY
+                                      │
+                                      ▼
+                                   RUNNING ◄──┐
+                                      │        │
+                          工具调用前    │        │ 工具返回后
+                                      ▼        │
+                                  WAITING_TOOL ─┘
+                                      │
+                          LLM 调用正常 │   LLM/工具抛异常
+                                      ▼        ▼
+                                 COMPLETED  FAILED
+                                  （终态）  （终态）
+  </pre>
+  <p>两条关键路径：正常路径是 INITIALIZED→READY→RUNNING→WAITING_TOOL→RUNNING→COMPLETED（五步状态变更），异常路径是<strong>任一步骤 → except → FAILED</strong>。try/except 把所有未预料的失败都纳入了状态机，这是"可靠"的核心保障。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程图</h2>
+<pre>
+StatefulAgent(task_id = uuid4)
+    │
+    ▼ execute(system_prompt, user_question)
+    ├─ update_state(READY)
+    ├─ 拼 full_prompt（系统提示 + 用户提问）
+    ├─ update_state(RUNNING)
+    ├─ update_state(WAITING_TOOL)
+    ├─ tool.call()  ← ForecastTool: print + sleep(1) + 返回假数据
+    ├─ update_state(RUNNING)
+    ├─ 拼 merged_prompt（full_prompt + 工具响应）
+    ├─ dashscope.Generation.call(qwen-plus)  ← 真实调用
+    ├─ update_state(COMPLETED)
+    └─ return result
+    
+    （任一步骤抛异常 → except → update_state(FAILED) → return "[ERROR]..."）
+    
+show_history() → 打印 5 条状态变更日志（时间戳 + 状态值）
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、逐段代码讲解</h2>
+<h3>4.1 AgentState 枚举：状态机的"字典"</h3>
+<pre>
+class AgentState(Enum):
+    INITIALIZED = "initialized"
+    READY = "ready"
+    RUNNING = "running"
+    WAITING_TOOL = "waiting_tool"
+    COMPLETED = "completed"
+    FAILED = "failed"
+</pre>
+<p>用 Python 枚举类做状态定义——好处是：① IDE 自动补全，不会写错字符串；② <code class="inline">state.value</code> 统一输出值（如 "running"），而 <code class="inline">AgentState.RUNNING</code> 是类型安全的引用，不会出现拼写错误（比如把 "running" 写成 "runing"）。六个状态覆盖了 Agent 从出生到死亡的完整生命周期。</p>
+<h3>4.2 StatefulAgent.__init__：去掉虚构 Agent，保留 self.tool</h3>
+<pre>
+# 原写法：self.agent = Agent(tools=tools)  ← 虚构 qwen_agent
+# 改写：直接删，StatefulAgent 内部直接调 dashscope
+self.tool = tools[0]
+</pre>
+<p>原代码用 <code class="true">Agent(tools=tools)</code> 做了一层"Agent 持有工具"的抽象，但 StatefulAgent 根本没用到这个抽象——execute 里直接调 <code class="true">self.tool.call()</code> 和 <code class="true">self.agent.chat()</code>，两个调用是平级的。改写后干脆去掉 self.agent，LLM 调用直接写在 execute 里——<strong>少一层无意义的包装，代码更扁平</strong>。</p>
+<h3>4.3 execute 方法：状态流转的骨架</h3>
+<pre>
+def execute(self, system_prompt, user_question):
+    try:
+        self.update_state(AgentState.READY)        # 状态1
+        # ... 拼 prompt ...
+        self.update_state(AgentState.RUNNING)       # 状态2
+        self.update_state(AgentState.WAITING_TOOL)  # 状态3（首次承认外部依赖）
+        tool_result = self.tool.call(user_question)
+        self.update_state(AgentState.RUNNING)       # 状态4
+        # ... 拼 merged_prompt + 调 LLM ...
+        self.update_state(AgentState.COMPLETED)     # 状态5
+        return result
+    except Exception as e:
+        self.update_state(AgentState.FAILED)        # 异常兜底
+        return f"[ERROR] {e}"
+</pre>
+<p>五个 <code class="inline">update_state</code> 调用就像五个"里程碑"——<strong>每一步做完先报状态再往下走</strong>。这个模式的好处：① 任何一步失败，FAILS 状态必然被记录，事后审计能精确定位；② 外部监控系统可以订阅状态变更事件（比如 RUNNING→WAITING_TOOL 超过 10 秒就告警工具超时）。</p>
+<h3>4.4 WAITING_TOOL：首次显式建模"外部依赖等待"</h3>
+<p>这是 char02-07 系列里<strong>第一次出现"工具调用前后的状态切换"</strong>。之前所有示例都是"调工具→拿结果→继续"，中间没有显式承认"我正在等工具"。WAITING_TOOL 状态的引入，意味着：① 工具调用可能慢（本篇 ForecastTool 就有 sleep(1)）；② 工具调用可能超时或失败；③ 可以监控"等工具等了多久"。这是从"同步一把梭"到"异步可靠 Agent"的关键一步。</p>
+
+<!-- ========== 五 ========== -->
+<h2>五、实测数据：时间戳暴露了每一步的耗时</h2>
+<div class="ok">
+  <div class="ok-title">show_history 日志的时间戳差值就是各阶段耗时</div>
+  <pre>
+2026-10-12 11:13:23 | ready          ← execute 开始
+2026-10-12 11:13:23 | running        ← 毫秒级（拼 prompt 是字符串操作）
+2026-10-12 11:13:23 | waiting_tool   ← 同上
+2026-10-12 11:13:24 | running        ← WAITING_TOOL→RUNNING：+1 秒 = ForecastTool.sleep(1)
+2026-10-12 11:13:37 | completed      ← RUNNING→COMPLETED：+13 秒 = qwen-plus 生成耗时
+  </pre>
+  <p>这个时间戳链的分析模式和 char07-05 的日志 timestamp 对比是<strong>同一家族</strong>——char07-05 是磁盘版 JSONL 日志，本篇是内存版 history 列表，都是"时间戳 = 免费性能探针"。区别是：05 篇日志跨运行存活，本篇 history 随对象销毁即消失。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、char08 开篇：从"上下文工程"到"单智能体实战"的衔接</h2>
+<table>
+  <tr><th>篇章</th><th>核心问题</th><th>关键资产</th></tr>
+  <tr><td>char07 全章</td><td>上下文怎么管</td><td>五字段表示、路由分发、JSONL 日志、MD5 缓存、三级合并</td></tr>
+  <tr><td><strong>char08-01（本篇）</strong></td><td>Agent 怎么"看得见自己"</td><td>AgentState 六态 + 状态变更记录 + try/except 兜底</td></tr>
+</table>
+<p>char07 是"数据层"（上下文的表示/存储/筛选），char08 是"控制层"（Agent 的生命周期/状态/调度）。本篇的 StatefulAgent 可以直接承接 char07 的成果：把 char07-05 的 JSONL 日志换成 char07-07 的动态合并策略当 execute 的 prompt 组装器，就是一个具备"状态感知 + 上下文工程"双重能力的生产级 Agent 雏形。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、架构视角：状态管理的三层能力</h2>
+<table>
+  <tr><th>能力层级</th><th>本篇实现</th><th>生产升级</th></tr>
+  <tr><td>状态定义</td><td>AgentState 六态枚举</td><td>可扩展（加 AUTHENTICATED / RATE_LIMITED 等业务态）</td></tr>
+  <tr><td>状态记录</td><td>内存 history 列表（随对象销毁即消失）</td><td>持久化：char07-05 JSONL 日志 / 数据库 / 专用时序存储</td></tr>
+  <tr><td>状态驱动行为</td><td>execute 内部硬编码 if/elif（状态→行为）</td><td>状态机框架（transitions / python-statemachine）/ 事件驱动架构</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学版 vs 生产版差距</h2>
+<table>
+  <tr><th>教学简化</th><th>生产要求</th></tr>
+  <tr><td>状态记录在内存 history 列表</td><td>持久化存储（char07-05 JSONL 日志同源技术），支持跨进程/跨运行状态恢复</td></tr>
+  <tr><td>execute 是同步单线程</td><td>WAITING_TOOL 应异步化（asyncio / 线程池），工具等待不阻塞主循环</td></tr>
+  <tr><td>无工具超时</td><td>WAITING_TOOL 超时（如 10 秒）自动转 FAILED + 重试</td></tr>
+  <tr><td>FAILED 只返回错误字符串</td><td>区分失败类型（ToolTimeout / LLMError / ParseError），不同类型不同重试策略</td></tr>
+  <tr><td>try/except 兜底所有异常</td><td>分层捕获：工具异常 / LLM 异常 / 系统异常分别处理，避免 ALL CATCH 吞掉关键错误</td></tr>
+  <tr><td>ForecastTool 返回假数据</td><td>真实 API + 超时兜底（char06 惯例）</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习（巩固本篇技能）</h2>
+<ol>
+  <li><strong>触发 FAILED 分支</strong>：把 ForecastTool.call 改成 <code class="inline">raise Exception("模拟工具超时")</code>，跑一次观察 FAILED 状态是否被记录、history 日志里最后一条是否是 failed。</li>
+  <li><strong>实现超时状态</strong>：给 AgentState 加一个 TIMEOUT 状态，在 WAITING_TOOL 阶段用 threading.Timer 计时（超过 5 秒就转 TIMEOUT），体会"状态机 = 业务流程的显式声明"。</li>
+  <li><strong>持久化 history</strong>：把 show_history 里的 history 列表改成 char07-05 的 JSONL 追加写——每次 update_state 就落盘，这样即使脚本崩溃，已完成的状态变更也不会丢。</li>
+  <li><strong>扩展状态机</strong>：加一个 AUTHENTICATED 状态（在 INITIALIZED→READY 之间），execute 开头先验证 API key 有效性，失败直接转 FAILED——体会"状态机可以前置业务验证"。</li>
+  <li><strong>进阶：双工具串行</strong>：再加一个 RAGRetrievalTool（模拟检索），execute 里先调检索工具再调预测工具，状态流转变成 RUNNING→WAITING_TOOL→RUNNING→WAITING_TOOL→RUNNING——观察状态机如何自然扩展到多工具场景。</li>
+</ol>
+
+</div>
+</body>
+</html>

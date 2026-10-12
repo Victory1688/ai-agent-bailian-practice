@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04_langchain的Memory使用 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>04_langchain的Memory使用 - 代码解析</h1>
+<div class="meta">对应文件：char08/04_langchain的Memory使用.py | 教材出处：第8章 单智能体系统构建实战 例8-4 | 环境实测：LangChain 1.3.18 + langchain_classic + ConversationBufferWindowMemory(k=3) + qwen-plus | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char08 第四篇——<strong>正式引入 LangChain 的 Memory 机制</strong>。前 01-03 篇的"记忆"全是手写的（history 列表、status 字段），本篇用 LangChain 提供的标准 Memory 组件 <code class="inline">ConversationBufferWindowMemory(k=3)</code> 来管理多轮对话历史：只保留最近 3 轮（6 条 message），老的自动从窗口视图里消失。核心循环是<strong>"取历史 → 拼 prompt → 调 LLM → 回写 memory"</strong>，这和 char04-03 的 BufferMemory 是同一家族，但用 LangChain 框架组件替代了手写实现。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、LangChain Memory 三种类型速查表（教材重点）</h2>
+<table>
+  <tr><th>类型</th><th>存储策略</th><th>适用场景</th><th>截断触发</th></tr>
+  <tr><td><strong>ConversationBufferMemory</strong></td><td>全量存储不截断</td><td>短对话 / 对完整历史有强依赖</td><td>永不截断 → Token 预算会爆</td></tr>
+  <tr><td><strong>ConversationBufferWindowMemory</strong>（本篇）</td><td>只保留最近 k 轮</td><td>长对话 / Token 预算有限（最常用）</td><td>每次 load_memory_variables 时窗口截断</td></tr>
+  <tr><td>ConversationSummaryMemory</td><td>LLM 摘要压缩存储</td><td>超长对话 / 历史信息密度低</td><td>超过阈值后让 LLM 写摘要替换旧消息</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">三种 Memory 的核心 trade-off</div>
+  <p><strong>Buffer</strong>：不丢信息但 Token 线性增长 → 适合只聊 2-3 轮就结束的场景。</p>
+  <p><strong>Window</strong>：只留最近 k 轮，老信息直接丢弃 → 适合长对话但用户意图主要在最近几轮的场景。<strong>这是本篇的选择，也是生产中最常用的类型</strong>。</p>
+  <p><strong>Summary</strong>：让 LLM 把旧历史压缩成一段摘要 → 适合超长对话且需要保留历史"大意"的场景，但摘要本身需要额外 LLM 调用（成本翻倍）。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程图</h2>
+<pre>
+LangChainQwenAgent.ask(user_input)
+  │
+  ├─ load_memory_variables({})['history']  ← 取 k=3 窗口视图（最近 3 轮）
+  │   注意：不是 chat_memory.messages（那个是全量）
+  │
+  ├─ 拼 full_prompt（窗口历史 + 当前问题 + 结合历史回答要求）
+  │
+  ├─ dashscope.Generation.call(qwen-plus)
+  │
+  ├─ chat_memory.add_user_message(user_input)  ← 回写（原始存储永远累积）
+  ├─ chat_memory.add_ai_message(result_content)
+  │
+  └─ 返回 result_content
+
+4 轮对话设计是故意的：
+  Round 1 → Round 4 时，Round 1 应从窗口视图中消失
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、逐段代码讲解</h2>
+<h3>4.1 ConversationBufferWindowMemory(k=3, return_messages=True)：两个关键参数</h3>
+<pre>
+memory = ConversationBufferWindowMemory(k=3, return_messages=True)
+</pre>
+<ul>
+  <li><code class="inline">k=3</code>：只保留最近 <strong>3 轮</strong>对话（1 轮 = 1 user + 1 AI = 2 条 message），窗口上限 6 条</li>
+  <li><code class="inline">return_messages=True</code>：让 <code class="inline">load_memory_variables({})['history']</code> 返回 AIMessage/HumanMessage 对象列表；如果是 False（默认），返回拼接的字符串</li>
+</ul>
+<h3>4.2 窗口截断的"两视图"设计（核心认知）</h3>
+<p>ConversationBufferWindowMemory 有<strong>两个视图</strong>，这是理解其行为的关键：</p>
+<pre>
+# 视图 A：原始存储（chat_memory.messages）
+# —— 永远累积全部消息，永不截断
+# —— 直接访问会绕开 k 窗口！（原代码的 bug）
+len(memory.chat_memory.messages)  # 4 轮后 = 8 条（全量）
+
+# 视图 B：窗口视图（load_memory_variables({})['history']）
+# —— 只返回最近 k 轮，自动截断
+len(memory.load_memory_variables({})['history'])  # 4 轮后 = 6 条（窗口）
+</pre>
+<p>这不是"先存后删"的物理截断，而是"先存后滤"的<strong>读时过滤</strong>。chat_memory 永远满的，load_memory_variables 在读取时做窗口裁剪。好处是存储逻辑极简（只管追加），坏处是内存占用随对话轮次线性增长（实际生产中如果对话很长，需要物理清理）。</p>
+<h3>4.3 ask() 的四步循环（LangChain Memory 的标准用法）</h3>
+<pre>
+def ask(self, user_input):
+    # 1. 取窗口视图（不是 chat_memory.messages！）
+    windowed = self.memory.load_memory_variables({})['history']
+    
+    # 2. 拼 prompt + 调 LLM
+    response = dashscope.Generation.call(qwen-plus, ...)
+    
+    # 3. 回写 memory（原始存储）
+    self.memory.chat_memory.add_user_message(user_input)
+    self.memory.chat_memory.add_ai_message(result_content)
+    
+    return response
+</pre>
+<p>这是 LangChain Memory 的<strong>标准使用模式</strong>——即使不通过 ConversationChain 框架直接用，也应该遵循这个四步循环。原代码的 bug 是把第 1 步写成了 <code class="inline">chat_memory.messages</code>，绕开了窗口视图，导致 k 参数形同虚设。</p>
+<h3>4.4 FakeDataFetcher：注册了但从未调用（死代码谱系）</h3>
+<p>原代码在 LangChainQwenAgent.__init__ 里初始化了 <code class="inline">FakeDataFetcher()</code>，并注册给虚构的 qwen_agent.Agent，但 ask() 方法里<strong>从未显式调用它</strong>——LLM 回答完全靠自己的预训练知识。这是 char07-03/04 路由死代码谱系的延伸：</p>
+<table>
+  <tr><th>篇</th><th>死代码</th><th>根因</th></tr>
+  <tr><td>char07-03</td><td>tool 路由分支</td><td>子任务丢失关键词</td></tr>
+  <tr><td>char07-04</td><td>hybrid 路由分支</td><td>if/elif 顺序截胡</td></tr>
+  <tr><td><strong>char08-04（本篇）</strong></td><td>FakeDataFetcher 工具</td><td>注册了但从没被调用</td></tr>
+</table>
+
+<!-- ========== 五 ========== -->
+<h2>五、实测数据：窗口截断真的生效了吗？</h2>
+<div class="ok">
+  <div class="ok-title">修复后实测：原始存储 vs 窗口视图（Round 4 时 Round 1 被裁掉）</div>
+  <pre>
+[Round 1]  用户:2022年GDP → AI → 原始存储 2 | 窗口视图 2 ✓
+[Round 2]  用户:那2023年呢 → AI → 原始存储 4 | 窗口视图 4 ✓
+[Round 3]  用户:2024年增长更快？ → AI → 原始存储 6 | 窗口视图 6 ✓ (k*2=6 到上限)
+[Round 4]  用户:依据是什么？ → AI → 原始存储 8 | 窗口视图 6 ✓ (Round 1 被窗口裁掉!)
+  </pre>
+  <p>4 轮设计是故意的：k=3 意味着 Round 4 时窗口只能看到 Rounds 2+3+4（6 条），Round 1 的"2022年GDP"查询和回答<strong>从窗口视图中消失</strong>。这正是"窗口存储"的本质——只关注最近几轮的上下文。</p>
+</div>
+<div class="warn">
+  <div class="warn-title">原代码的 bug：chat_memory.messages 绕开了窗口截断</div>
+  <p>修复前运行（直接访问 chat_memory.messages）：</p>
+  <pre>
+[Round 4]  原始存储 8 | 窗口视图 8 ✗（k 参数完全失效！）
+  </pre>
+  <p>修复后运行（用 load_memory_variables）：</p>
+  <pre>
+[Round 4]  原始存储 8 | 窗口视图 6 ✓（k=3 真正生效）
+  </pre>
+  <p>这个 bug 是 LangChain Memory 的<strong>经典陷阱</strong>——很多人以为 chat_memory.messages 就是窗口化后的结果，其实不是。<strong>chat_memory 永远是全量累积，窗口截断只在 load_memory_variables 时发生</strong>。如果手动读 chat_memory.messages，就等于绕过了整个窗口机制。</p>
+</div>
+<div class="warn">
+  <div class="warn-title">LangChain 正在废弃这套 Memory 类</div>
+  <p>运行时会看到 deprecation 警告：</p>
+  <pre>
+ConversationBufferWindowMemory was deprecated in LangChain 0.3.1 and will be removed in 2.0.0.
+Use langchain.agents.create_agent instead.
+  </pre>
+  <p>LangChain 2.0 方向是：把 Memory 的能力内置到 Agent 框架（checkpoint 持久化 + Store 长期记忆），不再推荐手动使用 ConversationBufferWindowMemory 这类 Memory 类。本篇作为教学代码保留，但生产新项目应直接用 LangGraph 的 checkpoint 机制。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、char04 ↔ char08 的 Memory 对照</h2>
+<table>
+  <tr><th>维度</th><th>char04-03 BufferMemory（手写）</th><th><strong>char08-04 本篇（LangChain 框架）</strong></th></tr>
+  <tr><td>存储容器</td><td>手写 list 手动 append</td><td>ChatMessageHistory 自动管理</td></tr>
+  <tr><td>截断</td><td>无截断（全量）</td><td>k=3 窗口截断</td></tr>
+  <tr><td>注入 prompt</td><td>手写 join 字符串</td><td>同上（框架组件只管存储不管 prompt 拼接）</td></tr>
+  <tr><td>回写</td><td>手写 append</td><td>chat_memory.add_user_message/add_ai_message</td></tr>
+  <tr><td>类型化</td><td>纯字符串</td><td>AIMessage/HumanMessage 对象（可扩展 system/tool）</td></tr>
+  <tr><td>跨进程</td><td>无</td><td>同上（默认内存存储）</td></tr>
+</table>
+<p>LangChain Memory 组件<strong>只帮你解决"怎么存"的问题，不解决"怎么用"的问题</strong>——prompt 拼接、回写时机、窗口参数，全部还是要自己管。这和 LangChain 的 Chain/Agent 框架不同（框架帮你管了全部），也是本篇选择手动四步循环而非 ConversationChain 的原因：<strong>手动模式更透明，教学时每一步都看得见</strong>。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、架构视角：对话记忆的三种技术路线</h2>
+<table>
+  <tr><th>路线</th><th>代表</th><th>截断策略</th><th>Token 成本</th><th>信息损失</th></tr>
+  <tr><td>全量存储</td><td>char04-03 BufferMemory</td><td>永不截断</td><td>线性增长</td><td>无（但迟早爆）</td></tr>
+  <tr><td><strong>窗口截断</strong></td><td><strong>本篇 WindowMemory(k=3)</strong></td><td>只读最近 k 轮</td><td>固定上限</td><td>老轮次完全丢弃</td></tr>
+  <tr><td>摘要压缩</td><td>ConversationSummaryMemory</td><td>LLM 写摘要替换旧消息</td><td>固定 + 额外摘要成本</td><td>老轮次只留大意</td></tr>
+  <tr><td>语义检索</td><td>char06 RAG + char07-07 动态合并</td><td>按相似度选 Top-K 条</td><td>固定上限</td><td>低（语义保留）</td></tr>
+</table>
+<p>第四行（语义检索）是 char07 系列的路线——把对话历史当"检索语料库"，每次按当前问题的语义相似度挑最相关的几条注入 prompt，比窗口截断更聪明。生产级 Agent 的记忆通常是<strong>窗口截断 + 语义检索</strong>的组合：窗口截断做粗筛（砍掉超老的轮次），语义检索做精选（从剩余里挑最相关的）。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学版 vs 生产版差距</h2>
+<table>
+  <tr><th>教学简化</th><th>生产要求</th></tr>
+  <tr><td>手动四步循环</td><td>用 LangGraph checkpoint 内置记忆（自动持久化 + 跨会话恢复）</td></tr>
+  <tr><td>窗口截断只在 load 时触发</td><td>chat_memory 本身物理截断（存满 k 轮就删最早的，避免内存泄漏）</td></tr>
+  <tr><td>FakeDataFetcher 注册但未调用</td><td>工具调用必须在 ask() 流程中显式出现，或用 LangChain tool agent 自动调度</td></tr>
+  <tr><td>deprecation 警告被忽略</td><td>新项目直接用 LangGraph + checkpoint，不再用 ConversationBufferWindowMemory</td></tr>
+  <tr><td>内存存储，进程销毁即消失</td><td>持久化后端（Redis / Postgres / 本地 JSON），跨会话恢复记忆</td></tr>
+  <tr><td>单 memory 实例</td><td>多会话隔离（每个 session_id 独立 memory），会话 TTL 过期清理</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习（巩固本篇技能）</h2>
+<ol>
+  <li><strong>对比两种访问方式</strong>：把 ask() 里的 load_memory_variables 改回 chat_memory.messages，跑 4 轮观察窗口视图从 6 变成 8——亲手复现原代码的 bug。</li>
+  <li><strong>改 k 值看截断效果</strong>：把 k=3 改成 k=2，跑 4 轮——Round 4 时窗口视图应该只剩 Rounds 3+4（4 条），验证 k 参数真的生效。</li>
+  <li><strong>让 FakeDataFetcher 真被调用</strong>：在 ask() 里加"先用 FakeDataFetcher 取数据，再拼进 prompt"——体会"注册了工具但没调用"和"真调用"的区别，以及 char07 死代码谱系的修复思路。</li>
+  <li><strong>升级为摘要压缩</strong>：让 ask() 在回写前检查 chat_memory 长度，超过 6 条时调 LLM 把 Round 1-2 压缩成摘要（如"用户问 2022/2023 GDP，AI 分别回答了 3.0%/5.2%"），替换掉原始消息——实现 SummaryMemory 的极简版。</li>
+  <li><strong>跨会话持久化</strong>：把 ask() 开头的 memory 改成从 JSON 文件读，结尾写回——让脚本第二次运行时还能记住第一次的对话历史（char07-05 JSONL 日志同源技术）。</li>
+</ol>
+
+</div>
+</body>
+</html>

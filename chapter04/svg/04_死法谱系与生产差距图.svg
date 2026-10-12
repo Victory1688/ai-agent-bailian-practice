@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1060" viewBox="0 0 1440 1060" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1060" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char04 死法谱系与生产差距图 —— 8 种死法现场 + 教学版 vs 生产版</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">char04 特色：AI 应用代码的常见死法每一种都有实测现场可回看（详见各篇 HTML 第六节）</text>
+
+  <!-- ============ 左半：死法谱系表 ============ -->
+  <g>
+    <rect x="40" y="100" width="800" height="700" rx="12" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+    <rect x="40" y="100" width="800" height="44" rx="12" fill="#312e2f"/>
+    <rect x="40" y="132" width="800" height="12" fill="#312e2f"/>
+    <text x="62" y="129" font-size="18" font-weight="bold" fill="#f87171">死法谱系全景（8 种现场实录）</text>
+    <text x="820" y="129" text-anchor="end" font-size="12" fill="#94a3b8">按"发现顺序"排列，越往下越隐蔽</text>
+
+    <!-- 表头 -->
+    <rect x="60" y="158" width="760" height="32" rx="4" fill="#0f172a" stroke="#475569"/>
+    <text x="76" y="179" font-size="13" font-weight="bold" fill="#22d3ee">死法</text>
+    <text x="240" y="179" font-size="13" font-weight="bold" fill="#22d3ee">篇目</text>
+    <text x="340" y="179" font-size="13" font-weight="bold" fill="#22d3ee">现象</text>
+    <text x="640" y="179" font-size="13" font-weight="bold" fill="#22d3ee">修复</text>
+
+    <!-- 行1 import 断裂 -->
+    <rect x="60" y="196" width="760" height="52" rx="4" fill="#0f172a" stroke="#334155"/>
+    <circle cx="76" cy="216" r="5" fill="#fbbf24"/>
+    <text x="92" y="216" font-size="13" font-weight="bold" fill="#e2e8f0">1. import 断裂</text>
+    <text x="240" y="216" font-size="12" fill="#94a3b8">全部 7 篇</text>
+    <text x="340" y="216" font-size="12" fill="#e2e8f0">langchain 0.x 路径在 1.x 已拆分</text>
+    <text x="340" y="236" font-size="12" fill="#fca5a5">ImportError（第一道门就过不去）</text>
+    <text x="640" y="226" font-size="12" fill="#34d399">langchain_classic / core</text>
+
+    <!-- 行2 模型不可直连 -->
+    <rect x="60" y="254" width="760" height="52" rx="4" fill="#0f172a" stroke="#334155"/>
+    <circle cx="76" cy="274" r="5" fill="#fbbf24"/>
+    <text x="92" y="274" font-size="13" font-weight="bold" fill="#e2e8f0">2. 模型不可直连</text>
+    <text x="240" y="274" font-size="12" fill="#94a3b8">全部 7 篇</text>
+    <text x="340" y="274" font-size="12" fill="#e2e8f0">OpenAI 类需 OPENAI_API_KEY</text>
+    <text x="340" y="294" font-size="12" fill="#fca5a5">认证失败 / 国内超时</text>
+    <text x="640" y="284" font-size="12" fill="#34d399">ChatTongyi + 环境变量</text>
+
+    <!-- 行3 API 误用 -->
+    <rect x="60" y="312" width="760" height="52" rx="4" fill="#0f172a" stroke="#334155"/>
+    <circle cx="76" cy="332" r="5" fill="#f87171"/>
+    <text x="92" y="332" font-size="13" font-weight="bold" fill="#e2e8f0">3. API 误用（硬错误）</text>
+    <text x="240" y="332" font-size="12" fill="#94a3b8">01</text>
+    <text x="340" y="332" font-size="12" fill="#e2e8f0">run() 遇多输出键直接抛</text>
+    <text x="340" y="352" font-size="12" fill="#fca5a5">ValueError: 输出键不匹配</text>
+    <text x="640" y="342" font-size="12" fill="#34d399">改 invoke() 字典取值</text>
+
+    <!-- 行4 类型错配 -->
+    <rect x="60" y="370" width="760" height="52" rx="4" fill="#0f172a" stroke="#334155"/>
+    <circle cx="76" cy="390" r="5" fill="#f87171"/>
+    <text x="92" y="390" font-size="13" font-weight="bold" fill="#e2e8f0">4. 类型错配（硬错误）</text>
+    <text x="240" y="390" font-size="12" fill="#94a3b8">02</text>
+    <text x="340" y="390" font-size="12" fill="#e2e8f0">字符串 "20" 乘浮点 7.25</text>
+    <text x="340" y="410" font-size="12" fill="#fca5a5">TypeError: can't multiply...</text>
+    <text x="640" y="400" font-size="12" fill="#34d399">显式 float() 转换</text>
+
+    <!-- 行5 平台不兼容 -->
+    <rect x="60" y="428" width="760" height="52" rx="4" fill="#0f172a" stroke="#334155"/>
+    <circle cx="76" cy="448" r="5" fill="#fbbf24"/>
+    <text x="92" y="448" font-size="13" font-weight="bold" fill="#e2e8f0">5. 平台不兼容</text>
+    <text x="240" y="448" font-size="12" fill="#94a3b8">04</text>
+    <text x="340" y="448" font-size="12" fill="#e2e8f0">SIGALRM / alarm 是 Unix 专属</text>
+    <text x="340" y="468" font-size="12" fill="#fca5a5">Windows 抛 AttributeError</text>
+    <text x="640" y="458" font-size="12" fill="#34d399">线程限时（3 秒语义不变）</text>
+
+    <!-- 行6 概念代码 -->
+    <rect x="60" y="486" width="760" height="66" rx="4" fill="#0f172a" stroke="#f472b6" stroke-width="1.5"/>
+    <circle cx="76" cy="512" r="5" fill="#f472b6"/>
+    <text x="92" y="512" font-size="13" font-weight="bold" fill="#f472b6">6. 概念代码（最深）</text>
+    <text x="240" y="512" font-size="12" fill="#94a3b8">06</text>
+    <text x="340" y="512" font-size="12" fill="#e2e8f0">custom_prompt 参数查无实效</text>
+    <text x="340" y="532" font-size="12" fill="#fca5a5">0.x 源码实证同样不生效 —— 纸面参数</text>
+    <text x="640" y="522" font-size="12" fill="#34d399">prefix / suffix 官方通道</text>
+
+    <!-- 行7 静默失败 -->
+    <rect x="60" y="558" width="760" height="66" rx="4" fill="#0f172a" stroke="#f87171" stroke-width="1.5"/>
+    <circle cx="76" cy="584" r="5" fill="#f87171"/>
+    <text x="92" y="584" font-size="13" font-weight="bold" fill="#f87171">7. 静默失败（最隐蔽）</text>
+    <text x="240" y="584" font-size="12" fill="#94a3b8">07</text>
+    <text x="340" y="584" font-size="12" fill="#e2e8f0">memory_key="history" 与模板</text>
+    <text x="340" y="604" font-size="12" fill="#fca5a5">{chat_history} 不匹配 → 不报错只"失忆"</text>
+    <text x="640" y="594" font-size="12" fill="#34d399">改 "chat_history" 对齐模板</text>
+
+    <!-- 行8 无兜底网络 -->
+    <rect x="60" y="630" width="760" height="66" rx="4" fill="#0f172a" stroke="#334155"/>
+    <circle cx="76" cy="656" r="5" fill="#fb923c"/>
+    <text x="92" y="656" font-size="13" font-weight="bold" fill="#e2e8f0">8. 无兜底网络调用</text>
+    <text x="240" y="656" font-size="12" fill="#94a3b8">07</text>
+    <text x="340" y="656" font-size="12" fill="#e2e8f0">openlibrary.org 国内不可达</text>
+    <text x="340" y="676" font-size="12" fill="#fca5a5">ConnectTimeout 一路抛穿打崩 Executor</text>
+    <text x="640" y="666" font-size="12" fill="#34d399">try/except + 模拟书库</text>
+
+    <!-- 对照备注 -->
+    <rect x="60" y="706" width="760" height="72" rx="6" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="76" y="732" font-size="13" font-weight="bold" fill="#34d399">对照：03 与 05 无隐藏 bug，改写后即可运行</text>
+    <text x="76" y="754" font-size="12" fill="#d1fae5">规律：显性死法（1-5）报错即修；隐性死法（6-8）"跑得通但教学目标落空"，必须实测对照教材预期输出</text>
+  </g>
+
+  <!-- ============ 右半：教学版 vs 生产版 ============ -->
+  <g>
+    <rect x="860" y="100" width="540" height="700" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <rect x="860" y="100" width="540" height="44" rx="12" fill="#312e81"/>
+    <rect x="860" y="132" width="540" height="12" fill="#312e81"/>
+    <text x="882" y="129" font-size="18" font-weight="bold" fill="#c7d2fe">教学版 vs 生产版差距</text>
+    <text x="1380" y="129" text-anchor="end" font-size="12" fill="#94a3b8">知道边界才知道方向</text>
+
+    <!-- 6 行对照 -->
+    <rect x="880" y="158" width="500" height="90" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="896" y="182" font-size="13" font-weight="bold" fill="#fbbf24">组件生命周期</text>
+    <text x="896" y="206" font-size="12" fill="#e2e8f0">教学：initialize_agent / BufferMemory</text>
+    <text x="896" y="226" font-size="12" fill="#fca5a5">（2.0 将移除）</text>
+    <text x="896" y="244" font-size="12" fill="#34d399">生产：create_agent + LangGraph checkpointing</text>
+
+    <rect x="880" y="258" width="500" height="90" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="896" y="282" font-size="13" font-weight="bold" fill="#fbbf24">记忆管理</text>
+    <text x="896" y="306" font-size="12" fill="#e2e8f0">教学：Buffer 无上限、进程内、无会话隔离</text>
+    <text x="896" y="326" font-size="12" fill="#94a3b8">（对话越长 token 越贵）</text>
+    <text x="896" y="344" font-size="12" fill="#34d399">生产：摘要/滑动窗口 + 持久化 + session 隔离</text>
+
+    <rect x="880" y="358" width="500" height="90" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="896" y="382" font-size="13" font-weight="bold" fill="#fbbf24">沙箱隔离</text>
+    <text x="896" y="406" font-size="12" fill="#e2e8f0">教学：进程内线程级沙箱（受限 eval）</text>
+    <text x="896" y="426" font-size="12" fill="#94a3b8">（防君子不防小人）</text>
+    <text x="896" y="444" font-size="12" fill="#34d399">生产：subprocess / Docker + AST 白名单</text>
+
+    <rect x="880" y="458" width="500" height="90" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="896" y="482" font-size="13" font-weight="bold" fill="#fbbf24">外部依赖</text>
+    <text x="896" y="506" font-size="12" fill="#e2e8f0">教学：数据源不可达即演示失败</text>
+    <text x="896" y="526" font-size="12" fill="#94a3b8">（维基百科 / openlibrary 国内超时）</text>
+    <text x="896" y="544" font-size="12" fill="#34d399">生产：可达源 + timeout + 降级策略</text>
+
+    <rect x="880" y="558" width="500" height="90" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="896" y="582" font-size="13" font-weight="bold" fill="#fbbf24">工具参数</text>
+    <text x="896" y="606" font-size="12" fill="#e2e8f0">教学：入参靠字符串猜测与清洗</text>
+    <text x="896" y="626" font-size="12" fill="#94a3b8">（剥书名号、去 by 后缀都是土办法）</text>
+    <text x="896" y="644" font-size="12" fill="#34d399">生产：Function Calling JSON Schema</text>
+
+    <rect x="880" y="658" width="500" height="90" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="896" y="682" font-size="13" font-weight="bold" fill="#fbbf24">安全审计</text>
+    <text x="896" y="706" font-size="12" fill="#e2e8f0">教学：无输出审计</text>
+    <text x="896" y="726" font-size="12" fill="#94a3b8">（模型说什么直接透传给用户）</text>
+    <text x="896" y="744" font-size="12" fill="#34d399">生产：输入/输出双层过滤 + 置信度预警</text>
+  </g>
+
+  <!-- ============ 底部：诊断心法 ============ -->
+  <g>
+    <rect x="40" y="830" width="1360" height="190" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="866" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">新人死法诊断四心法</text>
+
+    <rect x="70" y="886" width="310" height="110" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="86" y="912" font-size="15" font-weight="bold" fill="#22d3ee">心法一：报错先查版本</text>
+    <text x="86" y="938" font-size="13" fill="#e2e8f0">ImportError 八成是 0.x → 1.x</text>
+    <text x="86" y="960" font-size="13" fill="#e2e8f0">路径拆分，先核对 import</text>
+    <text x="86" y="982" font-size="12" fill="#94a3b8">langchain_classic / core / community</text>
+
+    <rect x="400" y="886" width="310" height="110" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="416" y="912" font-size="15" font-weight="bold" fill="#22d3ee">心法二：跑通不等于对</text>
+    <text x="416" y="938" font-size="13" fill="#e2e8f0">概念代码 / 静默失败 / 断忆</text>
+    <text x="416" y="960" font-size="13" fill="#e2e8f0">都不报错，要对照教学目标</text>
+    <text x="416" y="982" font-size="12" fill="#94a3b8">06 篇查源码、07 篇实测跨轮</text>
+
+    <rect x="730" y="886" width="310" height="110" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="746" y="912" font-size="15" font-weight="bold" fill="#22d3ee">心法三：变量名即契约</text>
+    <text x="746" y="938" font-size="13" fill="#e2e8f0">memory_key 必须与模板</text>
+    <text x="746" y="960" font-size="13" fill="#e2e8f0">变量一字不差才接得上</text>
+    <text x="746" y="982" font-size="12" fill="#94a3b8">char05 State、char08 Memory 同族陷阱</text>
+
+    <rect x="1060" y="886" width="310" height="110" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="1076" y="912" font-size="15" font-weight="bold" fill="#22d3ee">心法四：外调必有兜底</text>
+    <text x="1076" y="938" font-size="13" fill="#e2e8f0">工具里裸调外部 API</text>
+    <text x="1076" y="960" font-size="13" fill="#e2e8f0">超时异常会打崩整个 Agent</text>
+    <text x="1076" y="982" font-size="12" fill="#94a3b8">try/except + timeout 是硬要求</text>
+  </g>
+</svg>

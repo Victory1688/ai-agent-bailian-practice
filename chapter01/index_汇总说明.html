@@ -35,6 +35,18 @@
 <h1>char01 汇总说明：把大模型当"函数"用</h1>
 <div class="meta">位置：AI Agent Development Code/aiTest/char01 | 共 6 个 py 文件 | 全部已改写为阿里百炼 dashscope 真实调用 | 教学主线：提示词设计与大模型任务建模——在引入 Agent 之前，先学会"跟模型把一件事说清楚" | 姊妹篇：char02/index_汇总说明.html（智能体系统组成）</div>
 
+<!-- ========== SVG 架构图速查 ========== -->
+<div class="card">
+  <div class="card-title">SVG 独立架构图速查（点击跳转，浏览器直接打开）</div>
+  <table>
+    <tr><th>#</th><th>架构图</th><th>视角</th><th>核心内容</th></tr>
+    <tr><td>1</td><td><a href="svg/01_分层架构总图.svg">01_分层架构总图</a></td><td>分层结构</td><td>固定调用壳（L3 契约 + L0 底座）+ 三种建模变量（L1/L2）+ 6 篇落位</td></tr>
+    <tr><td>2</td><td><a href="svg/02_六篇演进线全景图.svg">02_六篇演进线全景图</a></td><td>学习路线</td><td>01→06 递进 + 03↔04 对照实验 + 两座桥通向 char02（SQL 执行 / Function Calling）</td></tr>
+    <tr><td>3</td><td><a href="svg/03_单向生命线时序图.svg">03_单向生命线时序图</a></td><td>运行时序</td><td>灵魂图：五泳道单向一问一答（无工具循环无记忆回流）+ char01/char02 生命线对比</td></tr>
+    <tr><td>4</td><td><a href="svg/04_两种建模范式与三条不变式图.svg">04_两种建模范式与三条不变式图</a></td><td>底层规律</td><td>生成类 vs 抽取类四维对照 + 三条不变式 + 教学简化 vs 生产差距 + 学习路径 6 步</td></tr>
+  </table>
+</div>
+
 <!-- ========== 一 ========== -->
 <h2>一、这组代码到底想表达什么</h2>
 <p>char01 回答大模型应用开发的<strong>第一个问题</strong>：抛开所有框架和智能体概念，<strong>调用一个大模型最本质的形态是什么？</strong>答案就一行代码——输入一个 messages 列表，返回一段文本。<code class="inline">大模型 = 一个输入提示词、输出文本的函数</code>。而全部 6 篇都在回答这个"函数"怎么用好：<strong>提示词怎么设计（01）、要不要用框架管理（02）、不同类型的任务怎么建模（03/04）、接口长什么样（05）、怎么用上下文引导多步任务（06）</strong>。</p>
@@ -213,6 +225,13 @@ char01（本目录）：模型调用内圈              char02：智能体外圈
     <li>环境变量：<code class="inline">DASHSCOPE_API_KEY</code>（阿里百炼平台），全部 6 篇共用同一读取方式</li>
     <li>02 篇额外依赖：langchain-core / langchain-community（ChatTongyi 底层复用已安装的 dashscope 包）</li>
     <li>char02 目录另有 index_汇总说明.html，覆盖智能体系统（01-08 共 8 篇），建议先读本篇再读彼篇</li>
+  </ul>
+</div>
+<div class="card">
+  <div class="card-title">配套架构资源</div>
+  <ul>
+    <li><a href="arch_汇总说明.md">arch_汇总说明.md</a> — 架构版汇总（Mermaid 关联图，VSCode/Typora/GitHub 可渲染）</li>
+    <li><a href="svg/01_分层架构总图.svg">svg/</a> — SVG 独立架构图 4 张（分层架构总图 / 六篇演进线全景图 / 单向生命线时序图 / 两种建模范式与三条不变式图，浏览器直接打开）</li>
   </ul>
 </div>
 

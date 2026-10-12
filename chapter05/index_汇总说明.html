@@ -35,6 +35,18 @@
 <h1>char05 index_汇总说明 - LangGraph 图编排技能总览</h1>
 <div class="meta">目录：char05（10 个 py 文件，01-10 全部改写验证） | 环境实测：langgraph 1.2.11 | 生成日期：2026-10-11 | 配套架构文档：arch_汇总说明.md（含 Mermaid 关联图）</div>
 
+<!-- ========== SVG 架构图速查 ========== -->
+<div class="card">
+  <div class="card-title">SVG 独立架构图速查（点击跳转，浏览器直接打开）</div>
+  <table>
+    <tr><th>#</th><th>架构图</th><th>视角</th><th>核心内容</th></tr>
+    <tr><td>1</td><td><a href="svg/01_四段演进线全景图.svg">01_四段演进线全景图</a></td><td>学习路线</td><td>10 篇 → 4 段映射（图的积木/组件入图/业务流水线/通信与并行）+ 三条不变式 + char04→05→08 定位</td></tr>
+    <tr><td>2</td><td><a href="svg/02_四种图编排形态图.svg">02_四种图编排形态图</a></td><td>拓扑结构</td><td>顺序(01)/条件边(02)/并行(10)/循环回边四个 mini 拓扑 + 三种决策机制对照 + superstep 执行模型</td></tr>
+    <tr><td>3</td><td><a href="svg/03_并行扇出汇聚时序图.svg">03_并行扇出汇聚时序图</a></td><td>运行时序</td><td>灵魂图：六泳道时序（invoke→拆解→Hub 总线→B/C 并行→D 汇聚屏障）+ 实测分工数据 + 随机分工警示</td></tr>
+    <tr><td>4</td><td><a href="svg/04_十连坑与四笔学费图.svg">04_十连坑与四笔学费图</a></td><td>踩坑谱系</td><td>State 静默失败谱系 / 降级链三部曲 / 教材输出造假谱系 / 协议名陷阱（假 MCP/假 A2A）+ 避坑四心法</td></tr>
+  </table>
+</div>
+
 <!-- ========== 一 ========== -->
 <h2>一、文件盘点与速查表</h2>
 <p>目录共 <strong>10 个 py 文件（01-10），无副本杂物，全部已完成"改写 + 运行验证"</strong>。本篇改写量系列最小——教材的图结构代码基本真实，问题集中在 State 定义（十连坑）与个别教材自带 bug。</p>
@@ -164,6 +176,7 @@
 <ul>
   <li>逐篇讲解：<a href="01_使用langgraph定义两个节点.html">01</a> · <a href="02_使用langgraph设置节点之间的条件边.html">02</a> · <a href="03_LangChain的检索工具与LangGraph集成.html">03</a> · <a href="04_LangChain函数调用工具与LangGraph集成.html">04</a> · <a href="05_基于LangGraph的简单任务流.html">05</a> · <a href="06_科研助手多步骤任务实现.html">06</a> · <a href="07_访问外部数据库进行检索.html">07</a> · <a href="08_实现LangGraph与MCP接口的映射.html">08</a> · <a href="09_A2A的多Agent通信协议传递.html">09</a> · <a href="10_通过消息总线进行广播多个Agent.html">10</a></li>
   <li>架构视角（含 4 张 Mermaid 关联图）：<a href="arch_汇总说明.md">arch_汇总说明.md</a></li>
+  <li>SVG 独立架构图（4 张）：本目录 <a href="svg/01_四段演进线全景图.svg">svg/</a> 子文件夹（四段演进线全景图 / 四种图编排形态图 / 并行扇出汇聚时序图 / 十连坑与四笔学费图，浏览器直接打开）</li>
   <li>同系列总览：char01（提示词基本功）/ char02（Agent 能力矩阵）/ char03（模型服务化）/ char04（LangChain 框架化）的 index_汇总说明.html + arch_汇总说明.md 均在各自目录</li>
 </ul>
 

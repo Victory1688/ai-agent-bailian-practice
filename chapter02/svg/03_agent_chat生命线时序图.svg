@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1150" viewBox="0 0 1440 1150" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1150" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char02 灵魂时序图 —— 一次 agent_chat 的完整生命线（8 篇共用骨架）</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">决策权在模型，执行权在本地 —— 模型是"动嘴的"，本地是"动手的"</text>
+
+  <!-- ============ 泳道头部 ============ -->
+  <g>
+    <rect x="60" y="100" width="250" height="44" rx="8" fill="#0c4a6e" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="185" y="128" text-anchor="middle" font-size="15" font-weight="bold" fill="#7dd3fc">用户</text>
+
+    <rect x="350" y="100" width="270" height="44" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="485" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#34d399">agent_chat 循环（本地）</text>
+    <text x="485" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">编排骨架 · 执行者指挥官</text>
+
+    <rect x="660" y="100" width="250" height="44" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="785" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#34d399">大模型（决策者）</text>
+    <text x="785" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">只动嘴：输出 tool_calls</text>
+
+    <rect x="950" y="100" width="230" height="44" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="1065" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#fbbf24">tool_registry（执行者）</text>
+    <text x="1065" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">只动手：真正干活的函数</text>
+
+    <rect x="1220" y="100" width="160" height="44" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="1300" y="128" text-anchor="middle" font-size="15" font-weight="bold" fill="#a78bfa">memory</text>
+  </g>
+
+  <!-- 泳道竖线 -->
+  <line x1="185" y1="144" x2="185" y2="1010" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="485" y1="144" x2="485" y2="1010" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="785" y1="144" x2="785" y2="1010" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="1065" y1="144" x2="1065" y2="1010" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="1300" y1="144" x2="1300" y2="1010" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+
+  <!-- ============ 主流程 ============ -->
+  <g>
+    <!-- 1 用户输入 -->
+    <line x1="185" y1="176" x2="477" y2="176" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrBlue)"/>
+    <text x="330" y="168" text-anchor="middle" font-size="12" fill="#7dd3fc">user_input</text>
+
+    <!-- 2 记忆注入 -->
+    <line x1="485" y1="204" x2="1292" y2="204" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrPurple)"/>
+    <text x="890" y="196" text-anchor="middle" font-size="12" fill="#a78bfa">memory 注入 system + 历史消息（框架不帮记，全显式传递）</text>
+
+    <!-- loop 框 -->
+    <rect x="330" y="232" width="1070" height="480" rx="10" fill="none" stroke="#22d3ee" stroke-width="2" stroke-dasharray="8,5"/>
+    <rect x="350" y="220" width="330" height="26" fill="#0f172a"/>
+    <text x="362" y="238" font-size="14" font-weight="bold" fill="#22d3ee">loop 直到模型不再调工具</text>
+
+    <!-- 3 循环体：本地 → 模型 -->
+    <line x1="485" y1="274" x2="777" y2="274" stroke="#34d399" stroke-width="2" marker-end="url(#arrGreen)"/>
+    <text x="632" y="266" text-anchor="middle" font-size="12" fill="#34d399">messages + tools 说明书（每个工具的名字与用途）</text>
+
+    <!-- 4 模型分支 -->
+    <rect x="640" y="298" width="500" height="70" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+    <text x="656" y="322" font-size="13" font-weight="bold" fill="#34d399">分支 A：返回 tool_calls（dict 列表）</text>
+    <text x="656" y="344" font-size="12" fill="#d1fae5" font-family="Consolas, monospace">call['function']['name'] → 工具名</text>
+    <text x="656" y="362" font-size="12" fill="#d1fae5" font-family="Consolas, monospace">json.loads(call['function']['arguments']) → 参数</text>
+
+    <!-- 5 解析 + dispatch -->
+    <line x1="485" y1="396" x2="1057" y2="396" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrYellow)"/>
+    <text x="770" y="388" text-anchor="middle" font-size="12" fill="#fbbf24">json.loads 解析参数后 dispatch 执行（注册表按名字取函数）</text>
+
+    <!-- 6 工具返回 -->
+    <line x1="1065" y1="428" x2="493" y2="428" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrYellow)"/>
+    <text x="770" y="420" text-anchor="middle" font-size="12" fill="#fbbf24">工具结果（字符串 · 永不抛异常 · 出错返回"失败：xxx"）</text>
+
+    <!-- 7 回传模型 -->
+    <line x1="485" y1="460" x2="777" y2="460" stroke="#34d399" stroke-width="2" marker-end="url(#arrGreen)"/>
+    <text x="632" y="452" text-anchor="middle" font-size="12" fill="#34d399">role=tool 结果回传（把错误当数据喂回去，模型才知道"换个办法"）</text>
+
+    <!-- 分支 B -->
+    <rect x="640" y="492" width="500" height="56" rx="8" fill="#0c4a6e" stroke="#22d3ee" stroke-width="2"/>
+    <text x="656" y="516" font-size="13" font-weight="bold" fill="#7dd3fc">分支 B：无 tool_calls → 循环退出</text>
+    <text x="656" y="538" font-size="12" fill="#7dd3fc">模型认为信息已足够，直接给出最终回答</text>
+
+    <!-- 8 最终回答 -->
+    <line x1="785" y1="580" x2="493" y2="580" stroke="#34d399" stroke-width="2" marker-end="url(#arrGreen)"/>
+    <text x="632" y="572" text-anchor="middle" font-size="12" fill="#34d399">最终回答（自然语言）</text>
+
+    <!-- 9 回写 memory -->
+    <line x1="485" y1="632" x2="1292" y2="632" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrPurple)"/>
+    <text x="890" y="624" text-anchor="middle" font-size="12" fill="#a78bfa">保存本轮问答（03 篇起落盘 JSON，04 篇起可注销清理）</text>
+
+    <!-- 10 返回用户 -->
+    <path d="M 485 664 L 485 692 L 193 692" stroke="#7dd3fc" stroke-width="2" fill="none" marker-end="url(#arrBlue)"/>
+    <text x="330" y="684" text-anchor="middle" font-size="12" fill="#7dd3fc">回答 + 更新后的 memory（reply, memory = agent_chat(...)）</text>
+  </g>
+
+  <!-- ============ 实测注脚 ============ -->
+  <g>
+    <rect x="60" y="730" width="1320" height="56" rx="8" fill="#78350f" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="76" y="754" font-size="13" font-weight="bold" fill="#fde68a">实测注脚（02 篇 schedule_meeting）：第 1 轮模型解析"周三下午和小王开会" → 调工具 → 返回"已安排"</text>
+    <text x="76" y="776" font-size="12" fill="#fde68a">第 2 轮问"参会人有谁" → 模型不调工具直接从 memory 里的工具结果作答 —— 分支 A 与分支 B 在真实对话中交替出现</text>
+  </g>
+
+  <!-- ============ 底部要点 ============ -->
+  <g>
+    <rect x="60" y="806" width="1320" height="300" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="842" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">这张时序图回答的三个核心问题</text>
+
+    <text x="100" y="878" font-size="14" fill="#d1fae5">Q1 为什么说"决策权在模型，执行权在本地"？ —— 模型只输出"想调什么工具 + JSON 参数"，真正调用函数的是本地 tool_registry.get(fn_name) —— 模型动嘴、本地动手</text>
+    <text x="100" y="908" font-size="14" fill="#d1fae5">Q2 工具为什么必须"永不抛异常"？ —— 工具结果要作为 role=tool 消息回流给模型，抛异常会打断整个循环；把错误当数据喂回去，模型才知道"换个办法"</text>
+    <text x="100" y="938" font-size="14" fill="#d1fae5">Q3 为什么 memory 要显式传递？ —— reply, memory = agent_chat(config, input, memory)：记什么、记多久、存哪里全部可见 —— 02 task_state 是业务状态，memory 是对话记忆，分工不混用</text>
+
+    <text x="100" y="976" font-size="13" fill="#94a3b8">最重要的架构洞察：大模型应用开发 = 一套固定编排骨架 + 一批可插拔的工具执行体。骨架学一遍就够，之后所有工作只是把业务能力封装成"永不抛异常、返回字符串"的工具函数</text>
+    <text x="100" y="1004" font-size="12" fill="#94a3b8">跨章对照：char04 initialize_agent 把这个循环装进黑盒（AgentExecutor）→ char05 LangGraph 把黑盒拆成显式图 → char03-06 揭晓 tool_calls 的标准协议形态（Function Calling）</text>
+    <text x="100" y="1028" font-size="12" fill="#64748b">跨章呼应：char05-04 的"工具参数清洗"对应本图 json.loads 解析环节 —— 模型传参带噪是常态，骨架与工具都要扛</text>
+  </g>
+
+  <defs>
+    <marker id="arrBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="arrGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#34d399"/>
+    </marker>
+    <marker id="arrYellow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrPurple" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#a78bfa"/>
+    </marker>
+  </defs>
+</svg>

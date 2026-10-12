@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1000" viewBox="0 0 1180 1000" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- 背景 -->
+  <rect width="1180" height="1000" fill="#0f172a"/>
+  <text x="590" y="44" text-anchor="middle" font-size="25" font-weight="bold" fill="#22d3ee">char08 灵魂图：一个完整请求的生命周期（五篇合一）</text>
+  <text x="590" y="72" text-anchor="middle" font-size="13" fill="#94a3b8">听懂(02) → 记住(04) → 精打细算(05) → 扛住故障(03) → 全程可观测(01)</text>
+
+  <!-- 参与者泳道 -->
+  <g font-size="16" font-weight="bold" text-anchor="middle">
+    <rect x="60" y="100" width="130" height="42" rx="8" fill="#1e293b" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="125" y="127" fill="#e2e8f0">用户</text>
+
+    <rect x="240" y="100" width="150" height="42" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <text x="315" y="127" fill="#a78bfa">02 参数解析</text>
+
+    <rect x="440" y="100" width="150" height="42" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <text x="515" y="127" fill="#fbbf24">04 Memory</text>
+
+    <rect x="640" y="100" width="150" height="42" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <text x="715" y="127" fill="#34d399">05 动态剪辑</text>
+
+    <rect x="840" y="100" width="150" height="42" rx="8" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+    <text x="915" y="127" fill="#f87171">工具+03兜底</text>
+
+    <rect x="1040" y="100" width="110" height="42" rx="8" fill="#020617" stroke="#22d3ee" stroke-width="2"/>
+    <text x="1095" y="127" fill="#22d3ee">qwen-plus</text>
+  </g>
+
+  <!-- 泳道生命线 -->
+  <g stroke="#334155" stroke-width="1.5" stroke-dasharray="5 5">
+    <line x1="125" y1="142" x2="125" y2="950"/>
+    <line x1="315" y1="142" x2="315" y2="950"/>
+    <line x1="515" y1="142" x2="515" y2="950"/>
+    <line x1="715" y1="142" x2="715" y2="950"/>
+    <line x1="915" y1="142" x2="915" y2="950"/>
+    <line x1="1095" y1="142" x2="1095" y2="950"/>
+  </g>
+
+  <!-- 消息 -->
+  <g font-size="13" fill="#e2e8f0">
+    <!-- 1 -->
+    <line x1="125" y1="185" x2="315" y2="185" stroke="#a78bfa" stroke-width="2" marker-end="url(#arA)"/>
+    <text x="220" y="177" text-anchor="middle">"请预测2024年美国GDP"</text>
+
+    <!-- 2 self -->
+    <rect x="330" y="205" width="330" height="40" rx="6" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="495" y="230" text-anchor="middle" fill="#ddd6fe">parse_input → {region:美国, year:2024}</text>
+
+    <!-- 3 -->
+    <line x1="315" y1="285" x2="515" y2="285" stroke="#fbbf24" stroke-width="2" marker-end="url(#arY)"/>
+    <text x="415" y="277" text-anchor="middle">取窗口历史</text>
+
+    <!-- 4 self -->
+    <rect x="530" y="305" width="330" height="56" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="695" y="328" text-anchor="middle" fill="#fde68a">load_memory_variables：k=3 窗口视图（读时过滤）</text>
+    <text x="695" y="350" text-anchor="middle" fill="#f87171">陷阱：chat_memory.messages 是全量，绕开截断</text>
+
+    <!-- 5 -->
+    <line x1="515" y1="400" x2="715" y2="400" stroke="#34d399" stroke-width="2" marker-end="url(#arG)"/>
+    <text x="615" y="392" text-anchor="middle">池子里挑段</text>
+
+    <!-- 6 self -->
+    <rect x="730" y="420" width="330" height="72" rx="6" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="895" y="443" text-anchor="middle" fill="#d1fae5">priority 排序 + 贪心装填</text>
+    <text x="895" y="465" text-anchor="middle" fill="#d1fae5">token_limit 内尽量多装，装不下跳过不终止</text>
+    <text x="895" y="485" text-anchor="middle" fill="#6ee7b7">system 段永远优先</text>
+
+    <!-- 7 -->
+    <line x1="715" y1="530" x2="915" y2="530" stroke="#f87171" stroke-width="2" marker-end="url(#arR)"/>
+    <text x="815" y="522" text-anchor="middle">tool.call(params)</text>
+
+    <!-- 8 分支框 -->
+    <rect x="700" y="550" width="430" height="130" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+    <text x="915" y="575" text-anchor="middle" fill="#94a3b8" font-weight="bold">alt 分支（03 篇核心）</text>
+    <line x1="715" y1="592" x2="915" y2="592" stroke="#34d399" stroke-width="2" marker-end="url(#arG)"/>
+    <text x="800" y="587" text-anchor="middle" fill="#6ee7b7" font-size="12">工具正常 → 返回数据</text>
+    <line x1="915" y1="622" x2="1095" y2="622" stroke="#22d3ee" stroke-width="2" marker-end="url(#arC)"/>
+    <text x="1005" y="616" text-anchor="middle" fill="#7dd3fc" font-size="12">正常 prompt（数据支撑）</text>
+    <line x1="715" y1="655" x2="915" y2="655" stroke="#f87171" stroke-width="2" marker-end="url(#arR)"/>
+    <text x="800" y="650" text-anchor="middle" fill="#fca5a5" font-size="12">工具失败 → [ERROR] 字符串</text>
+    <line x1="915" y1="672" x2="1095" y2="672" stroke="#f87171" stroke-width="2" marker-end="url(#arR)"/>
+    <text x="1005" y="667" text-anchor="middle" fill="#fca5a5" font-size="12">降级 prompt（LLM 常识兜底）</text>
+    <text x="915" y="700" text-anchor="middle" fill="#94a3b8" font-size="12">工具内部 try/except 自捕获，永不向上抛</text>
+
+    <!-- 9 LLM 回 -->
+    <line x1="1095" y1="720" x2="715" y2="720" stroke="#22d3ee" stroke-width="2" marker-end="url(#arC)"/>
+    <text x="905" y="712" text-anchor="middle" fill="#7dd3fc">生成回答</text>
+
+    <!-- 10 状态机 self -->
+    <rect x="440" y="745" width="250" height="76" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+    <text x="565" y="770" text-anchor="middle" fill="#7dd3fc">01 状态机流转</text>
+    <text x="565" y="790" text-anchor="middle" fill="#bae6fd" font-size="12">READY→RUNNING→WAITING_TOOL</text>
+    <text x="565" y="808" text-anchor="middle" fill="#bae6fd" font-size="12">→RUNNING→COMPLETED（timestamp 链）</text>
+
+    <!-- 11 回写 -->
+    <line x1="515" y1="860" x2="515" y2="890" stroke="#fbbf24" stroke-width="2" marker-end="url(#arY)"/>
+    <text x="640" y="880" text-anchor="middle" fill="#fde68a">回写 add_user/ai_message</text>
+
+    <!-- 12 返回 -->
+    <line x1="125" y1="930" x2="715" y2="930" stroke="#e2e8f0" stroke-width="2" marker-end="url(#arW)"/>
+    <text x="420" y="922" text-anchor="middle">最终回答返回用户</text>
+  </g>
+
+  <defs>
+    <marker id="arA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#a78bfa"/></marker>
+    <marker id="arY" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#fbbf24"/></marker>
+    <marker id="arG" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#34d399"/></marker>
+    <marker id="arR" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#f87171"/></marker>
+    <marker id="arC" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#22d3ee"/></marker>
+    <marker id="arW" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#e2e8f0"/></marker>
+  </defs>
+</svg>

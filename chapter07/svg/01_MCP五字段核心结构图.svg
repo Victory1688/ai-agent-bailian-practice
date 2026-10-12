@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="760" viewBox="0 0 1180 760" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect width="1180" height="760" fill="#0f172a"/>
+  <text x="590" y="46" text-anchor="middle" font-size="25" font-weight="bold" fill="#22d3ee">char07 灵魂数据结构：MCP 上下文段五字段（01 篇核心资产）</text>
+  <text x="590" y="74" text-anchor="middle" font-size="13" fill="#94a3b8">build_context_segment 是全章七篇的公共底座——01/02/07 直接复用，03-06 的一切策略都作用在这个结构上</text>
+
+  <!-- 左：LangChain 两字段对照 -->
+  <rect x="60" y="120" width="280" height="230" rx="12" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+  <text x="200" y="152" text-anchor="middle" font-size="17" font-weight="bold" fill="#94a3b8">LangChain messages（对照）</text>
+  <rect x="90" y="172" width="220" height="48" rx="6" fill="#020617" stroke="#475569" stroke-width="1.5"/>
+  <text x="200" y="193" text-anchor="middle" font-size="14" fill="#e2e8f0">role: "user"</text>
+  <text x="200" y="212" text-anchor="middle" font-size="14" fill="#e2e8f0">content: "你好"</text>
+  <text x="200" y="248" text-anchor="middle" font-size="13" fill="#94a3b8">只有 2 个字段，扁平结构</text>
+  <text x="200" y="270" text-anchor="middle" font-size="13" fill="#f87171">没有类型 / 任务隔离 / 元信息</text>
+  <text x="200" y="292" text-anchor="middle" font-size="13" fill="#f87171">不可追溯、不可恢复</text>
+  <text x="200" y="326" text-anchor="middle" font-size="12" fill="#64748b">char01-06 的隐式上下文都是这种</text>
+
+  <!-- 中间箭头 -->
+  <line x1="348" y1="235" x2="430" y2="235" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arC)"/>
+  <text x="389" y="222" text-anchor="middle" font-size="13" fill="#22d3ee">结构化升级</text>
+
+  <!-- 中：五字段核心结构 -->
+  <rect x="440" y="120" width="330" height="480" rx="14" fill="#134e4a" stroke="#22d3ee" stroke-width="3"/>
+  <text x="605" y="155" text-anchor="middle" font-size="18" font-weight="bold" fill="#6ee7b7">上下文段 ContextSegment</text>
+  <text x="605" y="178" text-anchor="middle" font-size="12" fill="#a7f3d0">build_context_segment() 返回值</text>
+
+  <g font-size="14">
+    <rect x="470" y="196" width="270" height="62" rx="6" fill="#020617" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="605" y="221" text-anchor="middle" fill="#22d3ee" font-weight="bold">role：角色</text>
+    <text x="605" y="243" text-anchor="middle" fill="#a5f3fc">user / system / tool / model</text>
+
+    <rect x="470" y="268" width="270" height="62" rx="6" fill="#020617" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="605" y="293" text-anchor="middle" fill="#22d3ee" font-weight="bold">content：内容</text>
+    <text x="605" y="315" text-anchor="middle" fill="#a5f3fc">上下文信息本体</text>
+
+    <rect x="470" y="340" width="270" height="62" rx="6" fill="#020617" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="605" y="365" text-anchor="middle" fill="#22d3ee" font-weight="bold">type：段落类型</text>
+    <text x="605" y="387" text-anchor="middle" fill="#a5f3fc">input / response / observation ...</text>
+
+    <rect x="470" y="412" width="270" height="62" rx="6" fill="#020617" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="605" y="437" text-anchor="middle" fill="#22d3ee" font-weight="bold">task_id：任务标识</text>
+    <text x="605" y="459" text-anchor="middle" fill="#a5f3fc">跨任务隔离（可追溯的关键）</text>
+
+    <rect x="470" y="484" width="270" height="62" rx="6" fill="#020617" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="605" y="509" text-anchor="middle" fill="#22d3ee" font-weight="bold">meta：元信息</text>
+    <text x="605" y="531" text-anchor="middle" fill="#a5f3fc">时间戳 / 状态码 / 来源 / is_mock</text>
+  </g>
+
+  <text x="605" y="578" text-anchor="middle" font-size="13" fill="#6ee7b7">JSON 可序列化 → 天然支持落盘与恢复</text>
+
+  <!-- 右：type 枚举扩展 -->
+  <rect x="840" y="120" width="280" height="480" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+  <text x="980" y="152" text-anchor="middle" font-size="17" font-weight="bold" fill="#a78bfa">type 枚举的扩展史</text>
+
+  <g font-size="13.5">
+    <rect x="865" y="175" width="230" height="44" rx="6" fill="#020617" stroke="#475569" stroke-width="1.5"/>
+    <text x="980" y="202" text-anchor="middle" fill="#e2e8f0">01 篇：input / response / observation</text>
+
+    <line x1="980" y1="219" x2="980" y2="238" stroke="#a78bfa" stroke-width="2" marker-end="url(#arA)"/>
+
+    <rect x="865" y="242" width="230" height="88" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="980" y="268" text-anchor="middle" fill="#ddd6fe" font-weight="bold">02 篇新增 4 类标注</text>
+    <text x="980" y="290" text-anchor="middle" fill="#c4b5fd">system（角色风格）/ memory（偏好）</text>
+    <text x="980" y="312" text-anchor="middle" fill="#c4b5fd">input（提问）/ tool（工具结果）</text>
+
+    <line x1="980" y1="330" x2="980" y2="349" stroke="#a78bfa" stroke-width="2" marker-end="url(#arA)"/>
+
+    <rect x="865" y="353" width="230" height="66" rx="6" fill="#020617" stroke="#34d399" stroke-width="1.5"/>
+    <text x="980" y="379" text-anchor="middle" fill="#6ee7b7" font-weight="bold">生产可继续扩展</text>
+    <text x="980" y="402" text-anchor="middle" fill="#86efac">feedback（反馈）/ plan（规划）</text>
+
+    <rect x="865" y="445" width="230" height="130" rx="6" fill="#020617" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="980" y="471" text-anchor="middle" fill="#fbbf24" font-weight="bold">02 篇实测结论</text>
+    <text x="980" y="494" text-anchor="middle" fill="#fde68a">三类标注全部生效：</text>
+    <text x="980" y="516" text-anchor="middle" fill="#fde68a">专业 = system</text>
+    <text x="980" y="538" text-anchor="middle" fill="#fde68a">简明 = memory</text>
+    <text x="980" y="560" text-anchor="middle" fill="#fde68a">有依据 = tool</text>
+  </g>
+
+  <!-- 底部：全章复用链 -->
+  <rect x="60" y="630" width="1060" height="90" rx="10" fill="#020617" stroke="#334155" stroke-width="1.5"/>
+  <text x="590" y="662" text-anchor="middle" font-size="15" font-weight="bold" fill="#e2e8f0">五字段结构的全章复用链：01 定义 → 02 四类标注组装 → 03-04 路由分发 → 05 落盘留痕 → 06 缓存回放 → 07 筛选合并</text>
+  <text x="590" y="694" text-anchor="middle" font-size="13" fill="#94a3b8">05 篇日志字段扩展为七字段（+model/duration）；07 篇剪辑版扩展为六字段（+timestamp/priority/length）——字段设计跟着用途走</text>
+
+  <defs>
+    <marker id="arC" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#22d3ee"/></marker>
+    <marker id="arA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#a78bfa"/></marker>
+  </defs>
+</svg>

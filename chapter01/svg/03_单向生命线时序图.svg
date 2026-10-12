@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1150" viewBox="0 0 1440 1150" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1150" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char01 灵魂时序图 —— 一次提示词任务的单向生命线（全系列不变）</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">单向一问一答，没有工具循环、没有记忆回流 —— 这就是"把模型当函数用"的全部含义</text>
+
+  <!-- ============ 泳道头部 ============ -->
+  <g>
+    <rect x="60" y="100" width="230" height="44" rx="8" fill="#0c4a6e" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="175" y="128" text-anchor="middle" font-size="15" font-weight="bold" fill="#7dd3fc">用户任务</text>
+
+    <rect x="330" y="100" width="260" height="44" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="460" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#34d399">提示词建模（01/02）</text>
+    <text x="460" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">角色 + 任务 + 约束</text>
+
+    <rect x="630" y="100" width="240" height="44" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="750" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#fbbf24">调用契约（05）</text>
+    <text x="750" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">system/user + 参数</text>
+
+    <rect x="910" y="100" width="220" height="44" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="1020" y="128" text-anchor="middle" font-size="15" font-weight="bold" fill="#a78bfa">大模型</text>
+
+    <rect x="1170" y="100" width="210" height="44" rx="8" fill="#1e293b" stroke="#f472b6" stroke-width="1.5"/>
+    <text x="1275" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#f472b6">输出解析（03/04）</text>
+    <text x="1275" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">JSON / SQL / 纯文本</text>
+  </g>
+
+  <!-- 泳道竖线 -->
+  <line x1="175" y1="144" x2="175" y2="880" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="460" y1="144" x2="460" y2="880" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="750" y1="144" x2="750" y2="880" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="1020" y1="144" x2="1020" y2="880" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="1275" y1="144" x2="1275" y2="880" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+
+  <!-- ============ 主流程（单向） ============ -->
+  <g>
+    <!-- 1 任务进建模 -->
+    <line x1="175" y1="180" x2="452" y2="180" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrBlue)"/>
+    <text x="315" y="172" text-anchor="middle" font-size="12" fill="#7dd3fc">原始需求（如"把这段话摘要"）</text>
+
+    <!-- 2 模板三要素 -->
+    <rect x="330" y="206" width="480" height="60" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="346" y="230" font-size="13" font-weight="bold" fill="#34d399">装进模板：角色 + 任务 + 约束</text>
+    <text x="346" y="252" font-size="12" fill="#94a3b8">01 手拼占位符 → 02 变量化 PromptTemplate（同一动作两种工程度）</text>
+
+    <!-- 3 建模 → 契约 -->
+    <line x1="460" y1="292" x2="742" y2="292" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrYellow)"/>
+    <text x="606" y="284" text-anchor="middle" font-size="12" fill="#fbbf24">填充后的 prompt</text>
+
+    <!-- 4 契约组装 -->
+    <rect x="620" y="318" width="480" height="60" rx="8" fill="#78350f" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="636" y="342" font-size="13" font-weight="bold" fill="#fde68a">组装 messages：system（你是谁）+ user（干什么）</text>
+    <text x="636" y="364" font-size="12" fill="#94a3b8">6 篇共用此契约 —— 学一遍用全章（05 篇定标准）</text>
+
+    <!-- 5 契约 → 模型 -->
+    <line x1="750" y1="404" x2="1012" y2="404" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrPurple)"/>
+    <text x="882" y="396" text-anchor="middle" font-size="12" fill="#a78bfa">dashscope 调用（temperature / max_tokens）</text>
+
+    <!-- 6 模型生成 -->
+    <rect x="900" y="430" width="320" height="60" rx="8" fill="#312e81" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="916" y="454" font-size="13" font-weight="bold" fill="#c7d2fe">模型生成（唯一"智能"环节）</text>
+    <text x="916" y="476" font-size="12" fill="#94a3b8">其余环节都是确定性工程 —— 智能全在这格</text>
+
+    <!-- 7 模型 → 输出解析 -->
+    <line x1="1020" y1="516" x2="1267" y2="516" stroke="#f472b6" stroke-width="2" marker-end="url(#arrPink)"/>
+    <text x="1145" y="508" text-anchor="middle" font-size="12" fill="#f472b6">文本输出（自然语言）</text>
+
+    <!-- 8 解析分支 -->
+    <rect x="1080" y="542" width="300" height="150" rx="8" fill="#0f172a" stroke="#f472b6" stroke-width="1.5"/>
+    <text x="1096" y="568" font-size="13" font-weight="bold" fill="#f472b6">按约定解析（三种结局）</text>
+    <text x="1096" y="594" font-size="12" fill="#e2e8f0">· 纯文本（01 摘要）</text>
+    <text x="1096" y="618" font-size="12" fill="#e2e8f0">· SQL 文本（03，不执行）</text>
+    <text x="1096" y="642" font-size="12" fill="#e2e8f0">· JSON（04，样例锚定）</text>
+    <text x="1096" y="672" font-size="11" fill="#f87171">风险：模型偶尔不守约 → char02 tools 解法</text>
+
+    <!-- 9 返回用户（长回线） -->
+    <path d="M 1170 716 L 750 716 L 750 744 L 460 744 L 460 772 L 183 772" stroke="#7dd3fc" stroke-width="2" fill="none" marker-end="url(#arrBlue)"/>
+    <text x="720" y="736" text-anchor="middle" font-size="12" fill="#7dd3fc">结构化结果返回用户 —— 生命线到此为止，没有回路</text>
+  </g>
+
+  <!-- ============ 单向终点标注 ============ -->
+  <g>
+    <rect x="90" y="800" width="1260" height="60" rx="8" fill="#7f1d1d" stroke="#f87171" stroke-width="1.5"/>
+    <text x="720" y="826" text-anchor="middle" font-size="14" font-weight="bold" fill="#fca5a5">生命线的终点就是终点 —— 没有 role=tool 回流、没有 memory 持久化、没有循环</text>
+    <text x="720" y="848" text-anchor="middle" font-size="12" fill="#fecaca">char02 只是给这条单向线加了两个回路：工具执行回路 + 记忆持久化回路</text>
+  </g>
+
+  <!-- ============ 底部：char01 vs char02 生命线对比 ============ -->
+  <g>
+    <rect x="60" y="890" width="1320" height="220" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="926" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">与 char02 生命线对比（一眼看懂两章的分界）</text>
+
+    <rect x="90" y="946" width="600" height="140" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="106" y="974" font-size="14" font-weight="bold" fill="#34d399">char01：单向生命线（本图）</text>
+    <text x="106" y="1000" font-size="12" fill="#e2e8f0">任务 → 建模 → 契约 → 模型 → 解析 → 结果（一问一答结束）</text>
+    <text x="106" y="1024" font-size="12" fill="#94a3b8">模型是"函数"：input 是 prompt，output 是文本</text>
+    <text x="106" y="1048" font-size="12" fill="#94a3b8">06 篇的上下文引导是唯一的"回路萌芽"（手工版）</text>
+
+    <rect x="720" y="946" width="630" height="140" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="736" y="974" font-size="14" font-weight="bold" fill="#fbbf24">char02：闭环生命线（加两个回路）</text>
+    <text x="736" y="1000" font-size="12" fill="#e2e8f0">模型输出 tool_calls → 本地执行 → 结果回流 → 再问模型（直到不调工具）</text>
+    <text x="736" y="1024" font-size="12" fill="#94a3b8">模型是"决策者"：只动嘴，本地动手（tool_registry）</text>
+    <text x="736" y="1048" font-size="12" fill="#94a3b8">memory 显式传递 + 落盘持久化（03/04 篇补齐"记与忘"）</text>
+  </g>
+
+  <defs>
+    <marker id="arrBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="arrYellow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrPurple" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrPink" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#f472b6"/>
+    </marker>
+  </defs>
+</svg>

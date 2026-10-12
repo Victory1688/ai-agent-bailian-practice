@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1180" viewBox="0 0 1440 1180" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1180" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char04 灵魂时序图 —— ReAct Agent 跨轮工具链生命线（07 篇）</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">搜书 → 记住第一本 → 查详情：第二轮的"第一本书"全部来自记忆 —— memory_key 配错即静默断忆</text>
+
+  <!-- ============ 泳道头部 ============ -->
+  <g>
+    <rect x="60" y="100" width="250" height="44" rx="8" fill="#0c4a6e" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="185" y="128" text-anchor="middle" font-size="15" font-weight="bold" fill="#7dd3fc">用户</text>
+
+    <rect x="350" y="100" width="260" height="44" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="480" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#fbbf24">AgentExecutor（黑盒）</text>
+    <text x="480" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">char02 手写循环的框架版</text>
+
+    <rect x="650" y="100" width="250" height="44" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="775" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#a78bfa">ConversationBufferMemory</text>
+    <text x="775" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">chat_history 键值对</text>
+
+    <rect x="940" y="100" width="220" height="44" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="1050" y="128" text-anchor="middle" font-size="15" font-weight="bold" fill="#34d399">qwen-plus</text>
+
+    <rect x="1200" y="100" width="180" height="44" rx="8" fill="#1e293b" stroke="#f472b6" stroke-width="1.5"/>
+    <text x="1290" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#f472b6">工具 x2</text>
+    <text x="1290" y="140" text-anchor="middle" font-size="11" fill="#94a3b8">SearchBooks / GetBookDetails</text>
+  </g>
+
+  <!-- 泳道竖线 -->
+  <line x1="185" y1="144" x2="185" y2="1080" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="480" y1="144" x2="480" y2="1080" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="775" y1="144" x2="775" y2="1080" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="1050" y1="144" x2="1050" y2="1080" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="1290" y1="144" x2="1290" y2="1080" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+
+  <!-- ============ 第一轮 ============ -->
+  <g>
+    <rect x="60" y="160" width="1320" height="30" rx="6" fill="#0c4a6e" opacity="0.55"/>
+    <text x="80" y="181" font-size="14" font-weight="bold" fill="#7dd3fc">第 1 轮："我想查几本关于人工智能的书"</text>
+
+    <!-- 1. 用户→Executor -->
+    <line x1="185" y1="206" x2="472" y2="206" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrBlue)"/>
+    <text x="328" y="198" text-anchor="middle" font-size="12" fill="#7dd3fc">agent.run(输入)</text>
+
+    <!-- 2. Executor→Memory 注入 -->
+    <line x1="480" y1="234" x2="783" y2="234" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrPurple)"/>
+    <text x="632" y="226" text-anchor="middle" font-size="12" fill="#a78bfa">注入 chat_history（空）</text>
+    <line x1="783" y1="252" x2="488" y2="252" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrPurple)"/>
+    <text x="632" y="244" text-anchor="middle" font-size="11" fill="#94a3b8">返回空历史</text>
+
+    <!-- 3. Executor→LLM 组装 prompt -->
+    <line x1="480" y1="280" x2="1042" y2="280" stroke="#34d399" stroke-width="2" marker-end="url(#arrGreen)"/>
+    <text x="762" y="272" text-anchor="middle" font-size="12" fill="#34d399">prompt = prefix + 工具清单 + 格式指令 + suffix</text>
+
+    <!-- 4. LLM→Executor: Thought+Action -->
+    <line x1="1050" y1="308" x2="488" y2="308" stroke="#34d399" stroke-width="2" marker-end="url(#arrGreen)"/>
+    <text x="762" y="300" text-anchor="middle" font-size="12" fill="#34d399">Thought: 需要搜书 → Action: SearchBooks[人工智能]</text>
+
+    <!-- 5. Executor→Tool -->
+    <line x1="480" y1="336" x2="1282" y2="336" stroke="#f472b6" stroke-width="2" marker-end="url(#arrPink)"/>
+    <text x="886" y="328" text-anchor="middle" font-size="12" fill="#f472b6">执行 SearchBooks("人工智能")</text>
+    <line x1="1282" y1="356" x2="488" y2="356" stroke="#f472b6" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrPink)"/>
+    <text x="886" y="348" text-anchor="middle" font-size="11" fill="#94a3b8">Observation: 1. 人工智能：一种现代方法 by Stuart Russell ...</text>
+
+    <!-- 6. 模型自主加戏 -->
+    <rect x="500" y="374" width="740" height="56" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="516" y="396" font-size="13" font-weight="bold" fill="#34d399">实测加戏：模型自主决定继续查详情（动态规划）</text>
+    <text x="516" y="418" font-size="12" fill="#d1fae5">LLM → Action: GetBookDetails(书名) → 工具执行 → Observation → 才给出最终回答</text>
+
+    <!-- 7. 最终回答 -->
+    <line x1="1050" y1="452" x2="488" y2="452" stroke="#34d399" stroke-width="2" marker-end="url(#arrGreen)"/>
+    <text x="762" y="444" text-anchor="middle" font-size="12" fill="#34d399">AI: 最终回答（书单介绍）</text>
+
+    <!-- 8. 回写记忆 -->
+    <line x1="480" y1="480" x2="783" y2="480" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrPurple)"/>
+    <text x="632" y="472" text-anchor="middle" font-size="12" fill="#a78bfa">保存本轮问答（模型从此"记得"书单）</text>
+
+    <line x1="480" y1="502" x2="193" y2="502" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrBlue)"/>
+    <text x="328" y="494" text-anchor="middle" font-size="12" fill="#7dd3fc">返回：书籍介绍</text>
+  </g>
+
+  <!-- ============ 第二轮 ============ -->
+  <g>
+    <rect x="60" y="530" width="1320" height="30" rx="6" fill="#831843" opacity="0.5"/>
+    <text x="80" y="551" font-size="14" font-weight="bold" fill="#f9a8d4">第 2 轮："请介绍第一本书的详细信息"（"第一本书"不在本轮输入里！）</text>
+
+    <!-- 9. 用户→Executor -->
+    <line x1="185" y1="576" x2="472" y2="576" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrBlue)"/>
+    <text x="328" y="568" text-anchor="middle" font-size="12" fill="#7dd3fc">agent.run(输入)</text>
+
+    <!-- 10. Executor→Memory 注入含第1轮 -->
+    <line x1="480" y1="604" x2="783" y2="604" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrPurple)"/>
+    <text x="632" y="596" text-anchor="middle" font-size="12" fill="#a78bfa">注入 chat_history（含第 1 轮完整问答）</text>
+
+    <!-- 关键标注 -->
+    <rect x="500" y="622" width="740" height="64" rx="8" fill="#78350f" stroke="#fbbf24" stroke-width="2"/>
+    <text x="516" y="646" font-size="13" font-weight="bold" fill="#fbbf24">本图灵魂：memory_key 匹配机制（07 篇最隐蔽 bug 现场）</text>
+    <text x="516" y="668" font-size="12" fill="#fde68a">教材原写 memory_key="history"，但模板变量是 {chat_history} → 注入悄悄变空</text>
+    <text x="516" y="684" font-size="12" fill="#fde68a">不报错、只"失忆" —— 第二轮模型不知道"第一本书"是谁，跨轮接力断裂</text>
+
+    <!-- 11. LLM 从记忆解析 -->
+    <line x1="480" y1="706" x2="1042" y2="706" stroke="#34d399" stroke-width="2" marker-end="url(#arrGreen)"/>
+    <text x="762" y="698" text-anchor="middle" font-size="12" fill="#34d399">prompt = 历史 + 本轮问题</text>
+
+    <line x1="1050" y1="732" x2="488" y2="732" stroke="#34d399" stroke-width="2" marker-end="url(#arrGreen)"/>
+    <text x="762" y="724" text-anchor="middle" font-size="12" fill="#34d399">Thought: 从记忆解析出第一本书 → Action: GetBookDetails(《书名》)</text>
+
+    <!-- 12. 工具执行 + 输入清洗 -->
+    <line x1="480" y1="760" x2="1282" y2="760" stroke="#f472b6" stroke-width="2" marker-end="url(#arrPink)"/>
+    <text x="886" y="752" text-anchor="middle" font-size="12" fill="#f472b6">执行 GetBookDetails</text>
+
+    <rect x="500" y="778" width="740" height="46" rx="8" fill="#4a044e" stroke="#f472b6" stroke-width="1.5"/>
+    <text x="516" y="798" font-size="12" font-weight="bold" fill="#f9a8d4">输入清洗实测：模型会传"《书名》 by 作者"等带噪参数</text>
+    <text x="516" y="816" font-size="11" fill="#e879f9">工具内部剥书名号、去 by 后缀 —— 模拟版工具必须自己扛清洗</text>
+
+    <line x1="1282" y1="842" x2="488" y2="842" stroke="#f472b6" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrPink)"/>
+    <text x="886" y="834" text-anchor="middle" font-size="11" fill="#94a3b8">Observation: 书名 / 作者 / 出版时间</text>
+
+    <!-- 13. 最终回答 + 回写 -->
+    <line x1="1050" y1="868" x2="488" y2="868" stroke="#34d399" stroke-width="2" marker-end="url(#arrGreen)"/>
+    <text x="762" y="860" text-anchor="middle" font-size="12" fill="#34d399">AI: 最终回答</text>
+
+    <line x1="480" y1="896" x2="783" y2="896" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrPurple)"/>
+    <text x="632" y="888" text-anchor="middle" font-size="12" fill="#a78bfa">保存本轮问答</text>
+
+    <line x1="480" y1="918" x2="193" y2="918" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrBlue)"/>
+    <text x="328" y="910" text-anchor="middle" font-size="12" fill="#7dd3fc">返回：书籍详情</text>
+  </g>
+
+  <!-- ============ 底部要点 ============ -->
+  <g>
+    <rect x="60" y="950" width="1320" height="190" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="986" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">这张时序图回答的三个核心问题</text>
+
+    <text x="100" y="1022" font-size="14" fill="#d1fae5">Q1 ReAct 循环谁在跑？ —— AgentExecutor 黑盒：注入历史 → 组装 prompt → 解析 Thought/Action → 执行工具 → 回填 Observation → 循环直到 AI 最终回答</text>
+    <text x="100" y="1052" font-size="14" fill="#d1fae5">Q2 跨轮接力靠什么？ —— 只靠 chat_history：第 1 轮的 Observation 写进记忆，第 2 轮"第一本书"才能被解析出来（memory_key 必须与模板变量一字不差）</text>
+    <text x="100" y="1082" font-size="14" fill="#d1fae5">Q3 框架版比 char02 手写版多了什么？ —— 模板组装、轨迹解析、记忆读写全部托管；代价是黑盒（char05 LangGraph 把黑盒拆成显式图）</text>
+    <text x="100" y="1112" font-size="12" fill="#94a3b8">对照：char08-04 直接访问 chat_memory.messages 绕开窗口截断 —— 同族"记忆键/视图错配"陷阱，char04-07 是第一次遇见</text>
+  </g>
+
+  <!-- ============ marker ============ -->
+  <defs>
+    <marker id="arrBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="arrPurple" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#34d399"/>
+    </marker>
+    <marker id="arrPink" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#f472b6"/>
+    </marker>
+  </defs>
+</svg>

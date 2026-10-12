@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="880" viewBox="0 0 1180 880" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect width="1180" height="880" fill="#0f172a"/>
+  <text x="590" y="46" text-anchor="middle" font-size="25" font-weight="bold" fill="#22d3ee">char06 四笔学费 + RAG 三种形态对照</text>
+  <text x="590" y="74" text-anchor="middle" font-size="13" fill="#94a3b8">学费篇（实测踩坑记录）是 char06 最珍贵的部分；三形态是检索工程从"玩具"到"生产"的成熟度阶梯</text>
+
+  <!-- ===== 上半：四笔学费 ===== -->
+  <text x="590" y="115" text-anchor="middle" font-size="18" font-weight="bold" fill="#fbbf24">四笔学费（每笔都有实测证据）</text>
+
+  <rect x="55" y="135" width="255" height="200" rx="12" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+  <text x="182" y="165" text-anchor="middle" font-size="15" font-weight="bold" fill="#f87171">学费 1：API 端点失效</text>
+  <text x="182" y="190" text-anchor="middle" font-size="12" fill="#fecaca">原生 requests 调百炼嵌入端点</text>
+  <text x="182" y="210" text-anchor="middle" font-size="12" fill="#fecaca">实测返回 BadRequest</text>
+  <text x="182" y="230" text-anchor="middle" font-size="12" fill="#fecaca">.IllegalInput（05 篇）</text>
+  <text x="182" y="258" text-anchor="middle" font-size="12" fill="#94a3b8">修复：DashScopeEmbeddings 封装</text>
+  <text x="182" y="280" text-anchor="middle" font-size="12" fill="#94a3b8">签名保持 List[np.ndarray]</text>
+  <text x="182" y="302" text-anchor="middle" font-size="11.5" fill="#64748b">教训：端点是别人的，随时会变</text>
+
+  <rect x="325" y="135" width="255" height="200" rx="12" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+  <text x="452" y="165" text-anchor="middle" font-size="15" font-weight="bold" fill="#f87171">学费 2：封装 = 黑盒</text>
+  <text x="452" y="190" text-anchor="middle" font-size="12" fill="#fecaca">LangChain 帮你做了：</text>
+  <text x="452" y="210" text-anchor="middle" font-size="12" fill="#fecaca">嵌入 / 索引 / 检索三件事</text>
+  <text x="452" y="238" text-anchor="middle" font-size="12" fill="#94a3b8">05/06 篇拆开原生实现：</text>
+  <text x="452" y="258" text-anchor="middle" font-size="12" fill="#94a3b8">np.vstack + IndexFlatL2.add</text>
+  <text x="452" y="280" text-anchor="middle" font-size="12" fill="#94a3b8">search(vec, k) 三步本质</text>
+  <text x="452" y="302" text-anchor="middle" font-size="11.5" fill="#64748b">教训：用框架前先徒手搓一次</text>
+
+  <rect x="595" y="135" width="255" height="200" rx="12" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+  <text x="722" y="165" text-anchor="middle" font-size="15" font-weight="bold" fill="#f87171">学费 3：假标题谱系</text>
+  <text x="722" y="190" text-anchor="middle" font-size="12" fill="#fecaca">03 篇："Agent"没有 Agent</text>
+  <text x="722" y="210" text-anchor="middle" font-size="12" fill="#fecaca">09 篇："DeepSeek"没调 DeepSeek</text>
+  <text x="722" y="230" text-anchor="middle" font-size="12" fill="#fecaca">08 篇："多段 Agent"是流水线</text>
+  <text x="722" y="258" text-anchor="middle" font-size="12" fill="#94a3b8">教材借热词命名吸引眼球</text>
+  <text x="722" y="280" text-anchor="middle" font-size="12" fill="#94a3b8">判定标准：有没有 LLM 决策环</text>
+  <text x="722" y="302" text-anchor="middle" font-size="11.5" fill="#64748b">教训：以代码实质为准，不以标题为准</text>
+
+  <rect x="865" y="135" width="255" height="200" rx="12" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+  <text x="992" y="165" text-anchor="middle" font-size="15" font-weight="bold" fill="#f87171">学费 4：re.split 陷阱</text>
+  <text x="992" y="190" text-anchor="middle" font-size="12" fill="#fecaca">正则切分句元后</text>
+  <text x="992" y="210" text-anchor="middle" font-size="12" fill="#fecaca">列表末尾会留一个空串</text>
+  <text x="992" y="230" text-anchor="middle" font-size="12" fill="#fecaca">下游嵌入时白白浪费调用</text>
+  <text x="992" y="258" text-anchor="middle" font-size="12" fill="#94a3b8">修复：if seg.strip() 过滤</text>
+  <text x="992" y="280" text-anchor="middle" font-size="12" fill="#94a3b8">延伸：清洗永远先于切片</text>
+  <text x="992" y="302" text-anchor="middle" font-size="11.5" fill="#64748b">教训：预处理链的每一步都要验产物</text>
+
+  <!-- ===== 下半：RAG 三种形态 ===== -->
+  <text x="590" y="395" text-anchor="middle" font-size="18" font-weight="bold" fill="#34d399">RAG 三种形态（成熟度阶梯，可叠加）</text>
+
+  <!-- 形态 1 -->
+  <rect x="55" y="420" width="345" height="240" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5"/>
+  <text x="227" y="452" text-anchor="middle" font-size="16" font-weight="bold" fill="#38bdf8">形态一：纯检索器</text>
+  <text x="227" y="474" text-anchor="middle" font-size="12" fill="#94a3b8">01 / 03 / 05 / 06 篇</text>
+  <rect x="80" y="490" width="295" height="90" rx="8" fill="#020617" stroke="#334155" stroke-width="1.2"/>
+  <text x="227" y="516" text-anchor="middle" font-size="12.5" fill="#bae6fd">文档 → 嵌入 → 向量库</text>
+  <text x="227" y="540" text-anchor="middle" font-size="12.5" fill="#bae6fd">问题 → 嵌入 → search(k)</text>
+  <text x="227" y="564" text-anchor="middle" font-size="12.5" fill="#bae6fd">返回相似片段，到此为止</text>
+  <text x="227" y="608" text-anchor="middle" font-size="12" fill="#94a3b8">只有"找"，没有"答"</text>
+  <text x="227" y="630" text-anchor="middle" font-size="12" fill="#94a3b8">适合：知识库浏览 / 召回评估</text>
+
+  <line x1="400" y1="540" x2="425" y2="540" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+
+  <!-- 形态 2 -->
+  <rect x="430" y="420" width="345" height="240" rx="12" fill="#1e293b" stroke="#34d399" stroke-width="2.5"/>
+  <text x="602" y="452" text-anchor="middle" font-size="16" font-weight="bold" fill="#34d399">形态二：显式 RAG 闭环</text>
+  <text x="602" y="474" text-anchor="middle" font-size="12" fill="#94a3b8">07 / 08 篇</text>
+  <rect x="455" y="490" width="295" height="90" rx="8" fill="#020617" stroke="#334155" stroke-width="1.2"/>
+  <text x="602" y="516" text-anchor="middle" font-size="12.5" fill="#d1fae5">检索 top-k → 拼 prompt</text>
+  <text x="602" y="540" text-anchor="middle" font-size="12.5" fill="#d1fae5">→ LLM 生成 → 带引用回答</text>
+  <text x="602" y="564" text-anchor="middle" font-size="12.5" fill="#d1fae5">08 篇升级：Top-K 多段融合</text>
+  <text x="602" y="608" text-anchor="middle" font-size="12" fill="#94a3b8">检索结果显式进 prompt</text>
+  <text x="602" y="630" text-anchor="middle" font-size="12" fill="#94a3b8">适合：问答 / 法条引用类场景</text>
+
+  <line x1="775" y1="540" x2="800" y2="540" stroke="#475569" stroke-width="3" marker-end="url(#arW)"/>
+
+  <!-- 形态 3 -->
+  <rect x="805" y="420" width="320" height="240" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="3"/>
+  <text x="965" y="452" text-anchor="middle" font-size="16" font-weight="bold" fill="#22d3ee">形态三：异构融合</text>
+  <text x="965" y="474" text-anchor="middle" font-size="12" fill="#94a3b8">09 篇</text>
+  <rect x="830" y="490" width="270" height="90" rx="8" fill="#020617" stroke="#334155" stroke-width="1.2"/>
+  <text x="965" y="516" text-anchor="middle" font-size="12.5" fill="#a5f3fc">语义通道(FAISS) + 结构化通道</text>
+  <text x="965" y="540" text-anchor="middle" font-size="12.5" fill="#a5f3fc">(pandas) → build_prompt 融合</text>
+  <text x="965" y="564" text-anchor="middle" font-size="12.5" fill="#a5f3fc">→ LLM 综合推理</text>
+  <text x="965" y="608" text-anchor="middle" font-size="12" fill="#d1fae5">相关 + 精确双保险</text>
+  <text x="965" y="630" text-anchor="middle" font-size="12" fill="#d1fae5">适合：报告 / 数据佐证类场景</text>
+
+  <!-- 底部：三形态 → 生产混合检索 -->
+  <rect x="55" y="690" width="1105" height="70" rx="10" fill="#020617" stroke="#334155" stroke-width="1.5"/>
+  <text x="590" y="718" text-anchor="middle" font-size="14" fill="#e2e8f0">生产级检索 = 三形态叠加：纯检索器做召回 → 显式闭环做生成 → 异构融合补精度；再叠加 char07 的重排序/缓存/预算管理</text>
+  <text x="590" y="744" text-anchor="middle" font-size="12.5" fill="#6ee7b7">选型速查：FAISS(轻量单机) / Chroma(带元数据持久化) / Weaviate(分布式，需 Docker) / Milvus(亿级规模)</text>
+
+  <defs>
+    <marker id="arW" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#475569"/></marker>
+  </defs>
+</svg>

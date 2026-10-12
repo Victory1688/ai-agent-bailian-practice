@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1030" viewBox="0 0 1440 1030" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1030" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char02 八篇演进线全景图 —— 三条能力升级线拧成一股绳</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">主线：一条"能力升级"的线 —— 骨架 → 状态 → 记忆 → 注销 → 手臂三连跳 → 服务化交付</text>
+
+  <!-- ============ 第一行：01 → 02 → 03 → 04（骨架与记忆线） ============ -->
+  <g>
+    <rect x="60" y="100" width="300" height="200" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2.5"/>
+    <rect x="60" y="100" width="300" height="38" rx="10" fill="#064e3b"/>
+    <rect x="60" y="126" width="300" height="12" fill="#064e3b"/>
+    <text x="76" y="126" font-size="15" font-weight="bold" fill="#34d399">01 智能启动过程展示（骨架）</text>
+    <text x="76" y="162" font-size="13" font-weight="bold" fill="#e2e8f0">最小智能体五步齐备</text>
+    <text x="76" y="186" font-size="12" fill="#94a3b8">模型加载 → 工具注册 → 系统提示词</text>
+    <text x="76" y="206" font-size="12" fill="#94a3b8">→ 记忆注入 → 函数调用循环</text>
+    <rect x="76" y="224" width="268" height="50" rx="4" fill="#064e3b"/>
+    <text x="86" y="244" font-size="12" fill="#34d399">实测通过 —— 8 篇 80% 代码</text>
+    <text x="86" y="264" font-size="12" fill="#34d399">一模一样，都是这一个循环</text>
+    <text x="76" y="294" font-size="11" fill="#64748b">L4 + L0 两层 = 最小骨架</text>
+
+    <path d="M 360 200 L 396 200" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="400" y="100" width="300" height="200" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <rect x="400" y="100" width="300" height="38" rx="10" fill="#064e3b"/>
+    <rect x="400" y="126" width="300" height="12" fill="#064e3b"/>
+    <text x="416" y="126" font-size="15" font-weight="bold" fill="#34d399">02 自动追踪任务状态</text>
+    <text x="416" y="162" font-size="13" font-weight="bold" fill="#e2e8f0">带参工具 + 跨轮状态</text>
+    <text x="416" y="186" font-size="12" fill="#94a3b8">schedule_meeting（主题/时间/参会人）</text>
+    <text x="416" y="206" font-size="12" fill="#94a3b8">task_state 字典逐轮填充</text>
+    <rect x="416" y="224" width="268" height="50" rx="4" fill="#064e3b"/>
+    <text x="426" y="244" font-size="12" fill="#34d399">实测通过 —— 业务状态与</text>
+    <text x="426" y="264" font-size="12" fill="#34d399">对话记忆分工不混用</text>
+    <text x="416" y="294" font-size="11" fill="#64748b">工具从零参升级到带参</text>
+
+    <path d="M 700 200 L 736 200" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="740" y="100" width="300" height="200" rx="10" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <rect x="740" y="100" width="300" height="38" rx="10" fill="#312e81"/>
+    <rect x="740" y="126" width="300" height="12" fill="#312e81"/>
+    <text x="756" y="126" font-size="15" font-weight="bold" fill="#a78bfa">03 对话终端恢复功能</text>
+    <text x="756" y="162" font-size="13" font-weight="bold" fill="#e2e8f0">JSON 持久化记忆</text>
+    <text x="756" y="186" font-size="12" fill="#94a3b8">PersistentJSONMemory 落盘</text>
+    <text x="756" y="206" font-size="12" fill="#94a3b8">同 session_id 中断恢复</text>
+    <rect x="756" y="224" width="268" height="50" rx="4" fill="#312e81"/>
+    <text x="766" y="244" font-size="12" fill="#c7d2fe">实测：重启后续聊</text>
+    <text x="766" y="264" font-size="12" fill="#c7d2fe">上下文完整恢复</text>
+    <text x="756" y="294" font-size="11" fill="#64748b">状态先落盘（恢复）</text>
+
+    <path d="M 1040 200 L 1076 200" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="1080" y="100" width="300" height="200" rx="10" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <rect x="1080" y="100" width="300" height="38" rx="10" fill="#312e81"/>
+    <rect x="1080" y="126" width="300" height="12" fill="#312e81"/>
+    <text x="1096" y="126" font-size="15" font-weight="bold" fill="#a78bfa">04 具备注销机制</text>
+    <text x="1096" y="162" font-size="13" font-weight="bold" fill="#e2e8f0">资源优雅退场三步</text>
+    <text x="1096" y="186" font-size="12" fill="#94a3b8">save 留底 → clear 删档</text>
+    <text x="1096" y="206" font-size="12" fill="#94a3b8">→ 写精简 txt 日志审计</text>
+    <rect x="1096" y="224" width="268" height="50" rx="4" fill="#312e81"/>
+    <text x="1106" y="244" font-size="12" fill="#fde68a">关键认知：注销不是直接删</text>
+    <text x="1106" y="264" font-size="12" fill="#fde68a">先留底再清理，留可追溯痕迹</text>
+    <text x="1096" y="294" font-size="11" fill="#64748b">再学注销（清理）—— 有记有忘</text>
+  </g>
+
+  <!-- 换行箭头 04 → 05 -->
+  <path d="M 1230 300 L 1230 336 L 210 336 L 210 372" stroke="#22d3ee" stroke-width="2.5" fill="none" marker-end="url(#arrCyan)"/>
+
+  <!-- ============ 第二行：05 → 06 → 07 + 08（工具手臂线 + 交付线） ============ -->
+  <g>
+    <rect x="60" y="372" width="300" height="200" rx="10" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <rect x="60" y="372" width="300" height="38" rx="10" fill="#78350f"/>
+    <rect x="60" y="398" width="300" height="12" fill="#78350f"/>
+    <text x="76" y="398" font-size="15" font-weight="bold" fill="#fbbf24">05 查询外部天气 API</text>
+    <text x="76" y="434" font-size="13" font-weight="bold" fill="#e2e8f0">外网 HTTP：手臂伸出本机</text>
+    <text x="76" y="458" font-size="12" fill="#94a3b8">wttr.in 真实调用</text>
+    <text x="76" y="478" font-size="12" fill="#94a3b8">四层防御：校验/超时/状态码/异常</text>
+    <rect x="76" y="496" width="268" height="50" rx="4" fill="#78350f"/>
+    <text x="86" y="516" font-size="12" fill="#fde68a">实测通过 —— 外部接口</text>
+    <text x="86" y="536" font-size="12" fill="#fde68a">永不裸调是第一军规</text>
+
+    <path d="M 360 472 L 396 472" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="400" y="372" width="300" height="200" rx="10" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <rect x="400" y="372" width="300" height="38" rx="10" fill="#78350f"/>
+    <rect x="400" y="398" width="300" height="12" fill="#78350f"/>
+    <text x="416" y="398" font-size="15" font-weight="bold" fill="#fbbf24">06 SQLite 数据库读写</text>
+    <text x="416" y="434" font-size="13" font-weight="bold" fill="#e2e8f0">结构化存储：手臂入数据库</text>
+    <text x="416" y="458" font-size="12" fill="#94a3b8">增查工具 + ? 占位符防注入</text>
+    <text x="416" y="478" font-size="12" fill="#94a3b8">字符串拼接 SQL = 注入入口</text>
+    <rect x="416" y="496" width="268" height="50" rx="4" fill="#78350f"/>
+    <text x="426" y="516" font-size="12" fill="#fde68a">实测：数据真实入库 ——</text>
+    <text x="426" y="536" font-size="12" fill="#fde68a">安全习惯从第一天养成</text>
+
+    <path d="M 700 472 L 736 472" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="740" y="372" width="300" height="200" rx="10" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+    <rect x="740" y="372" width="300" height="38" rx="10" fill="#7f1d1d"/>
+    <rect x="740" y="398" width="300" height="12" fill="#7f1d1d"/>
+    <text x="756" y="398" font-size="15" font-weight="bold" fill="#f87171">07 读写本地文件（红牌篇）</text>
+    <text x="756" y="434" font-size="13" font-weight="bold" fill="#e2e8f0">文件系统 + exec 警示</text>
+    <text x="756" y="458" font-size="12" fill="#94a3b8">read_file / write_file / exec_code</text>
+    <text x="756" y="478" font-size="12" fill="#94a3b8">exec = 最危险的工具（任意代码）</text>
+    <rect x="756" y="496" width="268" height="50" rx="4" fill="#7f1d1d"/>
+    <text x="766" y="516" font-size="12" fill="#fca5a5">实测三工具全通 —— exec 风险</text>
+    <text x="766" y="536" font-size="12" fill="#fca5a5">四条加固路（char04-04 沙箱落地）</text>
+
+    <path d="M 1040 472 L 1076 472" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="1080" y="372" width="300" height="200" rx="10" fill="#1e293b" stroke="#22d3ee" stroke-width="2.5"/>
+    <rect x="1080" y="372" width="300" height="38" rx="10" fill="#0c4a6e"/>
+    <rect x="1080" y="398" width="300" height="12" fill="#0c4a6e"/>
+    <text x="1096" y="398" font-size="15" font-weight="bold" fill="#7dd3fc">08 FastAPI UI 中间 API（交付）</text>
+    <text x="1096" y="434" font-size="13" font-weight="bold" fill="#e2e8f0">三段式：UI ↔ 中间 API ↔ 智能体</text>
+    <text x="1096" y="458" font-size="12" fill="#94a3b8">POST /chat + CORS 中间件</text>
+    <text x="1096" y="478" font-size="12" fill="#94a3b8">agent_ui_api.py 为启动命令副本</text>
+    <rect x="1096" y="496" width="268" height="50" rx="4" fill="#0c4a6e"/>
+    <text x="1106" y="516" font-size="12" fill="#7dd3fc">实测 POST /chat 全链路通</text>
+    <text x="1106" y="536" font-size="12" fill="#fbbf24">教学留白：session_id 收了没用</text>
+  </g>
+
+  <!-- ============ 两条跨篇虚线关联 ============ -->
+  <g>
+    <rect x="60" y="602" width="1320" height="120" rx="12" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <text x="80" y="632" font-size="16" font-weight="bold" fill="#f472b6">两条跨篇关联（08 篇的教学留白与练习题）</text>
+
+    <rect x="90" y="650" width="600" height="56" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="106" y="674" font-size="13" fill="#e2e8f0">03 → 08：会话记忆能力（虚线）</text>
+    <text x="106" y="696" font-size="12" fill="#94a3b8">08 的 session_id 收了却没用 —— 生产第一课：接上 03 的持久化记忆实现多用户隔离</text>
+
+    <rect x="720" y="650" width="630" height="56" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="736" y="674" font-size="13" fill="#e2e8f0">06 → 08：记账落库练习（虚线）</text>
+    <text x="736" y="696" font-size="12" fill="#94a3b8">把 06 的 SQLite 增查接到 08 的记账工具上 —— 教材留给读者的动手题</text>
+  </g>
+
+  <!-- ============ 底部方法论 ============ -->
+  <g>
+    <rect x="60" y="752" width="1320" height="230" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="788" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">演进线背后的教学设计（新人怎么看这张图）</text>
+
+    <text x="100" y="824" font-size="14" fill="#d1fae5">1. 记忆线（01→02→03→04）：工具先带参，状态先落盘（恢复），再学注销（清理）—— 有了"记"，还要有"忘"</text>
+    <text x="100" y="854" font-size="14" fill="#d1fae5">2. 工具手臂线（02→05→06→07）：从调外部 HTTP，到写数据库，到操作文件系统 —— 手臂越伸越长，危险也越来越近</text>
+    <text x="100" y="884" font-size="14" fill="#d1fae5">3. 交付线（01→08）：骨架最终被 FastAPI 包成 HTTP 服务 —— 中间 API 是前端与大模型之间的隔离带</text>
+    <text x="100" y="916" font-size="13" fill="#94a3b8">延伸对照：char02 手写 agent_chat 循环 → char04 initialize_agent 把循环装进黑盒 → char05 LangGraph 把黑盒拆成显式图 —— 控制权的三次迁移</text>
+    <text x="100" y="944" font-size="13" fill="#94a3b8">协议源头：char02 的 agent_chat 循环就是 Function Calling 三件套（说明书 + 自主决策 + dispatch）的手写版，char03-06 篇会揭晓其标准协议形态</text>
+    <text x="100" y="970" font-size="12" fill="#64748b">诚实标注：05 篇外部 API 四层防御是全系列外部调用的模板；07 篇 exec 的风险讨论直接催生 char04-04 的沙箱三道防线</text>
+  </g>
+
+  <defs>
+    <marker id="arrCyan" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#22d3ee"/>
+    </marker>
+  </defs>
+</svg>

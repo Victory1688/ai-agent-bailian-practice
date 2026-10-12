@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="700" viewBox="0 0 1180 700" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- 背景 -->
+  <rect width="1180" height="700" fill="#0f172a"/>
+  <text x="590" y="46" text-anchor="middle" font-size="25" font-weight="bold" fill="#22d3ee">char08 能力全景图：单 Agent 的完整能力面（五篇合一）</text>
+  <text x="590" y="74" text-anchor="middle" font-size="13" fill="#94a3b8">每篇教一个环节，五篇合起来是一个请求的全链路；生产级单 Agent 的毕业设计就是把这五块拼成一个类</text>
+
+  <!-- 中央 Agent 圆 -->
+  <circle cx="590" cy="380" r="110" fill="#134e4a" stroke="#22d3ee" stroke-width="3"/>
+  <text x="590" y="360" text-anchor="middle" font-size="22" font-weight="bold" fill="#6ee7b7">StatefulSmartAgent</text>
+  <text x="590" y="390" text-anchor="middle" font-size="14" fill="#d1fae5">char08 毕业设计</text>
+  <text x="590" y="414" text-anchor="middle" font-size="14" fill="#d1fae5">五篇合并成一个类</text>
+
+  <!-- ① 能听 -->
+  <rect x="60" y="120" width="280" height="130" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2.5"/>
+  <text x="200" y="155" text-anchor="middle" font-size="19" font-weight="bold" fill="#a78bfa">① 能听 —— 02 参数解析</text>
+  <text x="200" y="182" text-anchor="middle" font-size="13" fill="#ddd6fe">parse_input 三段式规则解析</text>
+  <text x="200" y="204" text-anchor="middle" font-size="13" fill="#ddd6fe">NL → {region, year, focus}</text>
+  <text x="200" y="230" text-anchor="middle" font-size="12" fill="#94a3b8">盲区：明年 / 多区域 / 大小写</text>
+  <line x1="340" y1="250" x2="500" y2="315" stroke="#a78bfa" stroke-width="2" marker-end="url(#arA)"/>
+
+  <!-- ② 能记 -->
+  <rect x="850" y="120" width="280" height="130" rx="12" fill="#1e293b" stroke="#fbbf24" stroke-width="2.5"/>
+  <text x="990" y="155" text-anchor="middle" font-size="19" font-weight="bold" fill="#fbbf24">② 能记 —— 04 Memory</text>
+  <text x="990" y="182" text-anchor="middle" font-size="13" fill="#fde68a">ConversationBufferWindowMemory(k=3)</text>
+  <text x="990" y="204" text-anchor="middle" font-size="13" fill="#fde68a">读时过滤：窗口视图 ≠ 原始存储</text>
+  <text x="990" y="230" text-anchor="middle" font-size="12" fill="#94a3b8">陷阱：chat_memory.messages 绕开截断</text>
+  <line x1="850" y1="250" x2="682" y2="315" stroke="#fbbf24" stroke-width="2" marker-end="url(#arY)"/>
+
+  <!-- ③ 能省 -->
+  <rect x="850" y="520" width="280" height="130" rx="12" fill="#1e293b" stroke="#34d399" stroke-width="2.5"/>
+  <text x="990" y="555" text-anchor="middle" font-size="19" font-weight="bold" fill="#34d399">③ 能省 —— 05 动态剪辑</text>
+  <text x="990" y="582" text-anchor="middle" font-size="13" fill="#d1fae5">priority + timestamp + length</text>
+  <text x="990" y="604" text-anchor="middle" font-size="13" fill="#d1fae5">token_limit 贪心装填</text>
+  <text x="990" y="630" text-anchor="middle" font-size="12" fill="#94a3b8">system 段永远优先，跳过不终止</text>
+  <line x1="850" y1="520" x2="682" y2="450" stroke="#34d399" stroke-width="2" marker-end="url(#arG)"/>
+
+  <!-- ④ 能扛 -->
+  <rect x="60" y="520" width="280" height="130" rx="12" fill="#1e293b" stroke="#f87171" stroke-width="2.5"/>
+  <text x="200" y="555" text-anchor="middle" font-size="19" font-weight="bold" fill="#f87171">④ 能扛 —— 03 异常处理</text>
+  <text x="200" y="582" text-anchor="middle" font-size="13" fill="#fecaca">工具自捕获 + [ERROR] 信号</text>
+  <text x="200" y="604" text-anchor="middle" font-size="13" fill="#fecaca">失败 → 降级 prompt（LLM 常识）</text>
+  <text x="200" y="630" text-anchor="middle" font-size="12" fill="#94a3b8">生产升级：L1重试 + L3熔断</text>
+  <line x1="340" y1="520" x2="500" y2="450" stroke="#f87171" stroke-width="2" marker-end="url(#arR)"/>
+
+  <!-- ⑤ 能看（顶部横跨） -->
+  <rect x="450" y="115" width="280" height="120" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5"/>
+  <text x="590" y="150" text-anchor="middle" font-size="19" font-weight="bold" fill="#38bdf8">⑤ 能看 —— 01 状态感知</text>
+  <text x="590" y="177" text-anchor="middle" font-size="13" fill="#bae6fd">AgentState 六态枚举</text>
+  <text x="590" y="199" text-anchor="middle" font-size="13" fill="#bae6fd">timestamp 链 = 性能探针</text>
+  <text x="590" y="222" text-anchor="middle" font-size="12" fill="#94a3b8">工具 1s + LLM 13s 实测暴露</text>
+  <line x1="590" y1="235" x2="590" y2="268" stroke="#38bdf8" stroke-width="2" marker-end="url(#arB)"/>
+
+  <!-- 底部说明 -->
+  <text x="590" y="680" text-anchor="middle" font-size="14" fill="#64748b">请求生命周期：听懂 → 记住 → 精打细算 → 执行中扛住故障 → 全程可观测</text>
+
+  <defs>
+    <marker id="arA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#a78bfa"/></marker>
+    <marker id="arY" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#fbbf24"/></marker>
+    <marker id="arG" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#34d399"/></marker>
+    <marker id="arR" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#f87171"/></marker>
+    <marker id="arB" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#38bdf8"/></marker>
+  </defs>
+</svg>

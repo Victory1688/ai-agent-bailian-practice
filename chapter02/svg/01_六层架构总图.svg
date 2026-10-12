@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1120" viewBox="0 0 1440 1120" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1120" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char02 六层架构总图 —— 一个智能体的完整解剖（8 篇落位）</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">核心洞察：大模型应用开发 = 一套固定编排骨架 + 一批可插拔的工具执行体</text>
+
+  <!-- ============ 前端 ============ -->
+  <rect x="560" y="96" width="320" height="40" rx="20" fill="#0c4a6e" stroke="#22d3ee" stroke-width="2"/>
+  <text x="720" y="122" text-anchor="middle" font-size="15" font-weight="bold" fill="#7dd3fc">任何前端 / 脚本 / curl</text>
+
+  <path d="M 720 136 L 720 158" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- ============ L5 交互交付层 ============ -->
+  <g>
+    <rect x="60" y="164" width="1320" height="110" rx="12" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+    <text x="80" y="194" font-size="17" font-weight="bold" fill="#22d3ee">L5 交互交付层 —— 怎么被使用</text>
+    <rect x="90" y="210" width="1280" height="50" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="106" y="232" font-size="15" font-weight="bold" fill="#e2e8f0">08 基于 FastAPI 的 UI 中间 API 接口系统</text>
+    <text x="106" y="252" font-size="12" fill="#94a3b8">POST /chat + CORS：UI 与大模型之间的隔离带（实测 POST /chat 全链路通）—— 前端不能直调大模型</text>
+  </g>
+
+  <path d="M 720 274 L 720 296" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- ============ L4 编排决策层 ============ -->
+  <g>
+    <rect x="60" y="302" width="1320" height="130" rx="12" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <text x="80" y="332" font-size="17" font-weight="bold" fill="#34d399">L4 编排决策层 —— 大脑怎么运转（01 篇 = L4 + L0 两层就是最小骨架）</text>
+
+    <rect x="90" y="350" width="620" height="66" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="106" y="374" font-size="15" font-weight="bold" fill="#e2e8f0">01 智能启动过程展示 —— agent_chat 循环</text>
+    <text x="106" y="396" font-size="12" fill="#94a3b8">决策权在模型（输出 tool_calls）· 执行权在本地（tool_registry dispatch）</text>
+    <text x="106" y="412" font-size="12" fill="#34d399">模型加载 / 工具注册 / 系统提示词 / 记忆注入 / 函数调用 五步齐备</text>
+
+    <rect x="740" y="350" width="610" height="66" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="756" y="374" font-size="15" font-weight="bold" fill="#e2e8f0">02 自动追踪任务状态 —— task_state 字典</text>
+    <text x="756" y="396" font-size="12" fill="#94a3b8">带参工具（schedule_meeting）+ 跨轮状态逐轮填充（主题/时间/参会人）</text>
+    <text x="756" y="412" font-size="12" fill="#94a3b8">工具从"零参"升级到"带参"，业务状态与对话记忆分工不混用</text>
+  </g>
+
+  <path d="M 720 432 L 720 454" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- ============ L3 记忆状态层 ============ -->
+  <g>
+    <rect x="60" y="460" width="1320" height="130" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <text x="80" y="490" font-size="17" font-weight="bold" fill="#a78bfa">L3 记忆状态层 —— 怎么记住与放下（有了"记"，还要有"忘"）</text>
+
+    <rect x="90" y="508" width="620" height="66" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="106" y="532" font-size="15" font-weight="bold" fill="#e2e8f0">03 对话终端恢复功能 —— PersistentJSONMemory</text>
+    <text x="106" y="554" font-size="12" fill="#94a3b8">memory 列表落盘 JSON 文件 · 同 session_id 重启恢复对话</text>
+    <text x="106" y="570" font-size="12" fill="#34d399">实测：中断后同 session_id 续聊，上下文完整恢复</text>
+
+    <rect x="740" y="508" width="610" height="66" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="756" y="532" font-size="15" font-weight="bold" fill="#e2e8f0">04 具备注销机制 —— 资源优雅退场三步</text>
+    <text x="756" y="554" font-size="12" fill="#94a3b8">save 留底 → clear 删 JSON 档案 → 写精简 txt 日志（审计留痕）</text>
+    <text x="756" y="570" font-size="12" fill="#fbbf24">关键认知：注销不是直接删 —— 先留底再清理，留可追溯痕迹</text>
+  </g>
+
+  <path d="M 720 590 L 720 612" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- ============ L2 能力工具层 ============ -->
+  <g>
+    <rect x="60" y="618" width="1320" height="130" rx="12" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <text x="80" y="648" font-size="17" font-weight="bold" fill="#fbbf24">L2 能力工具层 —— 会办什么事（每篇的"变量"，工具手臂从近到远）</text>
+
+    <rect x="90" y="666" width="240" height="66" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="106" y="690" font-size="14" font-weight="bold" fill="#e2e8f0">01 自检 / 时间</text>
+    <text x="106" y="712" font-size="12" fill="#94a3b8">本机：startup_check</text>
+
+    <rect x="350" y="666" width="240" height="66" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="366" y="690" font-size="14" font-weight="bold" fill="#e2e8f0">05 外部天气 API</text>
+    <text x="366" y="712" font-size="12" fill="#94a3b8">外网 HTTP：四层防御</text>
+
+    <rect x="610" y="666" width="240" height="66" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="626" y="690" font-size="14" font-weight="bold" fill="#e2e8f0">06 SQLite 增查</text>
+    <text x="626" y="712" font-size="12" fill="#94a3b8">数据库：? 占位符防注入</text>
+
+    <rect x="870" y="666" width="240" height="66" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="886" y="690" font-size="14" font-weight="bold" fill="#e2e8f0">07 文件读写 + exec</text>
+    <text x="886" y="712" font-size="12" fill="#94a3b8">文件系统：exec 最危险</text>
+
+    <rect x="1130" y="666" width="220" height="66" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="1146" y="690" font-size="14" font-weight="bold" fill="#e2e8f0">08 记账工具</text>
+    <text x="1146" y="712" font-size="12" fill="#94a3b8">触达智能体自身</text>
+  </g>
+
+  <path d="M 720 748 L 720 770" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- ============ L0 + LS 底座双栏 ============ -->
+  <g>
+    <rect x="60" y="776" width="650" height="120" rx="12" fill="#0c4a6e" stroke="#22d3ee" stroke-width="2"/>
+    <text x="80" y="806" font-size="17" font-weight="bold" fill="#7dd3fc">L0 模型服务层 —— 永远不变的底座</text>
+    <rect x="90" y="822" width="590" height="58" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="106" y="846" font-size="14" font-weight="bold" fill="#e2e8f0" font-family="Consolas, monospace">dashscope 调用（8 篇共用同一写法）</text>
+    <text x="106" y="868" font-size="12" fill="#94a3b8">原教材依赖本地 GPU / 虚构 API → 统一改写为百炼云端</text>
+
+    <rect x="730" y="776" width="650" height="120" rx="12" fill="#1e293b" stroke="#f472b6" stroke-width="2"/>
+    <text x="750" y="806" font-size="17" font-weight="bold" fill="#f472b6">LS 存储介质层 —— 数据住哪里（由近到远四站）</text>
+    <rect x="750" y="822" width="135" height="58" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="766" y="846" font-size="13" font-weight="bold" fill="#e2e8f0">变量(内存)</text>
+    <text x="766" y="866" font-size="11" fill="#94a3b8">01/02</text>
+    <rect x="900" y="822" width="135" height="58" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="916" y="846" font-size="13" font-weight="bold" fill="#e2e8f0">JSON 文件</text>
+    <text x="916" y="866" font-size="11" fill="#94a3b8">03/04</text>
+    <rect x="1050" y="822" width="135" height="58" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="1066" y="846" font-size="13" font-weight="bold" fill="#e2e8f0">SQLite</text>
+    <text x="1066" y="866" font-size="11" fill="#94a3b8">06</text>
+    <rect x="1200" y="822" width="150" height="58" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="1216" y="846" font-size="13" font-weight="bold" fill="#e2e8f0">任意本地文件</text>
+    <text x="1216" y="866" font-size="11" fill="#94a3b8">07</text>
+  </g>
+
+  <!-- ============ 底部读图方法 ============ -->
+  <g>
+    <rect x="60" y="926" width="1320" height="150" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="960" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">读图方法：六层是从 8 篇文件里"剥"出来的解剖结构</text>
+    <text x="100" y="992" font-size="14" fill="#d1fae5">01 篇 = L4 + L0 两层（最小骨架）→ 之后每篇往某一层添砖：02 添状态、03/04 添记忆、05/06/07 添工具、08 添交付</text>
+    <text x="100" y="1020" font-size="14" fill="#d1fae5">全部叠完 = 一个六层齐备的智能体：能被使用（L5）、会思考（L4）、记得住放得下（L3）、办得了事（L2）、调得动模型（L0）、存得住数据（LS）</text>
+    <text x="100" y="1048" font-size="12" fill="#94a3b8">三章连读：char01 提示词内圈 → char02 Agent 外圈（本篇）→ char03 服务化基础设施 —— 学完 char02 你拥有一个"能办事"的完整智能体</text>
+  </g>
+
+  <defs>
+    <marker id="arrGray" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#475569"/>
+    </marker>
+  </defs>
+</svg>

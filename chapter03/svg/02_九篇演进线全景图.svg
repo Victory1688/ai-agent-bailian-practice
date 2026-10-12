@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1020" viewBox="0 0 1440 1020" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1020" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char03 九篇演进线全景图 —— 从"会调模型"到"敢上线服务"</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">每卡带实测数据（全部真机验证）—— 三条主线：供给线 / 协议线 / 治理线</text>
+
+  <!-- ============ 第一行：01 → 02 → 03（供给线） ============ -->
+  <g>
+    <rect x="60" y="100" width="420" height="180" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <rect x="60" y="100" width="420" height="38" rx="10" fill="#064e3b"/>
+    <rect x="60" y="126" width="420" height="12" fill="#064e3b"/>
+    <text x="76" y="126" font-size="16" font-weight="bold" fill="#34d399">01 远程调用大模型语义助手（起点）</text>
+    <text x="76" y="162" font-size="13" font-weight="bold" fill="#e2e8f0">最小闭环 + 工程参数四件套</text>
+    <text x="76" y="186" font-size="12" fill="#94a3b8">temperature 控随机 / max_tokens 控长度</text>
+    <text x="76" y="206" font-size="12" fill="#94a3b8">批量推理 / try-except 错误兜底</text>
+    <rect x="76" y="224" width="388" height="34" rx="4" fill="#064e3b"/>
+    <text x="86" y="246" font-size="12" fill="#34d399">实测：5 成语任务全返，模型当函数用</text>
+
+    <path d="M 480 190 L 516 190" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="520" y="100" width="420" height="180" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <rect x="520" y="100" width="420" height="38" rx="10" fill="#064e3b"/>
+    <rect x="520" y="126" width="420" height="12" fill="#064e3b"/>
+    <text x="536" y="126" font-size="16" font-weight="bold" fill="#34d399">02 模拟 Qwen 本地调用（形态对比）</text>
+    <text x="536" y="162" font-size="13" font-weight="bold" fill="#e2e8f0">本地五步 vs 云端一步</text>
+    <text x="536" y="186" font-size="12" fill="#94a3b8">加载→编码→生成→解码 → messages 直发</text>
+    <text x="536" y="206" font-size="12" fill="#94a3b8">资源受限场景的务实选择</text>
+    <rect x="536" y="224" width="388" height="34" rx="4" fill="#064e3b"/>
+    <text x="546" y="246" font-size="12" fill="#34d399">实测：max_tokens 截断成教学点</text>
+
+    <path d="M 940 190 L 976 190" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="980" y="100" width="400" height="180" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <rect x="980" y="100" width="400" height="38" rx="10" fill="#064e3b"/>
+    <rect x="980" y="126" width="400" height="12" fill="#064e3b"/>
+    <text x="996" y="126" font-size="16" font-weight="bold" fill="#34d399">03 模型的 LoRA 微调控制（定制）</text>
+    <text x="996" y="162" font-size="13" font-weight="bold" fill="#e2e8f0">本地 PEFT 九步原理 + 云端提交</text>
+    <text x="996" y="186" font-size="12" fill="#94a3b8">冻结底座 + 训练低秩适配层</text>
+    <text x="996" y="206" font-size="12" fill="#94a3b8">235B 底座跑不动，LoRA 权重很小</text>
+    <rect x="996" y="224" width="368" height="34" rx="4" fill="#78350f"/>
+    <text x="1006" y="246" font-size="12" fill="#fde68a">实测：百炼提交 403（账号权限，非代码问题）</text>
+  </g>
+
+  <!-- 换行箭头 03 → 04 -->
+  <path d="M 1180 280 L 1180 316 L 270 316 L 270 352" stroke="#22d3ee" stroke-width="2.5" fill="none" marker-end="url(#arrCyan)"/>
+
+  <!-- ============ 第二行：04 → 05 → 06（并发与协议线） ============ -->
+  <g>
+    <rect x="60" y="352" width="420" height="180" rx="10" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <rect x="60" y="352" width="420" height="38" rx="10" fill="#312e81"/>
+    <rect x="60" y="378" width="420" height="12" fill="#312e81"/>
+    <text x="76" y="378" font-size="16" font-weight="bold" fill="#a78bfa">04 多线程并发 GPU 推理系统</text>
+    <text x="76" y="414" font-size="13" font-weight="bold" fill="#e2e8f0">多实例 + 线程分发 + 槽位轮询</text>
+    <text x="76" y="438" font-size="12" fill="#94a3b8">模型实例有限，请求必须排队调度</text>
+    <text x="76" y="458" font-size="12" fill="#94a3b8">服务化的第一课：并发</text>
+    <rect x="76" y="476" width="388" height="34" rx="4" fill="#312e81"/>
+    <text x="86" y="498" font-size="12" fill="#c7d2fe">实测：串行 vs 并发 3.3 倍加速</text>
+
+    <path d="M 480 442 L 516 442" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="520" y="352" width="420" height="180" rx="10" fill="#1e293b" stroke="#22d3ee" stroke-width="2.5"/>
+    <rect x="520" y="352" width="420" height="38" rx="10" fill="#0c4a6e"/>
+    <rect x="520" y="378" width="420" height="12" fill="#0c4a6e"/>
+    <text x="536" y="378" font-size="16" font-weight="bold" fill="#7dd3fc">05 模拟 ChatCompletion 接口（枢纽篇）</text>
+    <text x="536" y="414" font-size="13" font-weight="bold" fill="#e2e8f0">实现 /v1/chat/completions 标准协议</text>
+    <text x="536" y="438" font-size="12" fill="#94a3b8">客户端只换 base_url，代码零改动</text>
+    <text x="536" y="458" font-size="12" fill="#94a3b8">协议 = 行业通用方言（不是某家私产）</text>
+    <rect x="536" y="476" width="388" height="34" rx="4" fill="#0c4a6e"/>
+    <text x="546" y="498" font-size="12" fill="#7dd3fc">实测：真流式 44 块逐块返回 + [DONE]</text>
+
+    <path d="M 940 442 L 976 442" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="980" y="352" width="400" height="180" rx="10" fill="#1e293b" stroke="#22d3ee" stroke-width="2.5"/>
+    <rect x="980" y="352" width="400" height="38" rx="10" fill="#0c4a6e"/>
+    <rect x="980" y="378" width="400" height="12" fill="#0c4a6e"/>
+    <text x="996" y="378" font-size="16" font-weight="bold" fill="#7dd3fc">06 Qwen 函数调用标准结构</text>
+    <text x="996" y="414" font-size="13" font-weight="bold" fill="#e2e8f0">Function Calling 真三件套</text>
+    <text x="996" y="438" font-size="12" fill="#94a3b8">tools 说明书 + 模型自主决策 + 本地 dispatch</text>
+    <text x="996" y="458" font-size="12" fill="#34d399">char02 Agent 循环的协议源头</text>
+    <rect x="996" y="476" width="368" height="34" rx="4" fill="#0c4a6e"/>
+    <text x="1006" y="498" font-size="12" fill="#7dd3fc">实测：调 / 不调 / 多工具三场景全通</text>
+  </g>
+
+  <!-- 换行箭头 06 → 07 -->
+  <path d="M 1180 532 L 1180 568 L 270 568 L 270 604" stroke="#22d3ee" stroke-width="2.5" fill="none" marker-end="url(#arrCyan)"/>
+
+  <!-- ============ 第三行：07 → 08 → 09（交付收束与治理线） ============ -->
+  <g>
+    <rect x="60" y="604" width="420" height="180" rx="10" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <rect x="60" y="604" width="420" height="38" rx="10" fill="#312e81"/>
+    <rect x="60" y="630" width="420" height="12" fill="#312e81"/>
+    <text x="76" y="630" font-size="16" font-weight="bold" fill="#a78bfa">07 并行处理与实时流式接口（收束）</text>
+    <text x="76" y="666" font-size="13" font-weight="bold" fill="#e2e8f0">批处理（吞吐）vs 流式（延迟）</text>
+    <text x="76" y="690" font-size="12" fill="#94a3b8">04 的并发思想 + 05 的流式协议在此合体</text>
+    <text x="76" y="710" font-size="12" fill="#94a3b8">批处理优化机器效率，流式优化人的感受</text>
+    <rect x="76" y="728" width="388" height="34" rx="4" fill="#312e81"/>
+    <text x="86" y="750" font-size="12" fill="#c7d2fe">实测：4.29s 并发批 vs 0.43s 流式首字</text>
+
+    <path d="M 480 694 L 516 694" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="520" y="604" width="420" height="180" rx="10" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <rect x="520" y="604" width="420" height="38" rx="10" fill="#78350f"/>
+    <rect x="520" y="630" width="420" height="12" fill="#78350f"/>
+    <text x="536" y="630" font-size="16" font-weight="bold" fill="#fbbf24">08 审查敏感词过滤系统（硬边界）</text>
+    <text x="536" y="666" font-size="13" font-weight="bold" fill="#e2e8f0">双层防线：生成前 + 生成后</text>
+    <text x="536" y="690" font-size="12" fill="#94a3b8">Trie 前缀树 O(前缀长) 匹配</text>
+    <text x="536" y="710" font-size="12" fill="#94a3b8">"暴 力带空格"实验证明单层必漏</text>
+    <rect x="536" y="728" width="388" height="34" rx="4" fill="#78350f"/>
+    <text x="546" y="750" font-size="12" fill="#fde68a">实测：input_blocked / output_blocked 均触发</text>
+
+    <path d="M 940 694 L 976 694" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+    <rect x="980" y="604" width="400" height="180" rx="10" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <rect x="980" y="604" width="400" height="38" rx="10" fill="#78350f"/>
+    <rect x="980" y="630" width="400" height="12" fill="#78350f"/>
+    <text x="996" y="630" font-size="16" font-weight="bold" fill="#fbbf24">09 大模型的可信度评估（软预警）</text>
+    <text x="996" y="666" font-size="13" font-weight="bold" fill="#e2e8f0">逐 token logprobs = 自我确信度</text>
+    <text x="996" y="690" font-size="12" fill="#94a3b8">低概率 token = 幻觉预警（非判决）</text>
+    <text x="996" y="710" font-size="12" fill="#f472b6">依赖 05 的 OpenAI 兼容模式（logprobs）</text>
+    <rect x="996" y="728" width="368" height="34" rx="4" fill="#78350f"/>
+    <text x="1006" y="750" font-size="12" fill="#fde68a">实测：0.9365 vs 0.8763 置信度对比</text>
+  </g>
+
+  <!-- ============ 三条关键连线 ============ -->
+  <g>
+    <rect x="60" y="814" width="1320" height="164" rx="12" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <text x="80" y="846" font-size="16" font-weight="bold" fill="#a78bfa">三条关键连线（把 9 篇串成体系的三根线）</text>
+
+    <rect x="90" y="864" width="400" height="92" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="106" y="890" font-size="14" font-weight="bold" fill="#34d399">04 → 07：交付线收束</text>
+    <text x="106" y="914" font-size="12" fill="#e2e8f0">04 的多线程并发思想 + 05 的流式协议</text>
+    <text x="106" y="936" font-size="12" fill="#e2e8f0">在 07 收束成"批处理 + 流式"完整双模式</text>
+
+    <rect x="510" y="864" width="400" height="92" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="526" y="890" font-size="14" font-weight="bold" fill="#22d3ee">05 → 06 → char02：协议线</text>
+    <text x="526" y="914" font-size="12" fill="#e2e8f0">char02 八篇 Agent 的 agent_chat 循环</text>
+    <text x="526" y="936" font-size="12" fill="#e2e8f0">协议源头就是 06 的 Function Calling 三件套</text>
+
+    <rect x="930" y="864" width="420" height="92" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="946" y="890" font-size="14" font-weight="bold" fill="#fbbf24">05 → 09：能力补位线</text>
+    <text x="946" y="914" font-size="12" fill="#e2e8f0">dashscope 原生 SDK 不返回 logprobs</text>
+    <text x="946" y="936" font-size="12" fill="#e2e8f0">09 必须走 05 教过的 OpenAI 兼容模式</text>
+  </g>
+
+  <defs>
+    <marker id="arrCyan" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#22d3ee"/>
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02_输入参数解析与封装Agent - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>02_输入参数解析与封装Agent - 代码解析</h1>
+<div class="meta">对应文件：char08/02_输入参数解析与封装Agent.py | 教材出处：第8章 单智能体系统构建实战 例8-2 | 环境实测：qwen-plus 真实调用 + 规则解析器全链路 | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char08 第二篇——<strong>解决"人说人话、工具要结构"的翻译问题</strong>。用户说的是自然语言（"请预测2026年美国的GDP增长趋势"），工具 API 吃的是结构化参数（<code class="inline">{"region": "美国", "year": 2026, "focus": "GDP"}</code>），两者之间需要一座桥——<code class="inline">parse_input()</code> 规则解析器。本篇完整演示了这条链：<strong>自然语言 → 规则解析 → 结构化参数 → 工具执行 → LLM 综合解读</strong>。这正是 function calling 的"规则版前传"——在 LLM 自主选参之前，工程师先用硬编码规则做参数提取。</p>
+
+<!-- ========== 二 ========== -->
+<h2>三段解析规则速查表（parse_input 的全部逻辑）</h2>
+<table>
+  <tr><th>参数</th><th>解析方式</th><th>默认值</th><th>匹配规则</th><th>本例结果</th></tr>
+  <tr><td>year</td><td>分词 + 后缀判断</td><td>2026</td><td>token 以"年"结尾且前缀是纯数字</td><td>2026（命中"2026年"）</td></tr>
+  <tr><td>region</td><td>关键词包含</td><td>中国</td><td>"美国" 优先于 "欧盟"（if/elif 顺序）</td><td>美国</td></tr>
+  <tr><td>focus</td><td>关键词包含</td><td>GDP</td><td>"CPI" 优先于 "PMI"（if/elif 顺序）</td><td>GDP（未命中 CPI/PMI）</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">三层兜底设计：每个参数都有默认值</div>
+  <p>注意 parse_input 的开头——三个变量先赋默认值，解析命中就覆盖，没命中就保留默认。配合工具侧的 <code class="inline">params.get("region", "中国")</code> 双重默认值，这条链<strong>永远不会因为参数缺失而崩溃</strong>。这是"宽容输入"设计：解析器尽力提取，提取不到就给合理默认，工具再兜一层底。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程图</h2>
+<pre>
+用户输入（自然语言）
+  "请预测2026年美国的GDP增长趋势"
+        │
+        ▼
+parse_input(user_input)          ← 规则解析器（本篇核心）
+  ├─ 分词找"2026年" → year=2026
+  ├─ 含"美国" → region=美国
+  └─ 无CPI/PMI → focus=GDP（默认）
+        │
+        ▼
+structured_params = {"region": "美国", "year": 2026, "focus": "GDP"}
+        │
+        ▼
+forecast_tool.call(params)       ← 结构化参数直接 .get() 取值
+  "[DeepSeek-V1] 美国在2026年的GDP增长率预计为5.2%"
+        │
+        ▼
+拼 prompt（工具输出 + 问题原文）
+        │
+        ▼
+dashscope.Generation.call(qwen-plus)
+  → "政策分析师视角简评：5.2%显著高于历史趋势2.3%..."
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、逐段代码讲解</h2>
+<h3>4.1 parse_input：三段式规则解析（本篇核心教学资产，原样保留）</h3>
+<pre>
+# 年份解析：分词 + 后缀判断
+for token in user_text.split():
+    if token.endswith("年") and token[:-1].isdigit():
+        year = int(token[:-1])
+
+# 区域解析：if/elif 优先级
+if "美国" in user_text:
+    region = "美国"
+elif "欧盟" in user_text:
+    region = "欧盟"
+
+# 指标关键词：if/elif 优先级
+if "CPI" in user_text:
+    focus = "CPI"
+elif "PMI" in user_text:
+    focus = "PMI"
+</pre>
+<p>三种典型的规则提取手法：<strong>分词+后缀</strong>（结构化程度高的"数字年"）、<strong>子串包含</strong>（"美国"藏在句子里任何位置都能命中）、<strong>if/elif 优先级</strong>（同时命中多个时取先判断的——和 char07-03/04 的路由函数同一套写法）。整段零依赖、纯 Python，是"不调 LLM 做参数提取"的最小样板。</p>
+<h3>4.2 EconomicForecastTool：Dict 签名 + 双层默认值</h3>
+<pre>
+def call(self, params: Dict[str, Any]) -> str:
+    region = params.get("region", "中国")   # 工具侧兜底
+    year = params.get("year", 2026)
+    focus = params.get("focus", "GDP")
+</pre>
+<p>注意 call 的签名是 <code class="inline">params: Dict[str, Any]</code> 而非 str——与 char07-04 的 HybridAnalysisTool 同款设计（结构化输入比单字符串表达力强）。<code class="inline">.get(key, default)</code> 的默认值机制让工具对"参数缺失"免疫：解析器漏提一个字段，工具照样能跑（用默认值），只是结果可能不符合用户本意。<strong>不崩溃 ≠ 正确</strong>，这是宽容输入的代价。</p>
+<h3>4.3 主流程：解析→工具→LLM 的三段式</h3>
+<pre>
+structured_params = parse_input(user_input)     # 第一段：NL → 结构化
+tool_output = forecast_tool.call(structured_params)  # 第二段：结构化 → 工具结果
+prompt = f"工具输出：{tool_output}\n问题原文：{user_input}\n..."  # 第三段：结果 → LLM 解读
+</pre>
+<p>第三段 prompt 里同时塞了<strong>工具输出</strong>和<strong>问题原文</strong>——这是个好习惯：LLM 既知道工具算出了什么，也知道用户原始意图是什么，能校验两者是否对齐（比如工具把"2026"解析错成"2020"，LLM 对比原文能发现）。</p>
+<h3>4.4 本篇与 function calling 的关系（重要认知）</h3>
+<p>本篇的 parse_input 是<strong>工程师手写的参数提取</strong>；char02-06/03-06 的 function calling 是<strong>LLM 自主的参数提取</strong>（模型输出 tool_calls JSON）。两者解决同一个问题（NL→结构化参数），但路线不同：</p>
+<table>
+  <tr><th>维度</th><th>规则解析器（本篇）</th><th>function calling（char02-06）</th></tr>
+  <tr><td>提取者</td><td>工程师写死的规则</td><td>LLM 按工具 schema 生成</td></tr>
+  <tr><td>成本</td><td>零（纯本地计算）</td><td>一次 LLM 调用（token 费用 + 延迟）</td></tr>
+  <tr><td>覆盖面</td><td>只覆盖预想到的表达（"2026年"能提取，"明年"不能）</td><td>泛化强（"明年"、"下个季度"都能理解）</td></tr>
+  <tr><td>确定性</td><td>100% 可复现</td><td>有随机性（temperature>0）</td></tr>
+  <tr><td>适用场景</td><td>格式固定的查询（报表年份、已知区域列表）</td><td>开放域自然语言（用户想怎么说就怎么说）</td></tr>
+</table>
+<p>生产系统常用<strong>混合策略</strong>：先用规则解析器快速试（成本低、命中就走），规则没命中再升级到 LLM 解析（成本高、但泛化强）——这就是"规则优先，模型兜底"的两级漏斗。</p>
+
+<!-- ========== 五 ========== -->
+<h2>五、实测验证：解析→工具→解读全链路</h2>
+<div class="ok">
+  <div class="ok-title">实测：三段式全链路跑通，参数提取全部正确</div>
+  <pre>
+--- 结构化参数 ---
+region: 美国          ← 命中"美国"关键词
+year: 2026           ← 分词提取"2026年"
+focus: GDP           ← 未命中 CPI/PMI，保留默认
+
+--- 工具输出结果 ---
+[DeepSeek-V1] 预测结果：美国在2026年的GDP增长率预计为5.2%
+
+--- Qwen3.0 输出结果 ---
+政策分析师视角简评：5.2%显著高于历史趋势（1990-2023年平均约2.3%）
+及 IMF 对美长期潜在增速（约1.8%）的基准判断...
+  </pre>
+  <p>三个参数全部提取正确，工具按结构化参数生成了结果，qwen-plus 以政策分析师视角给出了专业解读（还主动对比了历史均值和 IMF 基准——工具输出与问题原文同时入 prompt 的收益）。</p>
+</div>
+<div class="warn">
+  <div class="warn-title">规则解析器的盲区实测提示</div>
+  <p>试试这几句，观察 parse_input 的表现：</p>
+  <ul>
+    <li>"请预测<strong>明年</strong>美国的GDP" → year 保留默认 2026（"明年"没有"数字+年"结构，提取失败但静默用默认值——<strong>不报错但可能不是用户本意</strong>）</li>
+    <li>"请预测2026年<strong>欧盟和美国</strong>的GDP" → region=美国（if/elif 顺序，"美国"优先命中，欧盟被忽略——<strong>多区域只能取一个</strong>）</li>
+    <li>"请预测2026年<strong>美国的cpi</strong>"（小写） → focus=GDP（"CPI" 大小写敏感匹配失败——<strong>需要 upper() 归一化</strong>）</li>
+  </ul>
+  <p>这三条盲区就是"规则优先，模型兜底"两级漏斗存在的理由——动手练习第 2 题会让你亲手复现。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、char08 章内演进：01 → 02 的递进</h2>
+<table>
+  <tr><th>篇目</th><th>解决什么问题</th><th>核心资产</th><th>一句话</th></tr>
+  <tr><td>01 状态感知单Agent</td><td>Agent 怎么<strong>看得见自己</strong></td><td>AgentState 六态 + 状态流转</td><td>生命周期可观测</td></tr>
+  <tr><td><strong>02 参数解析与封装（本篇）</strong></td><td>Agent 怎么<strong>听懂用户</strong></td><td>parse_input 规则解析器 + Dict 签名工具</td><td>NL→结构化的翻译桥</td></tr>
+</table>
+<p>两篇合起来是单 Agent 的两大内功：<strong>对内管状态（01）、对外接输入（02）</strong>。01 篇的 execute 方法如果加上 02 篇的 parse_input 作为第一步（状态流转到 RUNNING 后先解析参数），就是一个"状态感知 + 参数解析"的完整 Agent。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、架构视角：参数提取的三代技术</h2>
+<table>
+  <tr><th>代际</th><th>技术</th><th>成本</th><th>泛化</th><th>代表</th></tr>
+  <tr><td>第一代</td><td>正则/分词规则</td><td>零</td><td>差（只认预设模式）</td><td><strong>本篇 parse_input</strong>、char03-08 Trie 敏感词</td></tr>
+  <tr><td>第二代</td><td>专门 NLU 模型（意图分类+槽位填充）</td><td>低（小模型推理）</td><td>中（需标注数据训练）</td><td>RASA、科大讯飞 NLU</td></tr>
+  <tr><td>第三代</td><td>LLM function calling</td><td>高（大模型推理）</td><td>强（开放域理解）</td><td>char02-06、char03-06、OpenAI tools</td></tr>
+</table>
+<p>三代不是替代关系，是<strong>成本-泛化的梯度</strong>：高频简单查询走第一代（零成本），复杂长尾走第三代（高成本高泛化）。本篇教的规则解析器是整个梯度里"免费档"的基石。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学版 vs 生产版差距</h2>
+<table>
+  <tr><th>教学简化</th><th>生产要求</th></tr>
+  <tr><td>三个参数硬编码解析</td><td>参数 schema 声明式定义（JSON Schema），解析器按 schema 自动生成</td></tr>
+  <tr><td>规则未命中静默用默认值</td><td>未命中时显式向用户确认（"您是指明年(2027)吗？"）或升级 LLM 解析</td></tr>
+  <tr><td>区域/指标只有 2-3 个枚举值</td><td>完整枚举表 + 别名映射（"美国/USA/US" 同义）</td></tr>
+  <tr><td>大小写敏感匹配</td><td>统一 lower()/upper() 归一化后再匹配</td></tr>
+  <tr><td>EconomicForecastTool 返回假数据</td><td>真实 API + 参数校验（year 超范围直接报错而非静默）</td></tr>
+  <tr><td>解析结果无日志留痕</td><td>解析输入/输出/命中规则全部落日志（char07-05 惯例），便于审计解析质量</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习（巩固本篇技能）</h2>
+<ol>
+  <li><strong>复现三条盲区</strong>：分别用"明年"、"欧盟和美国"、"小写cpi"三句话跑 parse_input，观察参数提取结果——验证第五节 Warn 卡的预判。</li>
+  <li><strong>修复大小写盲区</strong>：把 <code class="inline">if "CPI" in user_text</code> 改成 <code class="inline">if "CPI" in user_text.upper()</code>，让小写"cpi"也能命中——一行修复一类问题。</li>
+  <li><strong>支持多区域</strong>：把 region 从单值改成列表（"欧盟和美国"→["欧盟","美国"]），工具循环生成多条预测——体会"单值参数改多值"需要动的所有地方。</li>
+  <li><strong>升级两级漏斗</strong>：给主流程加逻辑——parse_input 提取的 year 等于默认值 2026 且原文不含"2026"时，调 qwen-plus 让模型解析年份（提示词："从这句话提取年份，只返回数字"），对比规则版和 LLM 版的提取结果。</li>
+  <li><strong>接入 01 篇状态机</strong>：把本篇主流程包进 01 篇的 StatefulAgent.execute——参数解析阶段转 RUNNING、工具调用转 WAITING_TOOL、LLM 解读转 RUNNING→COMPLETED，体验两篇合体。</li>
+</ol>
+
+</div>
+</body>
+</html>

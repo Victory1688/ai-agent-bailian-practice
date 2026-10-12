@@ -35,6 +35,18 @@
 <h1>char02 汇总说明：一个智能体的完整成长史</h1>
 <div class="meta">位置：AI Agent Development Code/aiTest/char02 | 共 9 个 py 文件（8 篇教学主文件 + 1 个启动副本） | 全部已改写为阿里百炼 dashscope 真实调用并运行验证 | 本文从大模型开发架构角度统领 8 篇，配合各篇"_代码解析.html"食用</div>
 
+<!-- ========== SVG 架构图速查 ========== -->
+<div class="card">
+  <div class="card-title">SVG 独立架构图速查（点击跳转，浏览器直接打开）</div>
+  <table>
+    <tr><th>#</th><th>架构图</th><th>视角</th><th>核心内容</th></tr>
+    <tr><td>1</td><td><a href="svg/01_六层架构总图.svg">01_六层架构总图</a></td><td>分层结构</td><td>智能体六层解剖（交付/编排/记忆/工具/模型/存储）+ 8 篇落位 + 读图方法</td></tr>
+    <tr><td>2</td><td><a href="svg/02_八篇演进线全景图.svg">02_八篇演进线全景图</a></td><td>学习路线</td><td>记忆线（01→04）/ 工具手臂线（05→07）/ 交付线（08）+ 两条跨篇虚线关联</td></tr>
+    <tr><td>3</td><td><a href="svg/03_agent_chat生命线时序图.svg">03_agent_chat生命线时序图</a></td><td>运行时序</td><td>灵魂图：四泳道 while True 循环 + 决策/执行两分支 + "永不抛异常"纪律</td></tr>
+    <tr><td>4</td><td><a href="svg/04_三条不变式与工具能力矩阵图.svg">04_三条不变式与工具能力矩阵图</a></td><td>底层规律</td><td>三不变式 + 工具手臂从近到远八级阶梯（风险递进）+ 学习路径 6 步</td></tr>
+  </table>
+</div>
+
 <!-- ========== 一 ========== -->
 <h2>一、这组代码到底想表达什么</h2>
 <p>char02 的教学主题是<strong>"智能体系统的组成结构与运行机制"</strong>。8 篇代码合起来回答一个问题：<strong>一个只会生成文字的大模型，是怎么一步步变成"能听懂任务、会调用工具、能记住历史、敢操作真实世界、最终作为一个服务被前端调用"的智能体的？</strong></p>
@@ -214,6 +226,7 @@ while True:
   <tr><td>07</td><td>07_读写本地文件.py</td><td>07_读写本地文件_代码解析.html</td><td>exec 机制、任意代码执行的安全警示</td></tr>
   <tr><td>08</td><td>08_基于FastAPI的UI中间API接口系统.py</td><td>08_基于FastAPI的UI中间API接口系统.html</td><td>三段式架构、请求生命线、服务化门槛</td></tr>
 </table>
+<p>其他配套资源：<a href="arch_汇总说明.md">arch_汇总说明.md</a>（架构版汇总，Mermaid 关联图，VSCode/Typora/GitHub 可渲染）| <a href="svg/01_六层架构总图.svg">svg/</a> 目录下 SVG 独立架构图 4 张（六层架构总图 / 八篇演进线全景图 / agent_chat生命线时序图 / 三条不变式与工具能力矩阵图，浏览器直接打开）。</p>
 <p>运行环境备忘：虚拟环境 <code class="inline">d:/MyCode/.venv/Scripts/python.exe</code>；需先设置环境变量 <code class="inline">DASHSCOPE_API_KEY</code>（阿里百炼平台）；08 的启动命令为 <code class="inline">uvicorn 08_基于FastAPI的UI中间API接口系统:app --port 8080</code>（或用副本名 agent_ui_api:app）。</p>
 
 </div>

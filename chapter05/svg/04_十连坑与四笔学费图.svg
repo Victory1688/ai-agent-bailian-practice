@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1060" viewBox="0 0 1440 1060" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1060" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char05 十连坑与四笔学费图 —— 踩坑谱系全记录（实测验证）</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">静默失败 / 降级链断裂 / 教材输出造假 / 协议名陷阱 —— 新人必看的四类学费</text>
+
+  <!-- ============ 象限一：State 静默失败谱系（左上） ============ -->
+  <g>
+    <rect x="40" y="100" width="670" height="370" rx="12" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="40" y="100" width="670" height="44" rx="12" fill="#312e2f" stroke="none"/>
+    <rect x="40" y="132" width="670" height="12" fill="#312e2f"/>
+    <text x="62" y="129" font-size="18" font-weight="bold" fill="#f87171">① 头号大坑：State 静默失败谱系（01-09 连环）</text>
+    <text x="688" y="129" text-anchor="end" font-size="12" fill="#94a3b8">无报错 + 结果错 = 最难排查</text>
+
+    <!-- 坑 A：01-08 裸 dict -->
+    <rect x="62" y="158" width="300" height="150" rx="8" fill="#0f172a" stroke="#f87171" stroke-width="1.5"/>
+    <text x="78" y="182" font-size="15" font-weight="bold" fill="#f87171">坑 A（01-08 篇）：裸 dict 子类</text>
+    <rect x="78" y="194" width="268" height="30" rx="4" fill="#1e293b" stroke="#475569"/>
+    <text x="88" y="214" font-size="13" fill="#fbbf24" font-family="Consolas, monospace">class State(dict): ...</text>
+    <text x="78" y="248" font-size="13" fill="#e2e8f0">langgraph 推断 schema 失败</text>
+    <text x="78" y="270" font-size="13" fill="#e2e8f0">→ invoke 返回 None / 字段被裁剪</text>
+    <text x="78" y="296" font-size="13" fill="#f87171">全程零报错，静默失败</text>
+
+    <!-- 箭头 A→B：更危险 -->
+    <path d="M 368 232 L 408 232" stroke="#f87171" stroke-width="2" marker-end="url(#arrowRed)"/>
+    <text x="388" y="222" text-anchor="middle" font-size="11" fill="#fbbf24">升级</text>
+
+    <!-- 坑 B：09 TypedDict 漏字段 -->
+    <rect x="414" y="158" width="278" height="150" rx="8" fill="#0f172a" stroke="#fb923c" stroke-width="1.5"/>
+    <text x="430" y="182" font-size="15" font-weight="bold" fill="#fb923c">坑 B（09 篇）：TypedDict 漏字段</text>
+    <rect x="430" y="194" width="246" height="30" rx="4" fill="#1e293b" stroke="#475569"/>
+    <text x="440" y="214" font-size="13" fill="#fbbf24" font-family="Consolas, monospace">TypedDict 只声明了 result</text>
+    <text x="430" y="248" font-size="13" fill="#e2e8f0">schema 裁剪掉未声明的输入键</text>
+    <text x="430" y="270" font-size="13" fill="#e2e8f0">→ query 输入悄悄丢失</text>
+    <text x="430" y="296" font-size="13" fill="#fb923c">比返回 None 更危险：错得更隐蔽</text>
+
+    <!-- 修复姿势条 -->
+    <rect x="62" y="322" width="630" height="52" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="78" y="344" font-size="14" font-weight="bold" fill="#34d399">修复姿势（全章统一）</text>
+    <text x="78" y="364" font-size="13" fill="#d1fae5">TypedDict 字段 = 节点要读写的全部键（含入口键）—— 图的契约先行，字段声明完整</text>
+
+    <text x="62" y="398" font-size="12" fill="#94a3b8">实证：09 篇漏声明 query 字段后 invoke 正常返回但输入被 schema 静默丢弃，直到输出缺失才暴露</text>
+    <text x="62" y="418" font-size="12" fill="#94a3b8">对照：char05 各篇 HTML 讲解文档均记录了该坑的复现与修复过程</text>
+    <text x="62" y="442" font-size="13" font-weight="bold" fill="#22d3ee">→ 延伸到 char08：LangGraph 1.x 中 State 必须用 TypedDict 且显式声明所有字段</text>
+  </g>
+
+  <!-- ============ 象限二：降级链三部曲（右上） ============ -->
+  <g>
+    <rect x="730" y="100" width="670" height="370" rx="12" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="730" y="100" width="670" height="44" rx="12" fill="#312e2f" stroke="none"/>
+    <rect x="730" y="132" width="670" height="12" fill="#312e2f"/>
+    <text x="752" y="129" font-size="18" font-weight="bold" fill="#fbbf24">② 降级链三部曲（05 → 06 → 07）</text>
+    <text x="1378" y="129" text-anchor="end" font-size="12" fill="#94a3b8">主模型挂了谁顶上？</text>
+
+    <!-- 三步横向卡 -->
+    <rect x="752" y="158" width="190" height="160" rx="8" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+    <text x="767" y="182" font-size="14" font-weight="bold" fill="#34d399">05 篇：链活着</text>
+    <text x="767" y="208" font-size="12" fill="#e2e8f0">主 LLM 调用失败</text>
+    <text x="767" y="228" font-size="12" fill="#e2e8f0">→ 异常捕获</text>
+    <text x="767" y="248" font-size="12" fill="#e2e8f0">→ 备用 LLM 顶上</text>
+    <rect x="767" y="270" width="160" height="28" rx="4" fill="#064e3b"/>
+    <text x="847" y="289" text-anchor="middle" font-size="12" fill="#34d399">降级成功</text>
+
+    <path d="M 946 238 L 986 238" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowYellow)"/>
+
+    <rect x="992" y="158" width="190" height="160" rx="8" fill="#0f172a" stroke="#f87171" stroke-width="1.5"/>
+    <text x="1007" y="182" font-size="14" font-weight="bold" fill="#f87171">06 篇：链断了</text>
+    <text x="1007" y="208" font-size="12" fill="#e2e8f0">主 + 备用 LLM</text>
+    <text x="1007" y="228" font-size="12" fill="#e2e8f0">全部不可用</text>
+    <text x="1007" y="248" font-size="12" fill="#e2e8f0">→ 无第三级兜底</text>
+    <rect x="1007" y="270" width="160" height="28" rx="4" fill="#7f1d1d"/>
+    <text x="1087" y="289" text-anchor="middle" font-size="12" fill="#fca5a5">整链失败</text>
+
+    <path d="M 1186 238 L 1226 238" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowYellow)"/>
+
+    <rect x="1232" y="158" width="146" height="160" rx="8" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="1246" y="182" font-size="14" font-weight="bold" fill="#fbbf24">07 篇：靠运气</text>
+    <text x="1246" y="208" font-size="12" fill="#e2e8f0">降级触发与否</text>
+    <text x="1246" y="228" font-size="12" fill="#e2e8f0">取决于时序侥幸</text>
+    <text x="1246" y="252" font-size="12" fill="#fbbf24">不可复制</text>
+    <rect x="1246" y="270" width="118" height="28" rx="4" fill="#78350f"/>
+    <text x="1305" y="289" text-anchor="middle" font-size="12" fill="#fde68a">幸运存活</text>
+
+    <!-- 结论条 -->
+    <rect x="752" y="336" width="626" height="56" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="768" y="359" font-size="14" font-weight="bold" fill="#34d399">生产结论</text>
+    <text x="768" y="381" font-size="13" fill="#d1fae5">降级判断用结构化 status 字段（成功/降级/失败），不要依赖异常顺序与时序巧合</text>
+
+    <text x="752" y="418" font-size="12" fill="#94a3b8">容错三级策略对照：L1 重试 → L2 降级（本系列实现）→ L3 熔断（生产进阶）</text>
+    <text x="752" y="440" font-size="12" fill="#94a3b8">与 char08-03 具备异常处理能力的 Agent 呼应：工具级自捕获 + [ERROR] 降级分支</text>
+  </g>
+
+  <!-- ============ 象限三：教材输出问题谱系（左下） ============ -->
+  <g>
+    <rect x="40" y="490" width="670" height="330" rx="12" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="40" y="490" width="670" height="44" rx="12" fill="#312e2f" stroke="none"/>
+    <rect x="40" y="522" width="670" height="12" fill="#312e2f"/>
+    <text x="62" y="519" font-size="18" font-weight="bold" fill="#a78bfa">③ 教材输出问题谱系（逐篇实测）</text>
+    <text x="688" y="519" text-anchor="end" font-size="12" fill="#94a3b8">教材输出 = 仅供参考，必须实测</text>
+
+    <!-- 时间线 -->
+    <line x1="90" y1="560" x2="90" y2="780" stroke="#475569" stroke-width="2"/>
+
+    <circle cx="90" cy="576" r="6" fill="#f87171"/>
+    <text x="110" y="581" font-size="14" font-weight="bold" fill="#f87171">05 篇</text>
+    <text x="170" y="581" font-size="13" fill="#e2e8f0">教材预估输出与实际运行结果不符（估错）</text>
+
+    <circle cx="90" cy="620" r="6" fill="#34d399"/>
+    <text x="110" y="625" font-size="14" font-weight="bold" fill="#34d399">07 篇</text>
+    <text x="170" y="625" font-size="13" fill="#e2e8f0">教材输出全对（罕见个例，别当常态）</text>
+
+    <circle cx="90" cy="664" r="6" fill="#34d399"/>
+    <text x="110" y="669" font-size="14" font-weight="bold" fill="#34d399">08 / 09 篇</text>
+    <text x="196" y="669" font-size="13" fill="#e2e8f0">实测输出正确（但 09 篇踩了 State 漏字段坑）</text>
+
+    <circle cx="90" cy="708" r="6" fill="#f87171"/>
+    <text x="110" y="713" font-size="14" font-weight="bold" fill="#f87171">10 篇</text>
+    <text x="170" y="713" font-size="13" fill="#e2e8f0">AgentD_results 键在 State 中根本不存在 —— 键名造假顶点</text>
+
+    <circle cx="90" cy="752" r="6" fill="#fbbf24"/>
+    <text x="110" y="757" font-size="14" font-weight="bold" fill="#fbbf24">共性</text>
+    <text x="170" y="757" font-size="13" fill="#e2e8f0">随机现象被描述为确定性结果（10 篇并行分工每次运行都不同）</text>
+
+    <rect x="62" y="776" width="626" height="32" rx="6" fill="#312e81" stroke="#818cf8" stroke-width="1"/>
+    <text x="78" y="797" font-size="13" fill="#c7d2fe">处理原则：每篇实测验证 → 差异写进配套 HTML 讲解文档 → 诚实标注，不替教材圆谎</text>
+  </g>
+
+  <!-- ============ 象限四：协议名陷阱连续剧（右下） ============ -->
+  <g>
+    <rect x="730" y="490" width="670" height="330" rx="12" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="730" y="490" width="670" height="44" rx="12" fill="#312e2f" stroke="none"/>
+    <rect x="730" y="522" width="670" height="12" fill="#312e2f"/>
+    <text x="752" y="519" font-size="18" font-weight="bold" fill="#f472b6">④ 协议名陷阱连续剧（08 / 09 篇）</text>
+    <text x="1378" y="519" text-anchor="end" font-size="12" fill="#94a3b8">名字像 ≠ 就是</text>
+
+    <!-- 教材版 -->
+    <rect x="752" y="552" width="300" height="170" rx="8" fill="#0f172a" stroke="#f472b6" stroke-width="1.5"/>
+    <text x="768" y="578" font-size="15" font-weight="bold" fill="#f472b6">教材版（假协议）</text>
+    <text x="768" y="606" font-size="13" fill="#e2e8f0">08 篇 "MCP"：单进程内函数调用</text>
+    <text x="768" y="630" font-size="13" fill="#e2e8f0">09 篇 "A2A"：同进程字典传递</text>
+    <text x="768" y="660" font-size="13" fill="#fca5a5">只是借用了协议的名字</text>
+    <text x="768" y="684" font-size="13" fill="#fca5a5">无跨进程 / 无标准报文 / 无握手</text>
+    <text x="768" y="708" font-size="12" fill="#94a3b8">教学简化模拟，便于理解概念</text>
+
+    <!-- 真协议 -->
+    <rect x="1078" y="552" width="300" height="170" rx="8" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+    <text x="1094" y="578" font-size="15" font-weight="bold" fill="#34d399">真协议（行业标准）</text>
+    <text x="1094" y="606" font-size="13" fill="#e2e8f0">MCP：Anthropic 2024 开放标准</text>
+    <text x="1094" y="626" font-size="13" fill="#94a3b8">跨进程工具调用协议（stdio/HTTP）</text>
+    <text x="1094" y="652" font-size="13" fill="#e2e8f0">A2A：Google 开放标准</text>
+    <text x="1094" y="672" font-size="13" fill="#94a3b8">Agent 间协作协议（跨组织/跨框架）</text>
+    <text x="1094" y="700" font-size="13" fill="#34d399">真实集成路径：langchain-mcp-adapters</text>
+
+    <!-- 中间箭头 -->
+    <path d="M 1056 637 L 1072 637" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowGray)"/>
+    <text x="1064" y="626" text-anchor="middle" font-size="10" fill="#94a3b8">升级</text>
+
+    <rect x="752" y="740" width="626" height="32" rx="6" fill="#312e81" stroke="#818cf8" stroke-width="1"/>
+    <text x="768" y="761" font-size="13" fill="#c7d2fe">辨析要点：教材讲的是"协议思想的教学模拟"；对接真实 MCP 服务器要用官方 SDK / adapters</text>
+    <text x="752" y="796" font-size="12" fill="#94a3b8">char07 延续同款陷阱：其 "MCP 上下文段" 依然是教学模拟，非真实 MCP 协议报文</text>
+  </g>
+
+  <!-- ============ 底部：新人避坑心法 ============ -->
+  <g>
+    <rect x="40" y="840" width="1360" height="180" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="876" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">新人避坑四心法（每个坑都付过学费）</text>
+
+    <rect x="70" y="896" width="310" height="100" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="86" y="922" font-size="15" font-weight="bold" fill="#22d3ee">心法一：契约先行</text>
+    <text x="86" y="948" font-size="13" fill="#e2e8f0">先声明 State（TypedDict 全字段）</text>
+    <text x="86" y="970" font-size="13" fill="#e2e8f0">再写节点 —— 字段 = 读写键全集</text>
+
+    <rect x="400" y="896" width="310" height="100" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="416" y="922" font-size="15" font-weight="bold" fill="#22d3ee">心法二：状态优于时序</text>
+    <text x="416" y="948" font-size="13" fill="#e2e8f0">降级判断看结构化 status 字段</text>
+    <text x="416" y="970" font-size="13" fill="#e2e8f0">不靠异常顺序 / 时序巧合</text>
+
+    <rect x="730" y="896" width="310" height="100" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="746" y="922" font-size="15" font-weight="bold" fill="#22d3ee">心法三：教材必实测</text>
+    <text x="746" y="948" font-size="13" fill="#e2e8f0">输出造假是常态不是例外</text>
+    <text x="746" y="970" font-size="13" fill="#e2e8f0">先跑通再对照，差异要标注</text>
+
+    <rect x="1060" y="896" width="310" height="100" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="1076" y="922" font-size="15" font-weight="bold" fill="#22d3ee">心法四：查官方规范</text>
+    <text x="1076" y="948" font-size="13" fill="#e2e8f0">见协议名先对照官方标准</text>
+    <text x="1076" y="970" font-size="13" fill="#e2e8f0">教材模拟 ≠ 行业真协议</text>
+  </g>
+
+  <!-- ============ 箭头 marker 定义 ============ -->
+  <defs>
+    <marker id="arrowRed" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#f87171"/>
+    </marker>
+    <marker id="arrowYellow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+</svg>

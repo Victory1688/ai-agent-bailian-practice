@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1060" viewBox="0 0 1440 1060" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <!-- ============ 背景 ============ -->
+  <rect width="1440" height="1060" fill="#0f172a"/>
+
+  <!-- ============ 标题区 ============ -->
+  <text x="720" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#22d3ee">char03 四层服务架构总图 —— 一家"迷你模型服务公司"（9 篇落位）</text>
+  <text x="720" y="74" text-anchor="middle" font-size="14" fill="#94a3b8">把 char01/02 的假设（"模型已经在那里，去调就行"）拆开：模型从哪来？怎么扛流量？对外说什么协议？安全谁把关？</text>
+
+  <!-- ============ 用户 ============ -->
+  <rect x="560" y="96" width="320" height="40" rx="20" fill="#0c4a6e" stroke="#22d3ee" stroke-width="2"/>
+  <text x="720" y="122" text-anchor="middle" font-size="16" font-weight="bold" fill="#7dd3fc">用户 / 客户端</text>
+
+  <path d="M 720 136 L 720 160" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- ============ L3 协议层 ============ -->
+  <g>
+    <rect x="60" y="166" width="1320" height="150" rx="12" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+    <text x="80" y="196" font-size="17" font-weight="bold" fill="#22d3ee">L3 对外协议层 —— 说什么方言（客户只认标准接口）</text>
+
+    <rect x="90" y="214" width="620" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="106" y="240" font-size="15" font-weight="bold" fill="#e2e8f0">05 模拟 ChatCompletion 接口</text>
+    <text x="106" y="264" font-size="13" fill="#94a3b8">实现 /v1/chat/completions：客户端换 base_url 无感迁移</text>
+    <text x="106" y="286" font-size="13" fill="#34d399">实测：非流式 + 真流式 44 块逐块返回 + [DONE]</text>
+
+    <rect x="740" y="214" width="610" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="756" y="240" font-size="15" font-weight="bold" fill="#e2e8f0">06 Function Calling 标准结构（真三件套）</text>
+    <text x="756" y="264" font-size="13" fill="#94a3b8">tools 说明书 + 模型自主决策 + 本地 dispatch 执行</text>
+    <text x="756" y="286" font-size="13" fill="#34d399">实测：调 / 不调 / 多工具三场景全通 —— char02 Agent 的协议源头</text>
+  </g>
+
+  <path d="M 720 316 L 720 340" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- ============ L2 治理层 ============ -->
+  <g>
+    <rect x="60" y="346" width="1320" height="150" rx="12" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <text x="80" y="376" font-size="17" font-weight="bold" fill="#fbbf24">L2 治理层 —— 敢不敢上线（硬边界 + 软预警双保险）</text>
+
+    <rect x="90" y="394" width="620" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="106" y="420" font-size="15" font-weight="bold" fill="#e2e8f0">08 敏感词双层过滤（硬边界）</text>
+    <text x="106" y="444" font-size="13" fill="#94a3b8">生成前 + 生成后两道关卡 · Trie 前缀树 O(前缀长) 匹配</text>
+    <text x="106" y="466" font-size="13" fill="#34d399">实测："暴 力带空格"实验证明双层必要性 · input/output_blocked 均触发</text>
+
+    <rect x="740" y="394" width="610" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="756" y="420" font-size="15" font-weight="bold" fill="#e2e8f0">09 大模型可信度评估（软预警）</text>
+    <text x="756" y="444" font-size="13" fill="#94a3b8">逐 token logprobs = 模型自我确信度 · 低概率 token 是幻觉预警</text>
+    <text x="756" y="466" font-size="13" fill="#34d399">实测：确定事实 0.9365 vs 幻觉高发 0.8763 对比 · 走 OpenAI 兼容模式</text>
+  </g>
+
+  <path d="M 720 496 L 720 520" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- ============ L1 交付模式层 ============ -->
+  <g>
+    <rect x="60" y="526" width="1320" height="150" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <text x="80" y="556" font-size="17" font-weight="bold" fill="#a78bfa">L1 交付模式层 —— 怎么送出去（吞吐优先 vs 延迟优先）</text>
+
+    <rect x="90" y="574" width="620" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="106" y="600" font-size="15" font-weight="bold" fill="#e2e8f0">07 批处理 vs 实时流式（07 篇收束双模式）</text>
+    <text x="106" y="624" font-size="13" fill="#94a3b8">Batch 吞吐优先（8 worker 并发批）vs Streaming 延迟优先（首字快）</text>
+    <text x="106" y="646" font-size="13" fill="#34d399">实测：4.29s 并发批完成 vs 0.43s 流式首字 —— 两种模式各优化一端</text>
+
+    <rect x="740" y="574" width="610" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="756" y="600" font-size="15" font-weight="bold" fill="#e2e8f0">04 多线程并发 GPU 推理调度</text>
+    <text x="756" y="624" font-size="13" fill="#94a3b8">多实例模拟 + 线程分发 + 槽位轮询（模型实例有限，请求排队）</text>
+    <text x="756" y="646" font-size="13" fill="#34d399">实测：串行 vs 并发 3.3 倍加速 —— 并发是服务化的第一课</text>
+  </g>
+
+  <path d="M 720 676 L 720 700" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- ============ L0 模型供给层 ============ -->
+  <g>
+    <rect x="60" y="706" width="1320" height="150" rx="12" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <text x="80" y="736" font-size="17" font-weight="bold" fill="#34d399">L0 模型供给层 —— 模型从哪来（三种来源形态）</text>
+
+    <rect x="90" y="754" width="400" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="106" y="780" font-size="15" font-weight="bold" fill="#e2e8f0">01 远程 API 调用（最小闭环）</text>
+    <text x="106" y="804" font-size="13" fill="#94a3b8">temperature / max_tokens / 批量推理 / 错误兜底</text>
+    <text x="106" y="826" font-size="13" fill="#34d399">实测：5 成语任务全返 —— 把云端模型当函数用</text>
+
+    <rect x="510" y="754" width="400" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="526" y="780" font-size="15" font-weight="bold" fill="#e2e8f0">02 本地部署 vs 云端调用</text>
+    <text x="526" y="804" font-size="13" fill="#94a3b8">本地五步（加载→编码→生成→解码）vs 云端一步</text>
+    <text x="526" y="826" font-size="13" fill="#34d399">实测：max_tokens 截断成教学点 · 资源受限选云端</text>
+
+    <rect x="930" y="754" width="420" height="84" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+    <text x="946" y="780" font-size="15" font-weight="bold" fill="#e2e8f0">03 LoRA 微调（模型定制）</text>
+    <text x="946" y="804" font-size="13" fill="#94a3b8">本地 PEFT 九步原理 + 百炼 FineTunes 云端提交</text>
+    <text x="946" y="826" font-size="13" fill="#fbbf24">实测：提交遇平台权限 403（账号限制非代码问题）</text>
+  </g>
+
+  <!-- ============ 底部读图方法 ============ -->
+  <g>
+    <rect x="60" y="886" width="1320" height="130" rx="12" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+    <text x="720" y="920" text-anchor="middle" font-size="18" font-weight="bold" fill="#22d3ee">读图方法：9 篇不是平铺列表，而是一家推理服务公司的四个楼层</text>
+    <text x="100" y="952" font-size="14" fill="#d1fae5">先解决"模型从哪来"（L0 供给）→ 再解决"流量怎么扛、结果怎么送"（L1 交付）→ 再解决"对客户承诺什么接口"（L3 协议）→ 最后"安全与可信"（L2 治理）</text>
+    <text x="100" y="980" font-size="13" fill="#94a3b8">章节顺序（01→09）是学习难度递进；本图层级（L0→L3）是服务上线顺序 —— 两套视角，同一组零件</text>
+    <text x="100" y="1004" font-size="12" fill="#64748b">衔接：char01 提示词内圈 → char02 Agent 外圈 → char03 服务化基础设施（从"用模型"升级为"运营模型服务"）</text>
+  </g>
+
+  <defs>
+    <marker id="arrGray" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#475569"/>
+    </marker>
+  </defs>
+</svg>
