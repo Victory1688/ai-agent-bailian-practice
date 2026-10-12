@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 820" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1280" height="820" fill="#0f172a"/>
+  <text x="640" y="44" font-size="26" font-weight="bold" fill="#22d3ee" text-anchor="middle">char11 · char10 A2A 协议 → HTTP 部署 完整映射</text>
+  <text x="640" y="68" font-size="13" fill="#94a3b8" text-anchor="middle">char10 全部是 Python 进程内对象（A2AServer/A2AClient），char11 暴露为真实 HTTP 端点</text>
+  <line x1="60" y1="80" x2="1220" y2="80" stroke="#334155" stroke-width="1"/>
+
+  <!-- ===== 左列：char10 进程内概念 ===== -->
+  <rect x="40" y="100" width="560" height="700" rx="10" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+  <text x="320" y="130" font-size="17" font-weight="bold" fill="#22d3ee" text-anchor="middle">char10 · Python 进程内概念</text>
+  <text x="320" y="150" font-size="11" fill="#94a3b8" text-anchor="middle">main() 里直接对象调用，无网络开销</text>
+
+  <!-- 1: Agent Card 概念 -->
+  <rect x="70" y="175" width="500" height="70" rx="6" fill="#064e3b" stroke="#22c55e"/>
+  <text x="90" y="197" font-size="13" font-weight="bold" fill="#22c55e">1 · Agent Card（身份 + skills + auth）</text>
+  <text x="90" y="217" font-size="11" fill="#94a3b8">Python dict 常量，build_agent_card(name, skills, auth_schemes)</text>
+  <text x="90" y="234" font-size="11" fill="#94a3b8">其他 Agent 拿到这个 dict 就知道"这个 Agent 是谁、能干什么"</text>
+
+  <!-- 2: message.send 业务方法 -->
+  <rect x="70" y="265" width="500" height="70" rx="6" fill="#064e3b" stroke="#22c55e"/>
+  <text x="90" y="287" font-size="13" font-weight="bold" fill="#22c55e">2 · A2AServer.message_send()（业务方法）</text>
+  <text x="90" y="307" font-size="11" fill="#94a3b8">接收 A2A Message 对象 → 处理 → 返回 Task（含 Artifact）</text>
+  <text x="90" y="324" font-size="11" fill="#94a3b8">验证: contextId 存在 + skills 匹配 + auth token 合法</text>
+
+  <!-- 3: verify_auth -->
+  <rect x="70" y="355" width="500" height="65" rx="6" fill="#064e3b" stroke="#22c55e"/>
+  <text x="90" y="377" font-size="13" font-weight="bold" fill="#22c55e">3 · A2AServer.verify_auth()（认证）</text>
+  <text x="90" y="397" font-size="11" fill="#94a3b8">解析 Authorization: Bearer &lt;token&gt; → 对比 server_token</text>
+  <text x="90" y="414" font-size="11" fill="#94a3b8">失败 → -32001 Auth Failed（JSON-RPC Error）</text>
+
+  <!-- 4: match_skill -->
+  <rect x="70" y="440" width="500" height="65" rx="6" fill="#064e3b" stroke="#22c55e"/>
+  <text x="90" y="462" font-size="13" font-weight="bold" fill="#22c55e">4 · A2AServer.match_skill()（能力匹配）</text>
+  <text x="90" y="482" font-size="11" fill="#94a3b8">三级匹配: description 中文字 → tags → skill_id</text>
+  <text x="90" y="499" font-size="11" fill="#94a3b8">失败 → -32002 Capability Validation Failed</text>
+
+  <!-- 5: dashscope.Generation.call -->
+  <rect x="70" y="525" width="500" height="65" rx="6" fill="#78350f" stroke="#fbbf24"/>
+  <text x="90" y="547" font-size="13" font-weight="bold" fill="#fbbf24">5 · dashscope.Generation.call（LLM 调用）</text>
+  <text x="90" y="567" font-size="11" fill="#94a3b8">messages=[system, user] → response.output.choices[0].message.content</text>
+  <text x="90" y="584" font-size="11" fill="#94a3b8">所有 01-10 篇统一复用的 LLM 后端</text>
+
+  <!-- 6: Request/Notification 信封 -->
+  <rect x="70" y="610" width="500" height="70" rx="6" fill="#1e3a5f" stroke="#60a5fa"/>
+  <text x="90" y="632" font-size="13" font-weight="bold" fill="#93c5fd">6 · JSON-RPC 2.0 信封（Request / Notification / Response）</text>
+  <text x="90" y="652" font-size="11" fill="#94a3b8">{jsonrpc:"2.0", id, method, params} ← 01-06 篇共用 build_* 函数</text>
+  <text x="90" y="669" font-size="11" fill="#94a3b8">A2A 和 MCP 协议共用这个信封层</text>
+
+  <!-- ===== 箭头区 ===== -->
+  <defs>
+    <marker id="arr3" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#22d3ee"/></marker>
+  </defs>
+  <path d="M600 210 L660 210" stroke="#22d3ee" stroke-width="2" fill="none" marker-end="url(#arr3)"/>
+  <path d="M600 300 L660 300" stroke="#22d3ee" stroke-width="2" fill="none" marker-end="url(#arr3)"/>
+  <path d="M600 387 L660 387" stroke="#22d3ee" stroke-width="2" fill="none" marker-end="url(#arr3)"/>
+  <path d="M600 472 L660 472" stroke="#22d3ee" stroke-width="2" fill="none" marker-end="url(#arr3)"/>
+  <path d="M600 557 L660 557" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#arr3)"/>
+  <path d="M600 645 L660 645" stroke="#60a5fa" stroke-width="2" fill="none" marker-end="url(#arr3)"/>
+
+  <!-- ===== 右列：char11 HTTP 端点 ===== -->
+  <rect x="660" y="100" width="580" height="700" rx="10" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+  <text x="950" y="130" font-size="17" font-weight="bold" fill="#22d3ee" text-anchor="middle">char11 · Flask HTTP 端点</text>
+  <text x="950" y="150" font-size="11" fill="#94a3b8" text-anchor="middle">部署成真实可调用的 Web 服务</text>
+
+  <rect x="690" y="175" width="520" height="70" rx="6" fill="#134e4a" stroke="#22d3ee"/>
+  <text x="710" y="197" font-size="13" font-weight="bold" fill="#22d3ee">1 · GET /.well-known/agent.json</text>
+  <text x="710" y="217" font-size="11" fill="#94a3b8">app.route("/well-known/agent.json") → jsonify(AGENT_CARD)</text>
+  <text x="710" y="234" font-size="11" fill="#22c55e">A2A 规范标准发现路径，其他 Agent 就能发现你</text>
+
+  <rect x="690" y="265" width="520" height="70" rx="6" fill="#134e4a" stroke="#22d3ee"/>
+  <text x="710" y="287" font-size="13" font-weight="bold" fill="#22d3ee">2 · POST /ask（核心业务端点）</text>
+  <text x="710" y="307" font-size="11" fill="#94a3b8">request.get_json() → call_dashscope/deepseek → jsonify({answer,...})</text>
+  <text x="710" y="324" font-size="11" fill="#22c55e">等价于 A2AServer.message_send() 的 HTTP 映射</text>
+
+  <rect x="690" y="355" width="520" height="65" rx="6" fill="#134e4a" stroke="#22d3ee"/>
+  <text x="710" y="377" font-size="13" font-weight="bold" fill="#22d3ee">3 · 可扩展: ask() 里加 Bearer 检查</text>
+  <text x="710" y="397" font-size="11" fill="#94a3b8">request.headers.get("Authorization") → verify_auth() → 失败返回 401</text>
+  <text x="710" y="414" font-size="11" fill="#22c55e">当前示例保留可选，可一步到位和 char10-02 对齐</text>
+
+  <rect x="690" y="440" width="520" height="65" rx="6" fill="#134e4a" stroke="#22d3ee"/>
+  <text x="710" y="462" font-size="13" font-weight="bold" fill="#22d3ee">4 · 可扩展: skills 匹配 + -32002 错误码</text>
+  <text x="710" y="482" font-size="11" fill="#94a3b8">ask() 里先 match_skill()，不匹配返回 {"error": {"code": -32002}}</text>
+  <text x="710" y="499" font-size="11" fill="#22c55e">当前示例简化，可加一行调 char10-02 的 match_skill 逻辑</text>
+
+  <rect x="690" y="525" width="520" height="65" rx="6" fill="#78350f" stroke="#fbbf24"/>
+  <text x="710" y="547" font-size="13" font-weight="bold" fill="#fbbf24">5 · call_dashscope() 直接复用 char10 的 SDK 模式</text>
+  <text x="710" y="567" font-size="11" fill="#94a3b8">Generation.call(model="qwen-plus", messages=[system, user])</text>
+  <text x="710" y="584" font-size="11" fill="#94a3b8">和 char01-10 完全相同的 API 调用模式</text>
+
+  <rect x="690" y="610" width="520" height="70" rx="6" fill="#1e3a5f" stroke="#60a5fa"/>
+  <text x="710" y="632" font-size="13" font-weight="bold" fill="#93c5fd">6 · 可扩展: 新增 POST /a2a JSON-RPC 端点</text>
+  <text x="710" y="652" font-size="11" fill="#94a3b8">接收 {"jsonrpc","2.0","id","method":"message.send","params":{...}}</text>
+  <text x="710" y="669" font-size="11" fill="#22c55e">等价于 char10 完整协议信封，外部 A2A Client 能直接调</text>
+
+  <!-- 底部关键洞察 -->
+  <rect x="40" y="770" width="1200" height="28" rx="5" fill="#134e4a" stroke="#22d3ee"/>
+  <text x="640" y="788" font-size="12" fill="#22d3ee" text-anchor="middle">char10 = 协议层理解 · char11 = 部署层暴露 → 完整多 Agent 系统 = 协议 + HTTP 部署 + 生产运维</text>
+</svg>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 11-1 讲解：基于 Flask 的 A2A Agent Web 服务</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}pre .k{color:#f472b6}pre .s{color:#86efac}pre .n{color:#fbbf24}pre .cm{color:#67e8f9}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:20px 24px;margin:20px 0;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.flow{background:#fff;border:1px solid #22d3ee;border-radius:8px;padding:16px;margin:16px 0;font-family:Consolas,monospace;font-size:13px;color:#0e7490;line-height:2}
+.step{display:inline-block;background:#0f172a;color:#22d3ee;border-radius:50%;width:28px;height:28px;text-align:center;line-height:28px;font-size:13px;font-weight:bold;margin-right:8px}
+.endpoint{border:1px solid #cbd5e1;border-radius:6px;padding:12px 16px;margin:10px 0;background:#fff;border-left:4px solid #22d3ee}
+.endpoint .ep-path{font-family:Consolas,monospace;color:#2563eb;font-weight:bold}
+.endpoint .ep-method{display:inline-block;background:#22c55e;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;margin-right:8px}
+.endpoint .ep-method.post{background:#f59e0b}
+.endpoint .ep-method.get{background:#22c55e}
+</style>
+</head>
+<body>
+
+<h1>例 11-1 讲解：基于 Flask 的 A2A Agent Web 服务</h1>
+
+<div class="highlight">
+  <strong>本节核心变化：</strong>char10 全部在 Python 进程内用"函数调用"模拟 Agent 通信。char11 是<b>部署到真实 Web 服务</b>——Flask 提供 HTTP 端点，外部（APP/网站/其他 Agent）通过 HTTP POST 调用。同时加入 A2A Agent Card 端点（/.well-known/agent.json），和 char10 的协议体系衔接。
+</div>
+
+<!-- ========== Section 1 ========== -->
+<h2>一、本节要解决什么问题</h2>
+
+<p>char01-10 都在"造轮子"和"理解协议"——Agent 跑在 Python 脚本里，靠 main 入口直接调用。但真实生产环境里，Agent 必须部署成 <b>可被外部调用的 Web 服务</b>。这一篇就是迈出这一步。</p>
+
+<p>教材原版的问题：</p>
+<ul>
+  <li>DashScope 用 <code>requests.post("api/v1/services/aigc/text-generation/generation")</code>——<strong>这个 v1 端点已经下线</strong>，标准做法是用 <code>dashscope SDK</code></li>
+  <li>API Key 变量名 <code>QWEN_API_KEY</code> 混乱（实际指向 DashScope）</li>
+  <li><code>status_code == 200</code> 粗糙判断，没有 try/except（网络超时、DNS 错误、502 上游错误）</li>
+  <li><strong>没有 A2A Agent Card 端点</strong>（和 char10 的协议脱节）</li>
+  <li><strong>没有健康检查端点</strong>（生产部署必需）</li>
+  <li>没有 main self-test（只能 Flask run，无法自动验证）</li>
+</ul>
+
+<!-- ========== Section 2 ========== -->
+<h2>二、改写后的 Flask 应用 4 个端点</h2>
+
+<div class="endpoint">
+  <span class="ep-method get">GET</span>
+  <span class="ep-path">/well-known/agent.json</span>
+  <p><strong>A2A Agent Card 发现端点</strong>（char10 协议规范路径）。Agent 把自己的身份、endpoint、skills 宣告出去。其他 Agent 发现端点后就能知道"这个 Flask 服务能干什么"。</p>
+</div>
+
+<div class="endpoint">
+  <span class="ep-method get">GET</span>
+  <span class="ep-path">/health</span>
+  <p><strong>健康检查端点</strong>。K8s / Docker / 负载均衡器用这个端点判断"服务还活着吗"。返回 status + timestamp + version + 支持的模型列表。</p>
+</div>
+
+<div class="endpoint">
+  <span class="ep-method post">POST</span>
+  <span class="ep-path">/ask</span>
+  <p><strong>核心业务路由</strong>。接收 question + model 参数，调用 DashScope qwen-plus 或 DeepSeek Chat，返回 answer + model + elapsed_ms + timestamp。完整错误处理（400 参数错误 / 400 API Key 缺失 / 502 上游错误 / 500 内部错误）。</p>
+</div>
+
+<div class="endpoint">
+  <span class="ep-method get">GET</span>
+  <span class="ep-path">/error handler</span>
+  <p><strong>Flask 错误处理器</strong>（404 / 405）。返回 JSON 格式错误，比 Flask 默认的 HTML 错误页更适合 API 消费方。</p>
+</div>
+
+<!-- ========== Section 3 ========== -->
+<h2>三、双 LLM 后端对比</h2>
+
+<table>
+  <tr><th>维度</th><th>DashScope qwen-plus</th><th>DeepSeek Chat</th></tr>
+  <tr><td><strong>调用方式</strong></td><td><code>dashscope.Generation.call()</code> SDK</td><td><code>requests.post()</code> 直调</td></tr>
+  <tr><td><strong>API Key</strong></td><td><code>DASHSCOPE_API_KEY</code>（前 10 章统一）</td><td><code>DEEPSEEK_API_KEY</code>（独立）</td></tr>
+  <tr><td><strong>端点</strong></td><td>SDK 封装，不暴露 URL</td><td><code>https://api.deepseek.com/v1/chat/completions</code></td></tr>
+  <tr><td><strong>请求格式</strong></td><td>统一 messages 数组</td><td>标准 OpenAI 兼容 messages 数组</td></tr>
+  <tr><td><strong>错误处理</strong></td><td>SDK 抛异常，直接 except</td><td><code>resp.raise_for_status()</code> + requests.RequestException</td></tr>
+  <tr><td><strong>main self-test</strong></td><td>✅ 真实 API 调用</td><td>❌（没有 key 不硬调）</td></tr>
+</table>
+
+<!-- ========== Section 4 ========== -->
+<h2>四、完整请求处理流程（/ask 端点）</h2>
+
+<div class="flow">
+  <span class="step">1</span>JSON 解析（force=True + silent=False 让 Flask 抛异常）<br>
+  &nbsp;&nbsp;失败 → 400 Invalid JSON<br>
+  <span class="step">2</span>参数校验（question 非空？model ∈ {qwen, deepseek}？）<br>
+  &nbsp;&nbsp;失败 → 400 参数错误<br>
+  <span class="step">3</span>模型分发（if model=="qwen" → call_dashscope；else → call_deepseek）<br>
+  <span class="step">4</span>try/except 三层：ValueError → 400 | requests.RequestException → 502 | Exception → 500<br>
+  <span class="step">5</span>返回 JSON（answer + model + elapsed_ms + timestamp）
+</div>
+
+<!-- ========== Section 5 ========== -->
+<h2>五、改写前后对照</h2>
+
+<table>
+  <tr><th>维度</th><th>教材原版（已注释）</th><th>改写后（生产级）</th></tr>
+  <tr><td><strong>DashScope 调用</strong></td><td>裸 requests + 过时 v1 端点</td><td>dashscope SDK Generation.call（前 10 章统一）</td></tr>
+  <tr><td><strong>API Key 命名</strong></td><td>QWEN_API_KEY（混乱）</td><td>DASHSCOPE_API_KEY（前 10 章统一）</td></tr>
+  <tr><td><strong>Agent Card</strong></td><td>无</td><td><code>GET /.well-known/agent.json</code>（A2A 规范路径）</td></tr>
+  <tr><td><strong>健康检查</strong></td><td>无</td><td><code>GET /health</code></td></tr>
+  <tr><td><strong>错误处理</strong></td><td>status_code==200 if/else</td><td>完整 try/except + 分层 HTTP 状态码（400/502/500）</td></tr>
+  <tr><td><strong>错误格式</strong></td><td>裸字符串 return</td><td>统一 JSON {"error": {"code", "message"}}</td></tr>
+  <tr><td><strong>main 验证</strong></td><td>app.run(port=5000) 阻塞</td><td>后台线程启动 Flask → HTTP self-test → 自动退出</td></tr>
+  <tr><td><strong>响应元信息</strong></td><td>{"answer": ...} 单一字段</td><td>+ model + elapsed_ms + timestamp</td></tr>
+  <tr><td><strong>错误页</strong></td><td>Flask 默认 HTML 404/405</td><td>统一 JSON 错误格式</td></tr>
+</table>
+
+<!-- ========== Section 6 ========== -->
+<h2>六、实测验证（main 入口 4 项 self-test）</h2>
+
+<h3>后台线程启动 Flask</h3>
+<div class="ok">
+  <code>* Serving Flask app '01_实现基于Flask的Web服务'</code><br>
+  <code>* Running on http://127.0.0.1:5000</code>
+</div>
+
+<h3>4 项 self-test 全部通过</h3>
+<div class="ok">
+  <strong>Test 1 - GET /health：</strong><code>[通过] status=ok, version=1.0.0</code><br>
+  <strong>Test 2 - GET /well-known/agent.json：</strong><code>[通过] name=flask-chat-agent, skills=2</code><br>
+  <strong>Test 3 - POST /ask (真实 DashScope 调用)：</strong><code>[通过] answer=2..., elapsed=801ms</code><br>
+  <strong>Test 4 - POST /ask 参数校验：</strong><code>[通过] 空 question 返回 400</code>
+</div>
+
+<h3>完整请求示例（用 curl 调用）</h3>
+<pre><code><span class="cm"># 健康检查</span>
+curl http://localhost:5000/health
+<span class="c"># → {"status":"ok","version":"1.0.0","models":["qwen-plus","deepseek-chat"],...}</span>
+
+<span class="cm"># Agent Card</span>
+curl http://localhost:5000/well-known/agent.json
+<span class="c"># → {"name":"flask-chat-agent","skills":[...],"authentication":{"schemes":["bearer"]},...}</span>
+
+<span class="cm"># 问答（DashScope）</span>
+curl -X POST http://localhost:5000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"1+1=?","model":"qwen"}'
+<span class="c"># → {"answer":"2","model":"qwen-plus","elapsed_ms":801,...}</span>
+
+<span class="cm"># 问答（DeepSeek）</span>
+curl -X POST http://localhost:5000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"什么是A2A协议","model":"deepseek"}'</code></pre>
+
+<!-- ========== Section 7 ========== -->
+<h2>七、与 char10 A2A 协议的衔接</h2>
+
+<div class="card">
+  <h3>这个 Flask 服务就是 char10 A2A Agent 的 HTTP 部署！</h3>
+  <p>char10 的所有 A2AServer/A2AClient 都是 Python 进程内的对象。这一篇把它们<b>暴露成真正的 HTTP 端点</b>：</p>
+  <table>
+    <tr><th>char10 概念</th><th>char11 实现</th></tr>
+    <tr><td>Agent Card（身份+skills）</td><td><code>GET /well-known/agent.json</code></td></tr>
+    <tr><td>A2AServer.message_send()</td><td><code>POST /ask</code></td></tr>
+    <tr><td>A2AServer.verify_auth()</td><td>可扩展：检查 Authorization Bearer header（当前示例保留可选）</td></tr>
+    <tr><td>DashScope 调用（Generation.call）</td><td>call_dashscope() 函数（完全复用）</td></tr>
+  </table>
+</div>
+
+<!-- ========== Section 8 ========== -->
+<h2>八、动手练习</h2>
+
+<ol>
+  <li><strong>加 Bearer Token 认证</strong>：在 /ask 端点开头检查 <code>request.headers.get("Authorization")</code>，和 char10-02 的 verify_auth() 逻辑对齐。</li>
+  <li><strong>加 A2A JSON-RPC 格式端点</strong>：新增 <code>POST /a2a</code> 端点，接收 <code>{"jsonrpc":"2.0","id":"...","method":"message.send","params":{...}}</code> 格式的请求（和 char10 完全对齐）。</li>
+  <li><strong>加 CORS 支持</strong>：pip install flask-cors，让浏览器端 APP 也能跨域调用这个服务。</li>
+  <li><strong>换 production WSGI 服务器</strong>：把 Flask 开发服务器换成 waitress / gunicorn，实现里已有警告 "Do not use in production"。</li>
+  <li><strong>加请求日志中间件</strong>：记录每次请求的 question 长度、模型选择、elapsed_ms，方便监控。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li>Flask 官方文档：<a href="https://flask.palletsprojects.com/">flask.palletsprojects.com</a></li>
+  <li>A2A Agent Card 规范路径 /.well-known/agent.json：Google A2A Protocol § Agent Discovery</li>
+  <li>生产部署：waitress（Windows）/ gunicorn（Linux）/ uwsgi</li>
+</ul>
+
+</body>
+</html>

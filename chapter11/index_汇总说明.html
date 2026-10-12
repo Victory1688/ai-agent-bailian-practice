@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>char11 汇总说明 - Flask Web 服务与 Agent 部署</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 1100px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; line-height: 1.7; }
+  h1 { color: #0f766e; border-bottom: 3px solid #14b8a6; padding-bottom: 10px; }
+  h2 { color: #0e7490; margin-top: 2rem; border-left: 5px solid #14b8a6; padding-left: 12px; }
+  h3 { color: #7c3aed; margin-top: 1.4rem; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; background: #fff; }
+  th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #ccfbf1; color: #134e4a; }
+  .card { background: #fff; border-radius: 10px; padding: 18px; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .chip { display: inline-block; background: #14b8a6; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 12px; margin-right: 6px; }
+  .chip-blue { background: #60a5fa; }
+  .chip-red { background: #f87171; }
+  .chip-amber { background: #fbbf24; color: #78350f; }
+  .chip-green { background: #34d399; }
+  .chip-violet { background: #a78bfa; }
+  a { color: #0e7490; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta { color: #64748b; font-size: 0.9em; }
+  .svg-card { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #e2e8f0; border-radius: 10px; padding: 16px; margin: 12px 0; border: 2px solid #22d3ee; }
+  .svg-card h3 { color: #22d3ee; margin-top: 0; }
+  .svg-card table th { background: #0f172a; color: #22d3ee; border-color: #334155; }
+  .svg-card table td { border-color: #334155; background: #1e293b; color: #e2e8f0; }
+  .endpoint-row { display: flex; align-items: center; gap: 12px; margin: 10px 0; padding: 10px 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; border-left: 4px solid #22d3ee; }
+  .method { background: #22c55e; color: #fff; padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; min-width: 50px; text-align: center; }
+  .method.post { background: #f59e0b; }
+  .path { font-family: Consolas, monospace; font-weight: bold; color: #2563eb; }
+  .desc { color: #475569; font-size: 13px; flex: 1; }
+  .code-ok { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+  .code-warn { background: #fefce8; color: #854d0e; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+  .code-err { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>char11 汇总说明 - Flask Web 服务与 Agent 部署</h1>
+<p class="meta">配套架构文档：<a href="arch_汇总说明.md">arch_汇总说明.md</a>（含 Mermaid 图） | 生成日期：2026-10-12 | 唯一 py 文件已改写为生产级 Flask 服务</p>
+
+<!-- ========== SVG 架构图速查 ========== -->
+<div class="svg-card">
+  <h3>SVG 独立架构图速查（4 张）</h3>
+  <table>
+    <tr><th>#</th><th>架构图</th><th>视角</th><th>核心内容</th></tr>
+    <tr><td>1</td><td><a href="svg/01_FlaskWeb服务完整架构图.svg">01_FlaskWeb服务完整架构图.svg</a></td><td>分层架构</td><td>HTTP 入口 → Flask 路由 → 业务逻辑 → LLM 后端 → main self-test</td></tr>
+    <tr><td>2</td><td><a href="svg/02_请求处理流程图.svg">02_请求处理流程图.svg</a></td><td>流程详解</td><td>/ask 5 步处理流程 + 6 种错误码覆盖</td></tr>
+    <tr><td>3</td><td><a href="svg/03_与char10A2A协议衔接图.svg">03_与char10A2A协议衔接图.svg</a></td><td>协议映射</td><td>char10 Python 进程内概念 → char11 HTTP 端点 6 条映射</td></tr>
+    <tr><td>4</td><td><a href="svg/04_双LLM后端架构对照.svg">04_双LLM后端架构对照.svg</a></td><td>后端对照</td><td>DashScope SDK vs DeepSeek HTTP 7 维度对比</td></tr>
+  </table>
+</div>
+
+<h2>一、char11 的核心命题</h2>
+<p><strong>理解了协议（char10）之后，怎么把 Agent 部署成真实可调用的 Web 服务？</strong></p>
+<p>char01-10 全部在 Python main 里直接调用进程内对象（agent.call()）。char11 迈出部署的第一步：<strong>Flask HTTP 端点把 A2A Agent 暴露出去</strong>，让外部 APP、网站、其他 Agent 都能通过 HTTP POST 调用。</p>
+
+<h2>二、Flask 服务 4 个端点</h2>
+
+<div class="endpoint-row">
+  <span class="method get">GET</span>
+  <span class="path">/well-known/agent.json</span>
+  <span class="desc">A2A Agent Card 标准发现路径，宣告自己的身份 + skills + auth 方案</span>
+  <span class="code-ok">A2A 规范</span>
+</div>
+<div class="endpoint-row">
+  <span class="method get">GET</span>
+  <span class="path">/health</span>
+  <span class="desc">健康检查，K8s/Docker/负载均衡器判断服务是否活着</span>
+  <span class="code-ok">生产必需</span>
+</div>
+<div class="endpoint-row">
+  <span class="method post">POST</span>
+  <span class="path">/ask {question, model}</span>
+  <span class="desc">核心业务端点，DashScope qwen-plus / DeepSeek Chat 双后端可选</span>
+  <span class="code-warn">self-test 覆盖</span>
+</div>
+<div class="endpoint-row">
+  <span class="method get">GET</span>
+  <span class="path">404 / 405 error handler</span>
+  <span class="desc">统一 JSON 错误格式，替代 Flask 默认 HTML 错误页</span>
+  <span class="code-err">覆盖全部错误</span>
+</div>
+
+<h2>三、双 LLM 后端架构</h2>
+
+<div class="card-grid">
+  <div class="card">
+    <h3><span class="chip chip-green">DashScope</span> qwen-plus（SDK 模式）</h3>
+    <ul>
+      <li><strong>调用：</strong>dashscope.Generation.call() —— SDK 封装</li>
+      <li><strong>API Key：</strong>DASHSCOPE_API_KEY（前 10 章统一）</li>
+      <li><strong>错误处理：</strong>SDK 抛 Exception → ask() 统一 except → 500</li>
+      <li><strong>和 char10 复用：</strong>完全相同的调用模式</li>
+      <li><strong>self-test：</strong>✅ 真实 API 调用通过（answer=2, elapsed=801ms）</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-blue">DeepSeek</span> deepseek-chat（HTTP 模式）</h3>
+    <ul>
+      <li><strong>调用：</strong>requests.post() —— HTTP 直调</li>
+      <li><strong>API Key：</strong>DEEPSEEK_API_KEY（独立变量）</li>
+      <li><strong>错误处理：</strong>requests.RequestException → 502 上游错误</li>
+      <li><strong>和 char10 复用：</strong>char11 首次引入</li>
+      <li><strong>self-test：</strong>❌ 不硬调（无 Key 会失败）</li>
+    </ul>
+  </div>
+</div>
+
+<p><strong>扩展第三个模型成本极低：</strong>加一个 call_xxx() 函数 + /ask 里加一个 elif 分支。Flask 的 model 分发就是经典的"策略模式"。</p>
+
+<h2>四、/ask 端点请求处理流程</h2>
+
+<div class="card">
+  <h3>5 步 + 6 种错误码覆盖</h3>
+  <table>
+    <tr><th>步骤</th><th>代码位置</th><th>错误情况</th><th>HTTP 状态码</th></tr>
+    <tr><td>Step 1 · JSON 解析</td><td>request.get_json(force=True)</td><td>非法 JSON</td><td><span class="code-err">400</span></td></tr>
+    <tr><td>Step 2 · 参数校验</td><td>question.strip() / model ∈ {qwen, deepseek}</td><td>空 question / model 不支持</td><td><span class="code-err">400</span></td></tr>
+    <tr><td>Step 3 · 模型分发</td><td>if/elif 模型路由</td><td>——</td><td>——</td></tr>
+    <tr><td>Step 4 · LLM 调用</td><td>call_dashscope() / call_deepseek()</td><td>API Key 缺失 / 上游超时</td><td><span class="code-err">400 / 502</span></td></tr>
+    <tr><td>Step 5 · 返回 JSON</td><td>jsonify({answer, model, elapsed_ms})</td><td>未知内部异常</td><td><span class="code-err">500</span></td></tr>
+  </table>
+</div>
+
+<h2>五、char10 → char11 协议衔接（关键！）</h2>
+
+<div class="card-grid">
+  <div class="card" style="background:#064e3b;color:#e2e8f0;border:2px solid #22c55e;">
+    <h3 style="color:#86efac">char10 · Python 进程内概念</h3>
+    <table>
+      <tr><td style="border-color:#334155;color:#e2e8f0">Agent Card 常量</td></tr>
+      <tr><td style="border-color:#334155;color:#e2e8f0">A2AServer.message_send()</td></tr>
+      <tr><td style="border-color:#334155;color:#e2e8f0">A2AServer.verify_auth()</td></tr>
+      <tr><td style="border-color:#334155;color:#e2e8f0">dashscope.Generation.call</td></tr>
+      <tr><td style="border-color:#334155;color:#e2e8f0">JSON-RPC 2.0 信封</td></tr>
+    </table>
+  </div>
+  <div class="card" style="background:#1e3a5f;color:#e2e8f0;border:2px solid #60a5fa;">
+    <h3 style="color:#93c5fd">char11 · Flask HTTP 端点</h3>
+    <table>
+      <tr><td style="border-color:#334155;color:#e2e8f0">GET /.well-known/agent.json</td></tr>
+      <tr><td style="border-color:#334155;color:#e2e8f0">POST /ask</td></tr>
+      <tr><td style="border-color:#334155;color:#e2e8f0">ask() 里加 Authorization 检查（可扩展）</td></tr>
+      <tr><td style="border-color:#334155;color:#e2e8f0">call_dashscope() 复用同样模式</td></tr>
+      <tr><td style="border-color:#334155;color:#e2e8f0">可扩展: 新增 POST /a2a JSON-RPC</td></tr>
+    </table>
+  </div>
+</div>
+
+<h2>六、改写前后对照（教材 vs 生产级）</h2>
+
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td><strong>DashScope 端点</strong></td><td>过时 v1 URL（已下线）</td><td>dashscope SDK Generation.call（前 10 章统一）</td></tr>
+  <tr><td><strong>API Key 命名</strong></td><td>QWEN_API_KEY（混乱）</td><td>DASHSCOPE_API_KEY（前 10 章统一）</td></tr>
+  <tr><td><strong>Agent Card</strong></td><td>无</td><td>GET /.well-known/agent.json（A2A 规范路径）</td></tr>
+  <tr><td><strong>健康检查</strong></td><td>无</td><td>GET /health</td></tr>
+  <tr><td><strong>错误处理</strong></td><td>status_code==200 粗糙判断</td><td>try/except 三层 + 6 种 HTTP 状态码</td></tr>
+  <tr><td><strong>错误格式</strong></td><td>裸字符串 return</td><td>统一 JSON {"error": {"code", "message"}}</td></tr>
+  <tr><td><strong>main 入口</strong></td><td>app.run() 阻塞</td><td>后台线程 Flask → self-test → 自动退出</td></tr>
+  <tr><td><strong>响应元信息</strong></td><td>{"answer": ...}</td><td>+ model + elapsed_ms + timestamp</td></tr>
+  <tr><td><strong>404/405</strong></td><td>Flask 默认 HTML 错误页</td><td>统一 JSON 错误</td></tr>
+</table>
+
+<h2>七、main self-test 验证结果</h2>
+
+<div class="card" style="background:#0f172a;color:#e2e8f0;">
+  <h3 style="color:#22d3ee">4 项测试全部通过</h3>
+  <pre style="background:#1e293b;border:1px solid #334155;border-radius:6px;"><span style="color:#22d3ee">Test 1</span>  GET  /health
+  <span style="color:#22c55e">[通过]</span> status=ok, version=1.0.0
+
+<span style="color:#22d3ee">Test 2</span>  GET  /well-known/agent.json
+  <span style="color:#22c55e">[通过]</span> name=flask-chat-agent, skills=2
+
+<span style="color:#22d3ee">Test 3</span>  POST /ask (model=qwen, <span style="color:#fbbf24">真实 DashScope 调用</span>)
+  <span style="color:#22c55e">[通过]</span> answer=2, elapsed=801ms
+
+<span style="color:#22d3ee">Test 4</span>  POST /ask 参数校验
+  <span style="color:#22c55e">[通过]</span> 空 question → 400 question field is required
+
+<span style="color:#22c55e">全部 4 项 self-test 通过</span></pre>
+</div>
+
+<h2>八、生产级扩展方向</h2>
+
+<div class="card-grid">
+  <div class="card">
+    <h3>CORS + 真实认证</h3>
+    <ul>
+      <li>pip install flask-cors —— 浏览器端跨域</li>
+      <li>/ask 开头加 Bearer 检查（verify_auth，和 char10-02 对齐）</li>
+      <li>Agent Card authentication 声明 bearer 后其他 Agent 会自动加 token</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>WSGI + 异步队列</h3>
+    <ul>
+      <li>waitress（Windows）或 gunicorn（Linux）替换 Flask dev server</li>
+      <li>Celery / RQ 把 LLM 调用下沉异步队列，Flask 只做参数校验</li>
+      <li>/ask 立即返回 task_id，后台处理完调 SSE 推送</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>A2A 完整 JSON-RPC 端点</h3>
+    <ul>
+      <li>新增 POST /a2a，接收 {"jsonrpc":"2.0","id":"...","method":"message.send","params":{...}}</li>
+      <li>复用 char10 build_request/build_response/build_error_response</li>
+      <li>外部 A2A Client 能直接发现并调用</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>容器化部署</h3>
+    <ul>
+      <li>Dockerfile 暴露 PORT 5000</li>
+      <li>docker-compose.yml 绑定 DASHSCOPE_API_KEY 环境变量</li>
+      <li>/health 作为 K8s readiness probe</li>
+    </ul>
+  </div>
+</div>
+
+<h2>九、资源卡片</h2>
+<div class="card">
+  <h3>规范文档</h3>
+  <ul>
+    <li>Flask 官方：<a href="https://flask.palletsprojects.com/">flask.palletsprojects.com</a></li>
+    <li>A2A Agent Card /.well-known/agent.json：Google A2A Protocol § Agent Discovery</li>
+    <li>DashScope SDK：pip install dashscope</li>
+    <li>DeepSeek Chat API：<a href="https://platform.deepseek.com/api-docs/">platform.deepseek.com</a></li>
+  </ul>
+  <h3>本地运行</h3>
+  <pre><code><span style="color:#22c55e"># 设置 API Key</span>
+$env:DASHSCOPE_API_KEY = "sk-xxxxxxxx"
+<span style="color:#22c55e"># 运行（自动 self-test）</span>
+d:/MyCode/.venv/Scripts/python.exe char11/01_实现基于Flask的Web服务.py
+<span style="color:#22c55e"># 手动 curl 调用（服务已退出，Flask 没保留）</span>
+curl http://localhost:5000/health</code></pre>
+  <h3>关键依赖</h3>
+  <table>
+    <tr><th>依赖</th><th>版本</th><th>用途</th></tr>
+    <tr><td>Flask</td><td>3.1.3</td><td>HTTP 路由 + 请求处理</td></tr>
+    <tr><td>dashscope</td><td>最新</td><td>qwen-plus SDK（前 10 章统一）</td></tr>
+    <tr><td>requests</td><td>最新</td><td>DeepSeek HTTP 直调</td></tr>
+    <tr><td>threading</td><td>stdlib</td><td>后台启动 Flask</td></tr>
+  </table>
+</div>
+
+</body>
+</html>

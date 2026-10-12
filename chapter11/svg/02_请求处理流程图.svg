@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1280" height="720" fill="#0f172a"/>
+  <text x="640" y="44" font-size="26" font-weight="bold" fill="#22d3ee" text-anchor="middle">char11 · /ask 端点请求处理流程</text>
+  <text x="640" y="68" font-size="13" fill="#94a3b8" text-anchor="middle">5 步分层处理 + 完整错误码覆盖</text>
+  <line x1="60" y1="80" x2="1220" y2="80" stroke="#334155" stroke-width="1"/>
+
+  <!-- 请求入口 -->
+  <rect x="540" y="100" width="200" height="50" rx="25" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+  <text x="640" y="130" font-size="14" fill="#22d3ee" text-anchor="middle">POST /ask</text>
+
+  <path d="M640 150 L640 180" stroke="#22d3ee" stroke-width="2" fill="none" marker-end="url(#arr2-c)"/>
+
+  <!-- Step 1: JSON 解析 -->
+  <rect x="440" y="180" width="400" height="55" rx="8" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+  <text x="640" y="202" font-size="14" font-weight="bold" fill="#60a5fa" text-anchor="middle">Step 1 · JSON 解析</text>
+  <text x="640" y="222" font-size="11" fill="#94a3b8" text-anchor="middle">request.get_json(force=True)</text>
+  <path d="M840 207 L960 207" stroke="#ef4444" stroke-width="1.5" fill="none"/>
+  <rect x="960" y="190" width="200" height="35" rx="5" fill="#7f1d1d" stroke="#ef4444"/>
+  <text x="1060" y="212" font-size="11" fill="#fca5a5" text-anchor="middle">失败 → 400 Invalid JSON</text>
+
+  <path d="M640 235 L640 270" stroke="#60a5fa" stroke-width="2" fill="none" marker-end="url(#arr2-b)"/>
+
+  <!-- Step 2: 参数校验 -->
+  <rect x="440" y="270" width="400" height="55" rx="8" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+  <text x="640" y="292" font-size="14" font-weight="bold" fill="#60a5fa" text-anchor="middle">Step 2 · 参数校验</text>
+  <text x="640" y="312" font-size="11" fill="#94a3b8" text-anchor="middle">question 非空？model ∈ {qwen, deepseek}？</text>
+  <path d="M840 297 L960 297" stroke="#ef4444" stroke-width="1.5" fill="none"/>
+  <rect x="960" y="280" width="200" height="35" rx="5" fill="#7f1d1d" stroke="#ef4444"/>
+  <text x="1060" y="302" font-size="11" fill="#fca5a5" text-anchor="middle">失败 → 400 参数错误</text>
+
+  <path d="M640 325 L640 360" stroke="#60a5fa" stroke-width="2" fill="none" marker-end="url(#arr2-b)"/>
+
+  <!-- Step 3: 模型分发 -->
+  <rect x="440" y="360" width="400" height="55" rx="8" fill="#0f172a" stroke="#fbbf24" stroke-width="2"/>
+  <text x="640" y="382" font-size="14" font-weight="bold" fill="#fbbf24" text-anchor="middle">Step 3 · 模型分发</text>
+  <text x="640" y="402" font-size="11" fill="#94a3b8" text-anchor="middle">model=="qwen" → call_dashscope() / model=="deepseek" → call_deepseek()</text>
+
+  <path d="M560 415 L470 490" stroke="#22c55e" stroke-width="2" fill="none" marker-end="url(#arr2-g)"/>
+  <path d="M720 415 L810 490" stroke="#60a5fa" stroke-width="2" fill="none" marker-end="url(#arr2-b)"/>
+
+  <!-- Step 4a: DashScope -->
+  <rect x="260" y="460" width="400" height="80" rx="8" fill="#064e3b" stroke="#22c55e" stroke-width="2"/>
+  <text x="460" y="484" font-size="13" font-weight="bold" fill="#22c55e" text-anchor="middle">call_dashscope() · dashscope SDK</text>
+  <text x="460" y="504" font-size="10" fill="#94a3b8" text-anchor="middle">dashscope.Generation.call(model="qwen-plus", messages=[...])</text>
+  <text x="460" y="520" font-size="10" fill="#94a3b8" text-anchor="middle">try 块: 抛 ValueError → 400</text>
+
+  <!-- Step 4b: DeepSeek -->
+  <rect x="620" y="460" width="400" height="80" rx="8" fill="#1e3a5f" stroke="#60a5fa" stroke-width="2"/>
+  <text x="820" y="484" font-size="13" font-weight="bold" fill="#60a5fa" text-anchor="middle">call_deepseek() · requests.post</text>
+  <text x="820" y="504" font-size="10" fill="#94a3b8" text-anchor="middle">requests.post(url, headers, json, timeout=30)</text>
+  <text x="820" y="520" font-size="10" fill="#94a3b8" text-anchor="middle">try 块: RequestException → 502</text>
+
+  <!-- 异常路径 -->
+  <path d="M460 540 L460 580" stroke="#22c55e" stroke-width="2" fill="none"/>
+  <path d="M820 540 L820 580" stroke="#60a5fa" stroke-width="2" fill="none"/>
+  <path d="M460 580 L640 580" stroke="#94a3b8" stroke-width="2" fill="none"/>
+  <path d="M820 580 L640 580" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arr2-g)"/>
+
+  <!-- Step 5: 返回 -->
+  <rect x="540" y="580" width="200" height="50" rx="25" fill="#14532d" stroke="#22c55e" stroke-width="2"/>
+  <text x="640" y="610" font-size="14" fill="#86efac" text-anchor="middle">Step 5 · 返回 JSON</text>
+
+  <!-- 成功/失败两个出口 -->
+  <rect x="80" y="640" width="500" height="60" rx="6" fill="#064e3b" stroke="#22c55e"/>
+  <text x="330" y="660" font-size="11" fill="#94a3b8" text-anchor="middle">成功返回</text>
+  <text x="330" y="678" font-size="11" fill="#22c55e" text-anchor="middle">{"answer": "...", "model": "qwen-plus", "elapsed_ms": 801, "timestamp": "..."}</text>
+
+  <rect x="700" y="640" width="500" height="60" rx="6" fill="#7f1d1d" stroke="#ef4444"/>
+  <text x="950" y="660" font-size="11" fill="#94a3b8" text-anchor="middle">失败返回（覆盖全部异常）</text>
+  <text x="950" y="678" font-size="11" fill="#fca5a5" text-anchor="middle">{"error": {"code": 400|502|500, "message": "..."}}</text>
+
+  <defs>
+    <marker id="arr2-c" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#22d3ee"/></marker>
+    <marker id="arr2-b" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#60a5fa"/></marker>
+    <marker id="arr2-g" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#22c55e"/></marker>
+  </defs>
+</svg>

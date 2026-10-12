@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 760" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1280" height="760" fill="#0f172a"/>
+  <text x="640" y="44" font-size="26" font-weight="bold" fill="#22d3ee" text-anchor="middle">char11 · 双 LLM 后端架构对照</text>
+  <text x="640" y="68" font-size="13" fill="#94a3b8" text-anchor="middle">同一个 Flask /ask 端点，可接两个完全不同的 LLM 后端</text>
+  <line x1="60" y1="80" x2="1220" y2="80" stroke="#334155" stroke-width="1"/>
+
+  <!-- 表头 -->
+  <rect x="40" y="100" width="220" height="50" rx="6" fill="#334155" stroke="#475569"/>
+  <text x="150" y="130" font-size="14" font-weight="bold" fill="#cbd5e1" text-anchor="middle">对比维度</text>
+
+  <rect x="280" y="100" width="470" height="50" rx="6" fill="#064e3b" stroke="#22c55e"/>
+  <text x="515" y="130" font-size="14" font-weight="bold" fill="#86efac" text-anchor="middle">DashScope qwen-plus（阿里通义）</text>
+
+  <rect x="770" y="100" width="470" height="50" rx="6" fill="#1e3a5f" stroke="#60a5fa"/>
+  <text x="1005" y="130" font-size="14" font-weight="bold" fill="#93c5fd" text-anchor="middle">DeepSeek Chat（深度求索）</text>
+
+  <!-- 行 -->
+  <!-- 行 1: 调用方式 -->
+  <rect x="40" y="160" width="220" height="55" fill="#1e293b" stroke="#334155"/>
+  <text x="60" y="182" font-size="12" font-weight="bold" fill="#e2e8f0">调用方式</text>
+  <text x="60" y="202" font-size="11" fill="#94a3b8">SDK vs HTTP</text>
+
+  <rect x="280" y="160" width="470" height="55" fill="#1e293b" stroke="#334155"/>
+  <text x="300" y="182" font-size="12" fill="#22c55e">dashscope.Generation.call() —— SDK 调用</text>
+  <text x="300" y="202" font-size="11" fill="#94a3b8">端点被 SDK 封装，不暴露 URL</text>
+
+  <rect x="770" y="160" width="470" height="55" fill="#1e293b" stroke="#334155"/>
+  <text x="790" y="182" font-size="12" fill="#60a5fa">requests.post() —— HTTP 直调</text>
+  <text x="790" y="202" font-size="11" fill="#94a3b8">URL 硬编码: https://api.deepseek.com/v1/chat/completions</text>
+
+  <!-- 行 2: API Key -->
+  <rect x="40" y="215" width="220" height="55" fill="#1e293b" stroke="#334155"/>
+  <text x="60" y="237" font-size="12" font-weight="bold" fill="#e2e8f0">API Key</text>
+  <text x="60" y="257" font-size="11" fill="#94a3b8">环境变量名</text>
+
+  <rect x="280" y="215" width="470" height="55" fill="#1e293b" stroke="#334155"/>
+  <text x="300" y="237" font-size="12" fill="#22c55e">DASHSCOPE_API_KEY（前 10 章统一）</text>
+  <text x="300" y="257" font-size="11" fill="#94a3b8">dashscope.api_key = os.environ.get(...)</text>
+
+  <rect x="770" y="215" width="470" height="55" fill="#1e293b" stroke="#334155"/>
+  <text x="790" y="237" font-size="12" fill="#60a5fa">DEEPSEEK_API_KEY（独立）</text>
+  <text x="790" y="257" font-size="11" fill="#94a3b8">硬编码在常量区，无全局 SDK 配置</text>
+
+  <!-- 行 3: 请求格式 -->
+  <rect x="40" y="270" width="220" height="80" fill="#1e293b" stroke="#334155"/>
+  <text x="60" y="292" font-size="12" font-weight="bold" fill="#e2e8f0">请求格式</text>
+  <text x="60" y="312" font-size="11" fill="#94a3b8">统一 messages 数组</text>
+
+  <rect x="280" y="270" width="470" height="80" fill="#0f172a" stroke="#22c55e"/>
+  <text x="300" y="290" font-size="11" fill="#86efac">messages=[</text>
+  <text x="310" y="306" font-size="11" fill="#86efac">{"role":"system","content":...},</text>
+  <text x="310" y="322" font-size="11" fill="#86efac">{"role":"user","content":prompt}</text>
+  <text x="300" y="338" font-size="11" fill="#86efac">]</text>
+
+  <rect x="770" y="270" width="470" height="80" fill="#0f172a" stroke="#60a5fa"/>
+  <text x="790" y="290" font-size="11" fill="#93c5fd">{"model":"deepseek-chat","messages":[</text>
+  <text x="800" y="306" font-size="11" fill="#93c5fd">{"role":"system",...}, {"role":"user",...}</text>
+  <text x="790" y="322" font-size="11" fill="#93c5fd">],"max_tokens":512}</text>
+  <text x="790" y="338" font-size="11" fill="#93c5fd">← OpenAI 兼容格式</text>
+
+  <!-- 行 4: 错误处理 -->
+  <rect x="40" y="350" width="220" height="60" fill="#1e293b" stroke="#334155"/>
+  <text x="60" y="372" font-size="12" font-weight="bold" fill="#e2e8f0">错误处理</text>
+  <text x="60" y="392" font-size="11" fill="#94a3b8">Python 异常类型</text>
+
+  <rect x="280" y="350" width="470" height="60" fill="#1e293b" stroke="#334155"/>
+  <text x="300" y="372" font-size="12" fill="#22c55e">SDK 抛 Exception → ask() 统一 except → 500</text>
+  <text x="300" y="392" font-size="11" fill="#94a3b8">无需处理 HTTP 层异常（SDK 封装）</text>
+
+  <rect x="770" y="350" width="470" height="60" fill="#1e293b" stroke="#334155"/>
+  <text x="790" y="372" font-size="12" fill="#60a5fa">requests.RequestException → 502 上游错误</text>
+  <text x="790" y="392" font-size="11" fill="#94a3b8">resp.raise_for_status() 先抛 HTTPError</text>
+
+  <!-- 行 5: 和 char10 复用 -->
+  <rect x="40" y="410" width="220" height="60" fill="#1e293b" stroke="#334155"/>
+  <text x="60" y="432" font-size="12" font-weight="bold" fill="#e2e8f0">和 char10 复用</text>
+  <text x="60" y="452" font-size="11" fill="#94a3b8">之前 10 章</text>
+
+  <rect x="280" y="410" width="470" height="60" fill="#064e3b" stroke="#22c55e"/>
+  <text x="300" y="432" font-size="12" fill="#22c55e">完全复用！char01-10 全部用这个 SDK 调用模式</text>
+  <text x="300" y="452" font-size="11" fill="#94a3b8">只需从 ask() 里调，其他 10 章代码不动</text>
+
+  <rect x="770" y="410" width="470" height="60" fill="#1e293b" stroke="#334155"/>
+  <text x="790" y="432" font-size="12" fill="#60a5fa">char11 首次引入，之前 10 章没有</text>
+  <text x="790" y="452" font-size="11" fill="#94a3b8">需要单独写函数封装 + requests 依赖</text>
+
+  <!-- 行 6: 主端点路由 -->
+  <rect x="40" y="470" width="220" height="60" fill="#1e293b" stroke="#334155"/>
+  <text x="60" y="492" font-size="12" font-weight="bold" fill="#e2e8f0">/ask 路由分发</text>
+  <text x="60" y="512" font-size="11" fill="#94a3b8">if/elif 分支</text>
+
+  <rect x="280" y="470" width="470" height="60" fill="#1e293b" stroke="#334155"/>
+  <text x="300" y="492" font-size="12" fill="#22c55e">if model == "qwen" → call_dashscope()</text>
+  <text x="300" y="512" font-size="11" fill="#94a3b8">else if model == "deepseek" → call_deepseek()</text>
+
+  <rect x="770" y="470" width="470" height="60" fill="#1e293b" stroke="#334155"/>
+  <text x="790" y="492" font-size="12" fill="#60a5fa">加第三个模型: elif model == "xxx" → call_xxx()</text>
+  <text x="790" y="512" font-size="11" fill="#94a3b8">扩展成本极低，1 个函数 + 1 个 elif</text>
+
+  <!-- 行 7: self-test 覆盖 -->
+  <rect x="40" y="530" width="220" height="60" fill="#1e293b" stroke="#334155"/>
+  <text x="60" y="552" font-size="12" font-weight="bold" fill="#e2e8f0">self-test 覆盖</text>
+  <text x="60" y="572" font-size="11" fill="#94a3b8">main 入口测试</text>
+
+  <rect x="280" y="530" width="470" height="60" fill="#064e3b" stroke="#22c55e"/>
+  <text x="300" y="552" font-size="12" fill="#22c55e">✅ Test 3: POST /ask model=qwen 真实 DashScope 调用通过</text>
+  <text x="300" y="572" font-size="11" fill="#94a3b8">answer=2, elapsed=801ms（真实 API）</text>
+
+  <rect x="770" y="530" width="470" height="60" fill="#1e293b" stroke="#334155"/>
+  <text x="790" y="552" font-size="12" fill="#60a5fa">❌ self-test 不调 DEEPSEEK（无 Key 硬调会失败）</text>
+  <text x="790" y="572" font-size="11" fill="#94a3b8">加 key 后可扩展第 5 项测试</text>
+
+  <!-- 底部关键洞察 -->
+  <rect x="40" y="610" width="1200" height="120" rx="8" fill="#134e4a" stroke="#22d3ee"/>
+  <text x="60" y="636" font-size="14" font-weight="bold" fill="#22d3ee">关键架构洞察</text>
+  <text x="60" y="658" font-size="12" fill="#e2e8f0">① DashScope SDK 模式 vs DeepSeek HTTP 模式 —— 两个后端两种调用风格并存，Flask /ask 端点把它们统一成同一个 JSON 请求格式。</text>
+  <text x="60" y="676" font-size="12" fill="#e2e8f0">② Flask 的 model 分发 if/elif 是经典的"策略模式"：未来加第三个模型（通义千问 / 文心一言 / 本地模型）只要加一个 call_xxx() 函数 + 一个 elif 分支。</text>
+  <text x="60" y="694" font-size="12" fill="#e2e8f0">③ 生产级 Flask 服务通常把 LLM 调用下沉到独立的后端队列（Celery / RQ），Flask 只负责路由和参数校验。本示例保持同步简化，适合新人理解基本架构。</text>
+  <text x="60" y="712" font-size="12" fill="#22c55e">④ call_dashscope() 完全复用 char10 的 SDK 调用模式 —— 前 10 章和第 11 章共享同一个 LLM 后端。</text>
+</svg>

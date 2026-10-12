@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 880" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1280" height="880" fill="#0f172a"/>
+  <text x="640" y="44" font-size="26" font-weight="bold" fill="#22d3ee" text-anchor="middle">char11 · Flask A2A Agent Web 服务完整架构</text>
+  <text x="640" y="68" font-size="13" fill="#94a3b8" text-anchor="middle">从 Python main 到 HTTP 部署 —— 4 个端点 + 双 LLM 后端 + A2A Agent Card</text>
+  <line x1="60" y1="80" x2="1220" y2="80" stroke="#334155" stroke-width="1"/>
+
+  <!-- ============ 顶部：HTTP 请求入口 ============ -->
+  <rect x="40" y="100" width="1200" height="100" rx="10" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+  <text x="60" y="130" font-size="16" font-weight="bold" fill="#94a3b8">HTTP 请求入口（外部 APP / 网站 / 其他 Agent）</text>
+
+  <rect x="70" y="150" width="260" height="38" rx="6" fill="#064e3b" stroke="#22c55e"/>
+  <text x="200" y="174" font-size="13" fill="#86efac" text-anchor="middle">GET /health</text>
+
+  <rect x="360" y="150" width="320" height="38" rx="6" fill="#064e3b" stroke="#22c55e"/>
+  <text x="520" y="174" font-size="13" fill="#86efac" text-anchor="middle">GET /.well-known/agent.json</text>
+
+  <rect x="710" y="150" width="230" height="38" rx="6" fill="#78350f" stroke="#fbbf24"/>
+  <text x="825" y="174" font-size="13" fill="#fde68a" text-anchor="middle">POST /ask {question, model}</text>
+
+  <rect x="970" y="150" width="250" height="38" rx="6" fill="#1e293b" stroke="#60a5fa"/>
+  <text x="1095" y="174" font-size="13" fill="#93c5fd" text-anchor="middle">404/405 Error Handler</text>
+
+  <path d="M640 200 L640 222" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arr1-g)"/>
+
+  <!-- ============ Flask 路由层 ============ -->
+  <rect x="40" y="222" width="1200" height="110" rx="10" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+  <text x="60" y="252" font-size="16" font-weight="bold" fill="#60a5fa">Flask 路由层（app.route 装饰器 + request/response）</text>
+
+  <rect x="70" y="270" width="260" height="45" rx="6" fill="#1e3a5f" stroke="#60a5fa"/>
+  <text x="200" y="292" font-size="13" fill="#93c5fd" text-anchor="middle">agent_card() → jsonify(AGENT_CARD)</text>
+
+  <rect x="360" y="270" width="320" height="45" rx="6" fill="#1e3a5f" stroke="#60a5fa"/>
+  <text x="520" y="292" font-size="13" fill="#93c5fd" text-anchor="middle">health() → jsonify({status, version, models})</text>
+
+  <rect x="710" y="270" width="230" height="45" rx="6" fill="#3b1d1d" stroke="#f87171"/>
+  <text x="825" y="292" font-size="13" fill="#fca5a5" text-anchor="middle">ask() → try/except 5 步处理</text>
+
+  <rect x="970" y="270" width="250" height="45" rx="6" fill="#1e3a5f" stroke="#60a5fa"/>
+  <text x="1095" y="292" font-size="13" fill="#93c5fd" text-anchor="middle">@app.errorhandler → JSON 错误</text>
+
+  <path d="M640 332 L640 354" stroke="#60a5fa" stroke-width="2" fill="none" marker-end="url(#arr1-b)"/>
+
+  <!-- ============ 业务逻辑层 ============ -->
+  <rect x="40" y="354" width="1200" height="140" rx="10" fill="#1e3a5f" stroke="#22d3ee" stroke-width="2"/>
+  <text x="60" y="384" font-size="16" font-weight="bold" fill="#22d3ee">业务逻辑层（双 LLM 调用 + A2A Agent Card + 错误码）</text>
+
+  <!-- 左：Agent Card 常量 -->
+  <rect x="70" y="400" width="240" height="75" rx="6" fill="#064e3b" stroke="#22c55e"/>
+  <text x="190" y="422" font-size="13" fill="#86efac" text-anchor="middle">AGENT_CARD 常量</text>
+  <text x="190" y="440" font-size="10" fill="#94a3b8" text-anchor="middle">name + endpoint + authentication</text>
+  <text x="190" y="456" font-size="10" fill="#94a3b8" text-anchor="middle">+ capabilities + skills[]</text>
+
+  <!-- 中：双 LLM 调用 -->
+  <rect x="350" y="400" width="240" height="75" rx="6" fill="#78350f" stroke="#fbbf24"/>
+  <text x="470" y="422" font-size="13" fill="#fde68a" text-anchor="middle">call_dashscope()</text>
+  <text x="470" y="440" font-size="10" fill="#94a3b8" text-anchor="middle">dashscope.Generation.call SDK</text>
+  <text x="470" y="456" font-size="10" fill="#94a3b8" text-anchor="middle">qwen-plus · messages[]</text>
+
+  <rect x="620" y="400" width="240" height="75" rx="6" fill="#78350f" stroke="#fbbf24"/>
+  <text x="740" y="422" font-size="13" fill="#fde68a" text-anchor="middle">call_deepseek()</text>
+  <text x="740" y="440" font-size="10" fill="#94a3b8" text-anchor="middle">requests.post HTTP 直调</text>
+  <text x="740" y="456" font-size="10" fill="#94a3b8" text-anchor="middle">deepseek-chat · v1/chat</text>
+
+  <!-- 右：错误码 -->
+  <rect x="890" y="400" width="320" height="75" rx="6" fill="#1e293b" stroke="#f87171"/>
+  <text x="1050" y="422" font-size="13" fill="#fca5a5" text-anchor="middle">分层错误处理</text>
+  <text x="1050" y="440" font-size="10" fill="#94a3b8" text-anchor="middle">ValueError → 400 / 上游错误 → 502</text>
+  <text x="1050" y="456" font-size="10" fill="#94a3b8" text-anchor="middle">Exception → 500 / 空 JSON → 400</text>
+
+  <path d="M470 475 L470 500" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#arr1-a)"/>
+  <path d="M740 475 L740 500" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#arr1-a)"/>
+
+  <!-- ============ LLM 后端层 ============ -->
+  <rect x="40" y="500" width="1200" height="100" rx="10" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+  <text x="60" y="530" font-size="16" font-weight="bold" fill="#22d3ee">LLM 后端层（两个外部 AI 服务）</text>
+
+  <rect x="350" y="545" width="240" height="45" rx="6" fill="#0f172a" stroke="#22c55e"/>
+  <text x="470" y="572" font-size="13" fill="#86efac" text-anchor="middle">DashScope API</text>
+
+  <rect x="620" y="545" width="240" height="45" rx="6" fill="#0f172a" stroke="#60a5fa"/>
+  <text x="740" y="572" font-size="13" fill="#93c5fd" text-anchor="middle">DeepSeek API</text>
+
+  <path d="M640 600 L640 622" stroke="#22d3ee" stroke-width="2" fill="none" marker-end="url(#arr1-c)"/>
+
+  <!-- ============ 底部：main + self-test ============ -->
+  <rect x="40" y="622" width="1200" height="110" rx="10" fill="#3b1d1d" stroke="#f87171" stroke-width="2"/>
+  <text x="60" y="652" font-size="16" font-weight="bold" fill="#f87171">main 入口（后台线程 + HTTP self-test）</text>
+
+  <rect x="70" y="670" width="240" height="45" rx="6" fill="#0f172a" stroke="#f87171"/>
+  <text x="190" y="697" font-size="13" fill="#fca5a5" text-anchor="middle">threading.Thread 后台启动 Flask</text>
+
+  <rect x="350" y="670" width="240" height="45" rx="6" fill="#0f172a" stroke="#fbbf24"/>
+  <text x="470" y="697" font-size="13" fill="#fde68a" text-anchor="middle">requests.get POST localhost self-test</text>
+
+  <rect x="620" y="670" width="240" height="45" rx="6" fill="#0f172a" stroke="#22c55e"/>
+  <text x="740" y="697" font-size="13" fill="#86efac" text-anchor="middle">4 项测试: health / card / ask / 校验</text>
+
+  <rect x="890" y="670" width="320" height="45" rx="6" fill="#0f172a" stroke="#60a5fa"/>
+  <text x="1050" y="697" font-size="13" fill="#93c5fd" text-anchor="middle">sys.exit(0/1) 自动退出不阻塞</text>
+
+  <!-- 底部图例 -->
+  <rect x="40" y="750" width="1200" height="100" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="60" y="776" font-size="13" fill="#22d3ee" font-weight="bold">关键设计决策</text>
+  <text x="60" y="796" font-size="12" fill="#e2e8f0">① 不依赖生产 WSGI 服务器（gunicorn/waitress），用 Flask 内置服务器 + daemon 线程就能在 main 里启动并立即验证。</text>
+  <text x="60" y="814" font-size="12" fill="#e2e8f0">② 同时暴露 /.well-known/agent.json —— 这是 A2A 协议 Agent 发现的标准路径，其他 Agent 拿到这个文件就知道"这个 Flask 服务是什么、能干嘛"。</text>
+  <text x="60" y="832" font-size="12" fill="#e2e8f0">③ 双 LLM 后端架构可独立扩展：加第三个模型只要加 call_xxx() 函数 + /ask 里的一个 elif 分支。</text>
+  <text x="60" y="850" font-size="12" fill="#94a3b8">教材原版没有 Agent Card、没有健康检查、错误处理粗糙、DashScope 端点过时 —— 改写把这些补齐到生产可部署的水平。</text>
+
+  <defs>
+    <marker id="arr1-g" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#94a3b8"/></marker>
+    <marker id="arr1-b" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#60a5fa"/></marker>
+    <marker id="arr1-a" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#fbbf24"/></marker>
+    <marker id="arr1-c" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#22d3ee"/></marker>
+  </defs>
+</svg>
