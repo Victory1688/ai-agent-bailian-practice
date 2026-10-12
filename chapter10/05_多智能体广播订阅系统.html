@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 10-5 讲解：多智能体广播订阅系统（Pub/Sub）</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}pre .k{color:#f472b6}pre .s{color:#86efac}pre .n{color:#fbbf24}pre .cm{color:#67e8f9}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:20px 24px;margin:20px 0;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.flow{background:#fff;border:1px solid #22d3ee;border-radius:8px;padding:16px;margin:16px 0;font-family:Consolas,monospace;font-size:13px;color:#0e7490;line-height:2}
+.step{display:inline-block;background:#0f172a;color:#22d3ee;border-radius:50%;width:28px;height:28px;text-align:center;line-height:28px;font-size:13px;font-weight:bold;margin-right:8px}
+.diff{display:flex;gap:16px;margin:16px 0}
+.diff-col{flex:1;background:#fff;border-radius:8px;padding:16px;border:1px solid #e2e8f0}
+.diff-col h4{margin-top:0;color:#0f172a;border-bottom:2px solid #22d3ee;padding-bottom:6px}
+.req{border-left:4px solid #7c3aed;padding:12px;background:#faf5ff;margin:8px 0;border-radius:0 8px 8px 0;font-size:14px;font-family:Consolas,monospace}
+.notif{border-left:4px solid #22c55e;padding:12px;background:#f0fdf4;margin:8px 0;border-radius:0 8px 8px 0;font-size:14px;font-family:Consolas,monospace}
+</style>
+</head>
+<body>
+
+<h1>例 10-5 讲解：多智能体广播订阅系统（Pub/Sub）</h1>
+
+<div class="highlight">
+  <strong>本节核心概念：</strong>Request-Response（例 10-4）是"一对一"通信，而 Pub/Sub（发布-订阅）是"<strong>一对多</strong>"通信。协议层用 JSON-RPC 2.0 <strong>Notification</strong>（没有 <code>id</code>，不需要响应）作为广播载体；业务层用 A2A <strong>subscribeToTask</strong> + <strong>SSE TaskStatusUpdateEvent</strong> 实现订阅和推送。两者关键区别就在 <code>id</code> 字段。
+</div>
+
+<!-- ========== Section 1 ========== -->
+<h2>一、本节要解决什么问题</h2>
+
+<p>例 10-1 到 10-4 讲的都是 <strong>一对一</strong> 通信（A 给 B 发请求，B 给 A 回响应）。但真实多 Agent 系统里经常需要 <strong>一对多</strong> 广播场景：</p>
+<ul>
+  <li>一个 Planner Agent 创建了新 Task，通知所有相关 Agent 自己选要不要接</li>
+  <li>一个 Worker Agent 处理完 Task，通知所有订阅者"我完成了，Artifact 在这"</li>
+  <li>一个 Status Agent 广播"系统故障，暂停服务"，所有 Agent 收到后各自处理</li>
+</ul>
+
+<p>教材原版的简化实现：</p>
+<ul>
+  <li><code>class PubSubMessage(topic, content)</code> — 自定义的 topic 订阅消息</li>
+  <li><code>class PubSubSystem(publish, register)</code> — 简单 topic 匹配</li>
+  <li><code>from qwen_agent import Agent, PromptEntry</code> — 虚构框架</li>
+</ul>
+
+<p>本次改写的核心目标：<strong>用真实 A2A v1.0 规范的 Pub/Sub 机制</strong>。</p>
+
+<!-- ========== Section 2 ========== -->
+<h2>二、协议层：JSON-RPC Request vs Notification（关键区别）</h2>
+
+<p>这是理解 Pub/Sub 的基础——<strong>Notification 就是"不需要响应的单向广播"</strong>。JSON-RPC 2.0 规范里明确定义了三种消息类型：</p>
+
+<div class="diff">
+  <div class="diff-col">
+    <h4>Request（请求）</h4>
+    <div class="req">
+{<br>
+  &nbsp;&nbsp;"jsonrpc": "2.0",<br>
+  &nbsp;&nbsp;"id": "req-abc123",<span class="cm"> // ← 有 id！</span><br>
+  &nbsp;&nbsp;"method": "message.send",<br>
+  &nbsp;&nbsp;"params": { ... }<br>
+}
+    </div>
+    <p>期望 Response（<code>{id, result}</code> 或 <code>{id, error}</code>）</p>
+    <p><strong>例 10-4 用的就是这个</strong></p>
+  </div>
+  <div class="diff-col">
+    <h4>Notification（通知）</h4>
+    <div class="notif">
+{<br>
+  &nbsp;&nbsp;"jsonrpc": "2.0",<br>
+  &nbsp;&nbsp;"method": "task.status",<span class="cm"> // ← 没有 id！</span><br>
+  &nbsp;&nbsp;"params": { ... }<br>
+}
+    </div>
+    <p><strong>MUST NOT</strong> 发送任何 Response</p>
+    <p><strong>例 10-5 Pub/Sub 的广播载体</strong></p>
+  </div>
+</div>
+
+<div class="card">
+  <h3>为什么 Notification 适合广播</h3>
+  <ul>
+    <li><strong>无 id</strong>：接收方收到后不需要回任何东西，Publisher 不用等响应就能继续干别的</li>
+    <li><strong>一发布多接收</strong>：Publisher 构造一个 Notification 对象，PubSubSystem 向注册表中的所有 Subscriber 分发</li>
+    <li><strong>容错天然</strong>：某个 Subscriber 挂了不影响其他 Subscriber（对比 Request 如果目标挂了会阻塞调用方）</li>
+  </ul>
+</div>
+
+<!-- ========== Section 3 ========== -->
+<h2>三、业务层：A2A subscribeToTask + TaskStatusUpdateEvent</h2>
+
+<p>JSON-RPC Notification 只是协议层信封，业务层 A2A 规范用 <strong>subscribeToTask</strong> RPC 方法 + <strong>TaskStatusUpdateEvent</strong> 事件对象实现了完整的 Pub/Sub 语义。</p>
+
+<h3>A2A Pub/Sub 三阶段（对应规范 § Streaming & Async）</h3>
+<table>
+  <tr><th>阶段</th><th>A2A 规范元素</th><th>说明</th></tr>
+  <tr><td>① 订阅</td><td><code>subscribeToTask(taskId)</code> RPC</td><td>Client 声明"我想看这个 Task 的所有状态变化"</td></tr>
+  <tr><td>② 推送通道</td><td>SSE（Server-Sent Events）流</td><td>Server 建立 HTTP 长连接（<code>Content-Type: text/event-stream</code>），实时推送</td></tr>
+  <tr><td>③ 事件对象</td><td><code>TaskStatusUpdateEvent</code></td><td>每次 Task 状态变化都推送一个，含 state + message + artifacts</td></tr>
+</table>
+
+<h3>TaskStatusUpdateEvent 状态流转</h3>
+
+<div class="flow">
+  <span class="step">1</span>submitted → <span style="color:#f59e0b">Task 已创建，等待处理</span><br>
+  <span class="step">2</span>working → <span style="color:#0e7490">Publisher 正在处理（LLM 调用中）</span><br>
+  <span class="step">3</span>completed → <span style="color:#22c55e">处理完成，返回 Artifact</span><br>
+  &nbsp;&nbsp;（也可能走向 input-required / failed / canceled）
+</div>
+
+<!-- ========== Section 4 ========== -->
+<h2>四、系统架构</h2>
+
+<pre>
+A2ASubscriptionManager（订阅管理器）
+├── _subscriptions: {task_id → [SubscriberAgent, SubscriberAgent, ...]}
+├── subscribe(task_id, subscriber)
+├── unsubscribe(task_id, subscriber)
+├── get_subscribers(task_id) → List[SubscriberAgent]
+└── broadcast(task_id, notification) → List[str]  ← 向所有订阅者分发
+
+PublisherAgent（发布者）
+├── create_task(description)     → 广播 task.submitted Notification
+├── process_task(task_id, prompt)
+│   ├── 广播 task.working Notification
+│   ├── dashscope.Generation.call()
+│   └── 广播 task.completed Notification（含 Artifact）
+└── get_task(task_id) → Task
+
+SubscriberAgent（订阅者）
+├── subscribe_to_task(task_id, mgr)   ← 业务调用 subscribeToTask
+└── on_notification(notification)     ← 接收 JSON-RPC Notification
+    ├── task.submitted → 记录新任务
+    ├── task.working   → 记录状态变化
+    └── task.completed → 可选调 dashscope 做二次分析
+</pre>
+
+<!-- ========== Section 5 ========== -->
+<h2>五、完整交互链路（运行时实际发生了什么）</h2>
+
+<div class="flow">
+  <span class="step">1</span>PublisherAgent.create_task()<br>
+  &nbsp;&nbsp;→ mgr.broadcast(task_id, {jsonrpc:"2.0", method:"task.status", params:{event:{state:"submitted"}}})<br>
+  &nbsp;&nbsp;→ 此时订阅者还未加入，broadcast 返回空列表<br>
+  <span class="step">2</span>SubscriberAgent.subscribe_to_task(task_id, mgr)<br>
+  &nbsp;&nbsp;→ mgr.subscribe(task_id, self) → 注册到注册表<br>
+  <span class="step">3</span>手动重广播 submitted（新订阅者已加入）<br>
+  &nbsp;&nbsp;→ analyzer.on_notification() 收到 → 返回 "[agent:analyzer] 收到新任务: ..."<br>
+  &nbsp;&nbsp;→ reporter.on_notification() 收到 → 返回 "[agent:reporter] 收到新任务: ..."<br>
+  <span class="step">4</span>PublisherAgent.process_task() 内部广播 working<br>
+  &nbsp;&nbsp;→ analyzer: "[agent:analyzer] 状态变化: Publisher 正在处理..."<br>
+  &nbsp;&nbsp;→ reporter: "[agent:reporter] 状态变化: Publisher 正在处理..."<br>
+  <span class="step">5</span>PublisherAgent 调 dashscope qwen-plus 生成财经分析<br>
+  <span class="step">6</span>PublisherAgent 广播 completed（含 Artifact）<br>
+  &nbsp;&nbsp;→ analyzer: 收到后调 dashscope 做二次摘要 → "[agent:analyzer] 二次分析: ..."<br>
+  &nbsp;&nbsp;→ reporter: "[agent:reporter] 任务完成，内容预览: ..."
+</div>
+
+<!-- ========== Section 6 ========== -->
+<h2>六、改写前后对照</h2>
+
+<table>
+  <tr><th>教材原版（已注释）</th><th>改写后（真实 A2A 规范）</th></tr>
+  <tr><td><code>class PubSubMessage(topic, content)</code></td><td>JSON-RPC 2.0 Notification（<code>{jsonrpc, method, params}</code> 无 id）</td></tr>
+  <tr><td><code>topic</code> 字符串匹配</td><td>A2A <code>taskId</code> 订阅 + TaskStatusUpdateEvent 状态事件</td></tr>
+  <tr><td><code>class PubSubSystem(register, publish)</code></td><td><code>A2ASubscriptionManager(subscribe, unsubscribe, broadcast)</code></td></tr>
+  <tr><td><code>from qwen_agent import Agent, PromptEntry</code></td><td><code>dashscope.Generation.call</code></td></tr>
+  <tr><td>广播 = 遍历 subscribers 列表调 on_message</td><td>广播 = broadcast(task_id, notification) 向注册表分发 JSON-RPC Notification</td></tr>
+  <tr><td>订阅者 topic_filter 回调</td><td>订阅者按 Notification 里的 state 字段（submitted/working/completed）做不同处理</td></tr>
+</table>
+
+<h3>新增核心组件</h3>
+<ul>
+  <li><strong>build_notification()</strong>：标准 JSON-RPC Notification 构建（无 id）</li>
+  <li><strong>TaskEventType 常量类</strong>：A2A Task 状态流转枚举（submitted/working/completed 等）</li>
+  <li><strong>build_task_status_event()</strong>：TaskStatusUpdateEvent 对象构建（A2A SSE 推送的核心事件）</li>
+  <li><strong>A2ASubscriptionManager</strong>：注册表维护 + 广播分发（核心 Pub/Sub 引擎）</li>
+  <li><strong>PublisherAgent</strong>：create_task + process_task 三阶段广播</li>
+  <li><strong>SubscriberAgent</strong>：subscribe_to_task + on_notification 按状态分发处理（可选项 completed 时调 dashscope 二次分析）</li>
+</ul>
+
+<!-- ========== Section 7 ========== -->
+<h2>七、实测验证（真实运行结果）</h2>
+
+<p>用真实 DASHSCOPE_API_KEY 调用 qwen-plus，完整跑通 3 阶段 × 2 订阅者 = 6 条处理结果：</p>
+
+<h3>Publisher 生成的 Artifact（央行降准对股市影响分析）</h3>
+<div class="ok">
+  <strong>核心观点：</strong>本次降准是稳增长的积极信号，短期提振市场情绪，利好股市流动性与风险偏好。<br><br>
+  <strong>1. 流动性改善：</strong>释放 1.2 万亿长期资金，银行信贷投放能力增强，间接提升股市资金面，尤其利好金融、地产等资金敏感型板块。<br>
+  <strong>2. 政策预期强化：</strong>叠加近期稳增长政策加码，市场对后续财政发力、地产支持及 LPR 下调预期升温，增强投资者信心。<br>
+  <strong>3. 结构分化延续：</strong>资金更倾向流向低估值蓝筹、高股息资产及政策受益主线。
+</div>
+
+<h3>6 条订阅者处理结果</h3>
+<div class="ok">
+  <strong>[agent:analyzer] 收到新任务:</strong> Task 已创建: 分析 2024 年中国央行降准对股市的影响<br>
+  <strong>[agent:reporter] 收到新任务:</strong> Task 已创建: 分析 2024 年中国央行降准对股市的影响<br>
+  <strong>[agent:analyzer] 状态变化:</strong> Publisher 正在处理...<br>
+  <strong>[agent:reporter] 状态变化:</strong> Publisher 正在处理...<br>
+  <strong>[agent:analyzer] 二次分析:</strong> 本次降准释放 1.2 万亿资金，提振股市流动性与信心，利好金融、地产等板块。（dashscope 真实调用生成）<br>
+  <strong>[agent:reporter] 任务完成，内容预览:</strong> 核心观点：本次降准是稳增长的积极信号...
+</div>
+
+<!-- ========== Section 8 ========== -->
+<h2>八、与例 10-4（Request-Response）的对比</h2>
+
+<p>这一节是理解 Pub/Sub 模式的关键——Request-Response 和 Pub/Sub 解决的是两种完全不同的通信场景：</p>
+
+<table>
+  <tr><th>维度</th><th>Request-Response（例 10-4）</th><th>Pub/Sub（例 10-5）</th></tr>
+  <tr><td><strong>通信模式</strong></td><td>一对一（点对点）</td><td>一对多（发布-订阅）</td></tr>
+  <tr><td><strong>协议层消息</strong></td><td>JSON-RPC <strong>Request</strong>（有 id）</td><td>JSON-RPC <strong>Notification</strong>（无 id）</td></tr>
+  <tr><td><strong>响应语义</strong></td><td>期望 Response（同步等待）</td><td><strong>不需要</strong>任何 Response</td></tr>
+  <tr><td><strong>业务载体</strong></td><td>A2A Task（同步返回）</td><td>A2A TaskStatusUpdateEvent（异步 SSE 推送）</td></tr>
+  <tr><td><strong>容错性</strong></td><td>目标挂了 → 调用方阻塞/报错</td><td>某个订阅者挂了 → 不影响其他订阅者</td></tr>
+  <tr><td><strong>适用场景</strong></td><td>"帮我干一件事，把结果告诉我"</td><td>"我有新消息，所有关心的人都应该知道"</td></tr>
+  <tr><td><strong>类比</strong></td><td>打电话（一对一）</td><td>发朋友圈（一对多，朋友各自看）</td></tr>
+</table>
+
+<!-- ========== Section 9 ========== -->
+<h2>九、动手练习</h2>
+
+<ol>
+  <li><strong>加第三个订阅者</strong>：创建一个只关心 <code>task.failed</code> 状态的订阅者，看看 publisher 任务失败时它会不会收到——可以让 publisher 故意抛异常触发 failed 状态。</li>
+  <li><strong>加取消订阅</strong>：在 SubscriberAgent 里加一个 <code>unsubscribe_from_task(task_id, mgr)</code> 方法，验证取消后该订阅者不再收到广播。</li>
+  <li><strong>对比 SSE 推送</strong>：当前 broadcast() 是进程内直接调用 on_notification()。改成用 HTTP + SSE 实现真正的跨进程推送——Publisher 建 HTTP Server，Subscriber 用 <code>requests.get(stream=True)</code> 消费 SSE 流。</li>
+  <li><strong>加多 Task 订阅</strong>：让一个 Subscriber 同时订阅多个 Task（task-abc123 + task-def456），验证它能正确区分不同 taskId 的状态变化。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li>JSON-RPC 2.0 Notification 规范：<a href="https://www.jsonrpc.org/specification#notification">jsonrpc.org → Notification</a></li>
+  <li>A2A Protocol Streaming & Async：<a href="https://a2a-protocol.org/dev/topics/streaming-and-async/">a2a-protocol.org → SSE + Push Notifications</a></li>
+  <li>A2A TaskStatusUpdateEvent + TaskArtifactUpdateEvent：规范 § Events</li>
+</ul>
+
+</body>
+</html>

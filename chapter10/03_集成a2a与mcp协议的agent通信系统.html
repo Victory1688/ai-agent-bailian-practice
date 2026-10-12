@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 10-3 讲解：A2A 与 MCP 协议联动开发</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}/* 注释 */
+pre .k{color:#f472b6}/* 关键字 */
+pre .s{color:#86efac}/* 字符串 */
+pre .n{color:#fbbf24}/* 数字 */
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:20px 24px;margin:20px 0;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.flow{background:#fff;border:1px solid #22d3ee;border-radius:8px;padding:16px;margin:16px 0;font-family:Consolas,monospace;font-size:13px;color:#0e7490;line-height:2}
+.step{display:inline-block;background:#0f172a;color:#22d3ee;border-radius:50%;width:28px;height:28px;text-align:center;line-height:28px;font-size:13px;font-weight:bold;margin-right:8px}
+</style>
+</head>
+<body>
+
+<h1>例 10-3 讲解：A2A 与 MCP 协议联动开发</h1>
+
+<div class="highlight">
+  <strong>本节关键发现：</strong>教材对 MCP 协议存在概念性误解——它把 <code>[system, user, memory]</code> 三段式 prompt 叫"MCP 格式"，但真实 MCP (Model Context Protocol) 根本不是 prompt 格式协议，而是 Agent 调 Tool/Resource 的通信协议。A2A 和 MCP 组合才是完整的多 Agent 通信基础设施。
+</div>
+
+<!-- ========== Section 1: 目标 ========== -->
+<h2>一、本节要解决什么问题</h2>
+
+<p>例 10-1 讲了 A2A 消息格式，例 10-2 讲了 A2A 认证与能力匹配，这一篇（10-3）讲的是：<strong>当一个 Agent 需要干活时，它怎么调用外部工具、怎么查外部数据</strong>。</p>
+
+<p>教材原版用虚构的 <code>qwen_agent</code> 框架，在 <code>ContextAwareAgent.handle_message()</code> 里手动拼了一个 <code>[system, user, memory]</code> 三段式 prompt，然后把这叫"MCP 格式"。这种实现方式在真实世界里站不住脚——因为 MCP 协议根本不是这样的。</p>
+
+<p>所以本次改写的核心目标是：</p>
+<ol>
+  <li><strong>用真实的 A2A 协议</strong>（JSON-RPC 信封 + Agent Card + Task 生命周期）完成 Agent-to-Agent 通信</li>
+  <li><strong>用真实的 MCP 协议</strong>（Tools / Resources / Prompts 三原语 + JSON-RPC 方法 <code>tools/list</code> / <code>tools/call</code> / <code>resources/read</code>）完成 Agent-to-Tool 调用</li>
+  <li><strong>把两者组合起来</strong>：A2A 管"谁干什么"，MCP 管"用什么工具干"，形成完整闭环</li>
+</ol>
+
+<!-- ========== Section 2: A2A vs MCP ========== -->
+<h2>二、A2A 与 MCP 的关系（核心概念辨析）</h2>
+
+<div class="card">
+  <h3>为什么两个协议都需要？</h3>
+  <p>这两个协议名字像，但设计目标完全不同，它们解决的是多 Agent 系统的两个不同层面：</p>
+  <table>
+    <tr><th>维度</th><th>A2A (Agent-to-Agent Protocol)</th><th>MCP (Model Context Protocol)</th></tr>
+    <tr><td><strong>发起人</strong></td><td>Google / Linux Foundation（2025.04）</td><td>Anthropic（2024.11 发布）</td></tr>
+    <tr><td><strong>解决什么</strong></td><td>Agent ↔ Agent 通信</td><td>Agent ↔ Tool/Resource 通信</td></tr>
+    <tr><td><strong>一句话总结</strong></td><td>"谁能干什么，怎么找到它"</td><td>"能干什么工具，怎么调用它"</td></tr>
+    <tr><td><strong>核心对象</strong></td><td>Agent Card / Task / Message / Artifact</td><td>Tool / Resource / Prompt（三原语）</td></tr>
+    <tr><td><strong>JSON-RPC 方法</strong></td><td><code>message.send</code> / <code>tasks/get</code></td><td><code>tools/list</code> / <code>tools/call</code> / <code>resources/read</code></td></tr>
+    <tr><td><strong>传输层</strong></td><td>HTTP(SSE) / gRPC / REST</td><td>STDIO / HTTP(SSE) / Streamable HTTP</td></tr>
+    <tr><td><strong>类比</strong></td><td>公司内部"谁负责什么"的组织架构</td><td>员工可用的"工具/数据库/文档"清单</td></tr>
+  </table>
+</div>
+
+<div class="flow">
+  A2A + MCP 组合的完整链路：<br><br>
+  <span class="step">1</span>A2A message.send —— Agent A 给 Agent B 发任务<br>
+  <span class="step">2</span>MCP tools/list —— Agent B 发现自己能用的工具<br>
+  <span class="step">3</span>MCP tools/call —— Agent B 调用工具获取数据<br>
+  <span class="step">4</span>MCP resources/read —— Agent B 读取静态资源<br>
+  <span class="step">5</span>dashscope.Generation.call —— Agent B 整合 MCP 结果生成最终响应<br>
+  <span class="step">6</span>A2A Task —— Agent B 返回任务结果（completed + Artifact）
+</div>
+
+<!-- ========== Section 3: 架构 ========== -->
+<h2>三、改写后的系统架构</h2>
+
+<pre>
+A2AMCPOrchestrator（主控调度）
+├── A2A Layer ── Agent-to-Agent 通信
+│   └── A2AServer (agent:finance)
+│       ├── agent_card（Agent Card v1.0 规范）
+│       ├── verify_auth()（Bearer token）
+│       ├── message_send()（核心：收任务 → 调 MCP → LLM 生成）
+│       └── _task_registry（Task 生命周期）
+│
+└── MCP Layer ── Agent-to-Tool 通信
+    └── MCPServer (mcp:financial)
+        ├── tools/list（返回 3 个工具 + inputSchema）
+        ├── tools/call（执行指定工具）
+        ├── resources/list（返回静态资源列表）
+        ├── resources/read（读取 World Bank GDP CSV）
+        └── tool_handlers（get_gdp_data / search_news / cpi_impact）
+</pre>
+
+<p>关键设计：<strong>A2AServer 绑定一个 MCPServer</strong>——Agent 不自己实现业务逻辑，而是把任务委托给 MCP Server 的 Tools/Resources。这就是两个协议组合的真正价值：A2A 管"谁"，MCP 管"工具"。</p>
+
+<!-- ========== Section 4: MCP 层核心 ========== -->
+<h2>四、MCP 层核心组件（MCPServer）</h2>
+
+<p>MCP 协议的三个原语对应规范 § Core Concepts，本次改写实现了前两个：</p>
+
+<h3>① Tools（可执行函数）</h3>
+<p>按 MCP v2025-03-26 规范，Tool 对象必须包含 <code>name</code> + <code>description</code> + <code>inputSchema</code>（JSON Schema 格式）：</p>
+
+<pre>
+{
+  "name": "get_gdp_data",
+  "description": "获取指定国家 GDP 增长率数据（模拟）",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "country": { "type": "string", "description": "国家名称" },
+      "year": { "type": "integer", "description": "年份" }
+    },
+    "required": ["country", "year"]
+  }
+}
+</pre>
+
+<p>Agent 通过 <code>tools/list</code> 发现所有可用工具，通过 <code>tools/call(name, arguments)</code> 执行——返回结果必须是 <code>ToolResult</code> 格式（含 <code>content: [{type: "text", text: "..."}]</code> + <code>isError: boolean</code>）。</p>
+
+<h3>② Resources（数据源）</h3>
+<p>Resources 是可读取的静态数据，用 URI 标识（如 <code>world-bank://country/gdp-forecast</code>）。Agent 通过 <code>resources/list</code> 发现，通过 <code>resources/read(uri)</code> 读取——返回 <code>contents: [{uri, mimeType, text}]</code>。</p>
+
+<h3>③ Prompts（模板，占位）</h3>
+<p>教材原版把三段式 prompt 叫"MCP 格式"，但在真实 MCP 规范里，Prompt 是第三个原语——可复用的模板，通过 <code>prompts/list</code> / <code>prompts/get</code> 协议方法管理。本次演示暂不实现。</p>
+
+<!-- ========== Section 5: A2A + MCP 协同流程 ========== -->
+<h2>五、完整交互流程（运行时实际发生了什么）</h2>
+
+<div class="card">
+  <h3>Step 1-2：MCP Server 初始化 + A2A Agent 注册</h3>
+  <p><code>create_financial_mcp_server()</code> 构建 MCPServer，含 3 个 Tool + 1 个 Resource。然后创建 <code>A2AServer(agent:finance)</code> 并 <strong>绑定 MCP Server</strong>——这是关键绑定关系，决定了 Agent 能调哪些工具。</p>
+</div>
+
+<div class="card">
+  <h3>Step 3：Orchestrator 启动</h3>
+  <p><code>A2AMCPOrchestrator</code> 同时注册 A2A Agent 和 MCP Server，维护两个独立注册表。</p>
+</div>
+
+<div class="card">
+  <h3>Step 4：MCP tools/list（Agent 发现自己能用啥）</h3>
+  <p>Orchestrator 调用 <code>mcp_list_tools("mcp:financial")</code>，MCPServer 返回完整 Tool 列表（含 inputSchema）。这是 MCP 协议的自动发现能力——Agent 不需要硬编码工具列表。</p>
+</div>
+
+<div class="card">
+  <h3>Step 5：完整 A2A + MCP 交互（6 步）</h3>
+  <pre>
+# A2A Agent 收到任务后，内部执行：
+
+# Step 5.1 — MCP 发现
+available_tools = self.mcp.tools_list()["tools"]
+# → ['get_gdp_data', 'search_economic_news', 'calculate_cpi_impact']
+
+# Step 5.2 — MCP 调用 1：查 GDP
+call_result = self.mcp.tools_call("get_gdp_data", {"country": "中国", "year": 2024})
+# → 中国 2024 GDP 增长率: 5.0%
+
+# Step 5.3 — MCP 调用 2：查通胀新闻
+call_result = self.mcp.tools_call("search_economic_news", {"keyword": "通胀"})
+# → 2024 年 CPI 持续回落至 0.2%，通胀压力基本消除
+
+# Step 5.4 — MCP 读取：World Bank GDP 预测
+wb_data = self.mcp.resources_read("world-bank://country/gdp-forecast")
+# → 中国,5.0 / 美国,2.5 / 欧盟,1.2 / 日本,0.8 / 印度,6.5
+
+# Step 5.5 — dashscope 整合 MCP 结果生成最终分析
+response = dashscope.Generation.call(model="qwen-plus", ...)
+
+# Step 5.6 — 返回 A2A Task（completed + Artifact）
+return {"status": {"state": "completed", ...}, "artifacts": [...]}
+  </pre>
+</div>
+
+<!-- ========== Section 6: 改写对照 ========== -->
+<h2>六、改写前后对照</h2>
+
+<h3>虚构框架依赖替换</h3>
+<table>
+  <tr><th>教材原版（已注释）</th><th>改写后（真实实现）</th></tr>
+  <tr><td><code>from qwen_agent import Agent, Message, PromptEntry</code></td><td>删除，改用 <code>dashscope.Generation.call</code></td></tr>
+  <tr><td><code>class A2AMessage</code>（自定义简化版）</td><td><code>build_message()</code> + <code>build_jsonrpc_request()</code>（A2A v1.0 规范）</td></tr>
+  <tr><td><code>class ContextAwareAgent</code>（Agent.chat + 三段式 prompt）</td><td><code>A2AServer</code>（完整 JSON-RPC + Task 生命周期 + MCP 集成）</td></tr>
+  <tr><td>"MCP 格式" = <code>[system, user, memory]</code> 三段 prompt</td><td>MCPServer（Tools + Resources + inputSchema + JSON-RPC 方法）</td></tr>
+  <tr><td><code>AgentOrchestrator.register_agent()</code> + 手动 dispatch</td><td><code>A2AMCPOrchestrator</code> 同时管理 A2A + MCP 两层</td></tr>
+</table>
+
+<h3>新增核心组件</h3>
+<ul>
+  <li><strong>MCPServer</strong>：按 MCP 规范暴露 Tools/Resources，实现 <code>tools_list()</code> / <code>tools_call()</code> / <code>resources_list()</code> / <code>resources_read()</code></li>
+  <li><strong>Tool 注册机制</strong>：<code>register_tool_handler(tool_name, handler)</code>——把工具名映射到 Python 函数</li>
+  <li><strong>create_financial_mcp_server()</strong>：财经场景 MCP Server 工厂（3 个 Tool + 1 个 Resource，含模拟数据）</li>
+  <li><strong>A2AServer.message_send()</strong> 内部集成 MCP 调用：自动根据用户意图选工具 + 多次串行调用 + 资源读取 + LLM 整合</li>
+  <li><strong>A2AMCPOrchestrator</strong>：同时注册/发现 A2A Agent 和 MCP Server</li>
+</ul>
+
+<!-- ========== Section 7: 与前两篇的关系 ========== -->
+<h2>七、与例 10-1 / 例 10-2 的代码复用</h2>
+
+<p>本篇复用了前两篇已验证的组件，在此基础上新增 MCP 层：</p>
+<table>
+  <tr><th>组件</th><th>来源</th><th>用途</th></tr>
+  <tr><td><code>build_jsonrpc_request()</code></td><td>例 10-1</td><td>A2A + MCP 共用同一 JSON-RPC 2.0 信封</td></tr>
+  <tr><td><code>build_message()</code></td><td>例 10-1</td><td>A2A Message 构建</td></tr>
+  <tr><td><code>build_agent_card()</code></td><td>例 10-2</td><td>A2A Agent Card 构建</td></tr>
+  <tr><td><code>A2AServer.verify_auth()</code></td><td>例 10-2</td><td>Bearer token 认证</td></tr>
+  <tr><td><strong>MCPServer</strong></td><td>本篇新增</td><td>MCP 协议核心实现</td></tr>
+  <tr><td><strong>A2AServer.message_send() 集成 MCP</strong></td><td>本篇增强</td><td>收任务 → 调 MCP → LLM 生成（6 步完整链路）</td></tr>
+  <tr><td><strong>A2AMCPOrchestrator</strong></td><td>本篇新增</td><td>同时管理 A2A + MCP 两层</td></tr>
+</table>
+
+<p>注意：A2A 和 MCP 都用 <strong>JSON-RPC 2.0</strong> 作为信封，这是两个协议能自然组合的技术基础。</p>
+
+<!-- ========== Section 8: 实测验证 ========== -->
+<h2>八、实测验证（真实运行结果）</h2>
+
+<p>代码用真实的 <code>DASHSCOPE_API_KEY</code> 调用 qwen-plus，完整跑通：</p>
+
+<h3>MCP 层验证</h3>
+<div class="ok">
+  <strong>tools/list：</strong> 返回 3 个工具（get_gdp_data / search_economic_news / calculate_cpi_impact），每个含完整 inputSchema<br>
+  <strong>tools/call(get_gdp_data)：</strong> 中国 2024 GDP 增长率: 5.0%<br>
+  <strong>tools/call(search_economic_news)：</strong> 2024 年 CPI 持续回落至 0.2%，通胀压力基本消除<br>
+  <strong>resources/read(world-bank://country/gdp-forecast)：</strong> 中国,5.0 / 美国,2.5 / 欧盟,1.2 / 日本,0.8 / 印度,6.5
+</div>
+
+<h3>A2A + MCP 完整链路验证</h3>
+<div class="ok">
+  <strong>输入：</strong>"请分析 2024 年中国经济增长趋势和通胀风险"<br>
+  <strong>MCP 自动选工具：</strong>命中 get_gdp_data + search_economic_news + World Bank 资源<br>
+  <strong>LLM 整合 MCP 数据生成：</strong>4 段结构化财经分析报告<br>
+  <strong>A2A 返回：</strong>Task completed + Artifact(analysis_report)
+</div>
+
+<h3>生成报告片段（qwen-plus 实时生成）</h3>
+<blockquote style="border-left:3px solid #22d3ee;padding-left:16px;color:#555;font-size:14px;background:#f0fdfa;padding:16px;margin:16px 0;border-radius:0 8px 8px 0">
+  2024 年中国经济实现 5.0% 的 GDP 增长，与世界银行预测一致，表明宏观政策稳增长成效显现，在全球主要经济体中仍保持显著领先优势（高于美国 2.5%、欧盟 1.2% 和日本 0.8%）。CPI 全年回落至 0.2%，已连续多月处于低位区间，反映总需求修复仍偏温和……
+</blockquote>
+
+<!-- ========== Section 9: 动手练习 ========== -->
+<h2>九、动手练习</h2>
+
+<ol>
+  <li><strong>加一个 Tool</strong>：在 <code>create_financial_mcp_server()</code> 里新增 <code>get_interest_rate</code> 工具（返回央行 LPR 数据），看看 A2AServer 能否自动发现并调用它——你需要在 <code>message_send()</code> 里加一个触发条件。</li>
+  <li><strong>加一个 Resource</strong>：添加一个 <code>central-bank://policy-meetings</code> Resource，里面存历年货币政策会议纪要片段，让 LLM 把这些历史信息也整合进分析。</li>
+  <li><strong>加第二个 A2A Agent</strong>：创建一个 <code>agent:tech</code>（绑定 Tech MCP Server），支持分析科技行业趋势。然后让 <code>agent:finance</code> 也能通过 A2A 调用 <code>agent:tech</code>——这就是 Agent-to-Agent + Agent-to-Tool 的两层协作。</li>
+  <li><strong>改 Agent 意图路由</strong>：当前 Agent 用 if/elif 硬编码选工具。把它改成让 dashscope 先做一次 function calling 或意图识别，再决定调哪些 MCP Tool——这样 Agent 就"真的聪明"了。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li>MCP 规范最新版本：<a href="https://modelcontextprotocol.io/specification/latest">modelcontextprotocol.io/specification/latest</a></li>
+  <li>A2A 协议规范：<a href="https://google.github.io/A2A/">google.github.io/A2A</a></li>
+  <li>MCP vs A2A 关系解读：Anthropic 和 Google 2025 年联合发布的 A2A-MCP 集成白皮书</li>
+</ul>
+
+</body>
+</html>

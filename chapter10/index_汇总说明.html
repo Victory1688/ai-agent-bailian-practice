@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>char10 汇总说明 - A2A 协议与多 Agent 通信</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 1100px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; line-height: 1.7; }
+  h1 { color: #0f766e; border-bottom: 3px solid #14b8a6; padding-bottom: 10px; }
+  h2 { color: #0e7490; margin-top: 2rem; border-left: 5px solid #14b8a6; padding-left: 12px; }
+  h3 { color: #7c3aed; margin-top: 1.4rem; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; background: #fff; }
+  th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #ccfbf1; color: #134e4a; }
+  .card { background: #fff; border-radius: 10px; padding: 18px; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card-grid-6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .chip { display: inline-block; background: #14b8a6; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 12px; margin-right: 6px; }
+  .chip-blue { background: #60a5fa; }
+  .chip-red { background: #f87171; }
+  .chip-amber { background: #fbbf24; color: #78350f; }
+  .chip-green { background: #34d399; }
+  .chip-violet { background: #a78bfa; }
+  a { color: #0e7490; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta { color: #64748b; font-size: 0.9em; }
+  .svg-card { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #e2e8f0; border-radius: 10px; padding: 16px; margin: 12px 0; border: 2px solid #22d3ee; }
+  .svg-card h3 { color: #22d3ee; margin-top: 0; }
+  .svg-card table th { background: #0f172a; color: #22d3ee; border-color: #334155; }
+  .svg-card table td { border-color: #334155; background: #1e293b; color: #e2e8f0; }
+  .svg-card a { color: #67e8f9; }
+  .err-row { background: #fef2f2; }
+  .ok-row { background: #f0fdf4; }
+  .warn-row { background: #fefce8; }
+  .prose b { color: #0f172a; }
+</style>
+</head>
+<body>
+
+<h1>char10 A2A 协议与多 Agent 通信 —— 汇总说明</h1>
+<p class="meta">配套架构文档：<a href="arch_汇总说明.md">arch_汇总说明.md</a>（含 Mermaid 图） | 生成日期：2026-10-12 | 全部 6 个 py 文件已改写为 A2A v1.0 / MCP 规范实现</p>
+
+<!-- ========== SVG 架构图速查 ========== -->
+<div class="svg-card">
+  <h3>SVG 独立架构图速查（4 张）</h3>
+  <table>
+    <tr><th>#</th><th>架构图</th><th>视角</th><th>核心内容</th></tr>
+    <tr><td>1</td><td><a href="svg/01_A2A协议组件总图.svg">01_A2A协议组件总图.svg</a></td><td>六层分层</td><td>传输层→协议信封→业务对象→核心能力→通信模式→编排组合</td></tr>
+    <tr><td>2</td><td><a href="svg/02_核心对象生命周期图.svg">02_核心对象生命周期图.svg</a></td><td>对象结构</td><td>Task 七态流转 + Message/Part/Artifact/Agent Card 字段</td></tr>
+    <tr><td>3</td><td><a href="svg/03_A2A认证+能力匹配时序图.svg">03_A2A认证+能力匹配时序图.svg</a></td><td>运行时序</td><td>Agent Card 发现 → Bearer 认证 → skills 匹配 → LLM 处理完整链路</td></tr>
+    <tr><td>4</td><td><a href="svg/04_A2AvsMCPvs教材简化对照图.svg">04_A2AvsMCPvs教材简化对照图.svg</a></td><td>规范对比</td><td>教材简化 vs A2A v1.0 vs MCP v1.0 三列对照（8 维度）</td></tr>
+  </table>
+</div>
+
+<h2>一、char10 的核心命题</h2>
+<p><strong>从手写消息到完整协议——第一次用 Google/Linux Foundation A2A v1.0 规范重写多 Agent 通信层。</strong></p>
+<p>char01-09 都在"造轮子"：手写 A2AMessage、自定义 AgentRegistry、for 循环调度。char10 直面真实协议规范，6 篇改写围绕一个主题：<strong>教材简化版 vs 真实协议规范，差距在哪？</strong></p>
+
+<h2>二、六层架构速览</h2>
+<div class="card-grid">
+  <div class="card">
+    <h3><span class="chip">L6</span> 编排组合层（06 协商竞标）</h3>
+    <p><strong>把所有组件组合成完整多 Agent 系统</strong>：A2ANegotiationOrchestrator + BidderRegistry + skills 匹配评分 + dashscope 辅助评标。</p>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-blue">L5</span> 通信模式层（04 / 05）</h3>
+    <p><strong>两种核心通信范式</strong>：04 Request-Response（一对一，JSON-RPC Request→Response）+ 05 Pub/Sub（一对多，Notification 无 id + subscribeToTask + SSE）。</p>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-red">L4</span> 核心能力层（02 / 03）</h3>
+    <p><strong>Agent 能证明自己是谁 + 能干什么</strong>：02 Agent Card skills 三级匹配 + Bearer Token 认证；03 MCPServer Tools/Resources 三原语。</p>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-amber">L3</span> 业务对象层（01）</h3>
+    <p><strong>A2A 协议定义的核心数据模型</strong>：Message(role+parts+contextId) + Part(text/file/data) + Task(七态) + Artifact + Agent Card。</p>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-violet">L2</span> 协议信封层（01-06 共用）</h3>
+    <p><strong>JSON-RPC 2.0</strong>：Request（有 id，期望 Response）/ Notification（无 id，单向）/ Response（result 或 error）。A2A 和 MCP 共用！</p>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-green">L1</span> 传输层</h3>
+    <p><strong>怎么送过去</strong>：HTTP / SSE（text/event-stream）/ gRPC / HTTP-REST / STDIO（MCP 本地）。规范兼容多传输。</p>
+  </div>
+</div>
+
+<h2>三、六篇详解速查</h2>
+
+<div class="card-grid-6">
+
+  <div class="card" style="grid-column: span 3;">
+    <h3><span class="chip">01</span> A2A 消息格式与语义设计规范</h3>
+    <p><strong>改写核心：</strong>自定义 8 字段字典 → 完整 A2A v1.0 规范对象</p>
+    <ul>
+      <li>Message：role + parts + <span class="ok-row">contextId（SERVER 生成）</span></li>
+      <li>Part：kind=text/file/data 三种</li>
+      <li>Task：七态 + Artifact（教材没有）</li>
+      <li>Agent Card：/.well-known/agent.json 规范路径</li>
+    </ul>
+    <p><a href="01_a2a的消息格式与语义设计规范.py">py 文件</a> | <a href="01_a2a的消息格式与语义设计规范.html">讲解文档</a></p>
+  </div>
+
+  <div class="card" style="grid-column: span 3;">
+    <h3><span class="chip chip-blue">02</span> 智能体身份认证与能力生命机制</h3>
+    <p><strong>改写核心：</strong>token+signature 硬比 → Bearer Token + Agent Card skills 三级匹配</p>
+    <ul>
+      <li>verify_auth("Bearer &lt;token&gt;") 标准解析</li>
+      <li>match_skill() 三级：中文描述 → tags → skill_id</li>
+      <li>error -32001 / -32002 标准错误码</li>
+    </ul>
+    <p><a href="02_智能体身份认证与能力生命机制.py">py 文件</a> | <a href="02_智能体身份认证与能力生命机制.html">讲解文档</a></p>
+  </div>
+
+  <div class="card" style="grid-column: span 3;">
+    <h3><span class="chip chip-red">03</span> 集成 A2A 与 MCP 协议的 Agent 通信系统</h3>
+    <p><strong>改写核心：</strong>教材"MCP 格式"=三段 prompt → <strong>MCPServer 真实实现（概念性误解修正）</strong></p>
+    <ul>
+      <li>MCPServer：tools/list / tools/call / resources/read</li>
+      <li>A2AServer 绑定 MCPServer：A2A 管谁干，MCP 管用什么干</li>
+      <li>完整链路：广播→调工具→读资源→dashscope 整合生成</li>
+    </ul>
+    <p><a href="03_集成a2a与mcp协议的agent通信系统.py">py 文件</a> | <a href="03_集成a2a与mcp协议的agent通信系统.html">讲解文档</a></p>
+  </div>
+
+  <div class="card" style="grid-column: span 3;">
+    <h3><span class="chip chip-amber">04</span> 实现请求与响应的机制</h3>
+    <p><strong>改写核心：</strong>单层 A2AMessage → <strong>三层 Request-Response 架构</strong></p>
+    <ul>
+      <li>L1：JSON-RPC Request(id) → Response(result)</li>
+      <li>L2：A2A Task（working → completed + Artifact）</li>
+      <li>L3：dashscope.Generation.call</li>
+      <li>对比教材的 if/elif 硬编码</li>
+    </ul>
+    <p><a href="04_实现请求与响应的机制.py">py 文件</a> | <a href="04_实现请求与响应的机制.html">讲解文档</a></p>
+  </div>
+
+  <div class="card" style="grid-column: span 3;">
+    <h3><span class="chip chip-violet">05</span> 多智能体广播订阅系统</h3>
+    <p><strong>改写核心：</strong>topic 字符串匹配 → <strong>JSON-RPC Notification（无 id）+ subscribeToTask</strong></p>
+    <ul>
+      <li>Notification vs Request：关键区别就是没有 id</li>
+      <li>TaskStatusUpdateEvent（submitted → working → completed）</li>
+      <li>SSE 流式推送（A2A 规范）</li>
+    </ul>
+    <p><a href="05_多智能体广播订阅系统.py">py 文件</a> | <a href="05_多智能体广播订阅系统.html">讲解文档</a></p>
+  </div>
+
+  <div class="card" style="grid-column: span 3;">
+    <h3><span class="chip chip-green">06</span> 多智能体协商与竞标系统</h3>
+    <p><strong>改写核心：</strong>random.uniform 模拟评分 + for 循环 → <strong>Agent Card skills 匹配评分 + Pub/Sub 广播</strong></p>
+    <ul>
+      <li>综合评分 = base_capability × (0.5 + 0.5 × match_score)</li>
+      <li>match_score=1.00（完美匹配）→ 分数 8.70</li>
+      <li>match_score=0.50（部分匹配）→ 分数 6.30</li>
+      <li>dashscope 辅助评标</li>
+    </ul>
+    <p><a href="06_多智能体协商与竞标系统.py">py 文件</a> | <a href="06_多智能体协商与竞标系统.html">讲解文档</a></p>
+  </div>
+
+</div>
+
+<h2>四、A2A vs MCP 关系（关键理解点）</h2>
+
+<div class="card">
+  <h3>为什么两个协议都需要？它们解决完全不同的问题：</h3>
+  <table>
+    <tr><th>维度</th><th>A2A (Agent↔Agent)</th><th>MCP (Agent↔Tool/Resource)</th></tr>
+    <tr class="ok-row"><td>通信对象</td><td><b>Agent 和 Agent</b></td><td><b>Agent 和 Tool</b></td></tr>
+    <tr><td>核心对象</td><td>Agent Card / Task / Message / Artifact</td><td>Tool(inputSchema) / Resource(uri) / Prompt</td></tr>
+    <tr><td>协议信封</td><td colspan="2" style="text-align:center;"><b>共用 JSON-RPC 2.0</b></td></tr>
+    <tr><td>传输层</td><td>HTTP(SSE) / gRPC / REST</td><td>STDIO / HTTP(SSE) / Streamable HTTP</td></tr>
+    <tr><td>适用场景</td><td>"谁来干这个活？"（多 Agent 协商/竞标）</td><td>"我需要什么数据？"（查数据库/调 API/读文件）</td></tr>
+    <tr class="warn-row"><td>教材简化</td><td>把 type 字段手写分 request/response</td><td><b>概念误解：把三段 prompt 叫"MCP 格式"</b></td></tr>
+  </table>
+</div>
+
+<h2>五、学习路线建议</h2>
+
+<div class="card">
+  <p><b>推荐顺序（由浅入深，组件递进）：</b></p>
+  <div style="font-size: 15px; font-family: Consolas, monospace; padding: 14px; background: #0f172a; color: #e2e8f0; border-radius: 8px;">
+    <span style="color:#22c55e">01 消息格式</span> → <span style="color:#60a5fa">04 Request-Response</span> → <span style="color:#22d3ee">05 Pub/Sub</span> → <span style="color:#fbbf24">02 认证+能力</span> → <span style="color:#f87171">03 A2A+MCP</span> → <span style="color:#c4b5fd">06 协商竞标</span>
+  </div>
+  <p>先跑 01 和 04，理解 JSON-RPC 信封和 A2A Task 的基础概念，再上 05 的 Notification + SSE 订阅机制，最后看 06 怎么把全部组件拼成多 Agent 协商系统。</p>
+</div>
+
+<h2>六、关键错误码速查</h2>
+
+<table>
+  <tr><th>错误码</th><th>含义</th><th>触发位置</th><th>来源</th></tr>
+  <tr><td>-32700</td><td>Parse Error</td><td>JSON 解析失败</td><td>JSON-RPC 标准</td></tr>
+  <tr><td>-32600</td><td>Invalid Request</td><td>jsonrpc 版本不是 "2.0"</td><td>JSON-RPC 标准</td></tr>
+  <tr><td>-32601</td><td>Method Not Found</td><td>method 不存在（如 nonexistent.method）</td><td>JSON-RPC 标准</td></tr>
+  <tr><td>-32602</td><td>Invalid Params</td><td>params 缺失 message 字段</td><td>JSON-RPC 标准</td></tr>
+  <tr class="err-row"><td><b>-32001</b></td><td><b>Auth Failed</b></td><td>Bearer Token 校验失败</td><td>A2A 扩展</td></tr>
+  <tr class="err-row"><td><b>-32002</b></td><td><b>Capability Validation Failed</b></td><td>Agent Card skills 不匹配</td><td>A2A 扩展</td></tr>
+  <tr class="err-row"><td>-32003</td><td>Input Required</td><td>Agent 需要额外输入</td><td>A2A 扩展</td></tr>
+</table>
+
+<h2>七、可复用构建器（01-06 共用）</h2>
+
+<pre><code><span style="color:#22d3ee"># 协议信封（所有篇共用）</span>
+<span style="color:#67e8f9">build_request()</span>           → JSON-RPC Request（有 id）
+<span style="color:#67e8f9">build_notification()</span>     → JSON-RPC Notification（无 id）
+<span style="color:#67e8f9">build_response()</span>          → JSON-RPC Response
+<span style="color:#67e8f9">build_error_response()</span>    → JSON-RPC Error Response
+
+<span style="color:#22d3ee"># A2A 业务对象</span>
+<span style="color:#67e8f9">build_a2a_message()</span>       → role + parts + contextId
+<span style="color:#67e8f9">build_a2a_task()</span>          → 七态 + Artifact
+<span style="color:#67e8f9">build_artifact()</span>          → 最终产出
+<span style="color:#67e8f9">build_agent_card()</span>        → 身份 + skills + auth
+
+<span style="color:#22d3ee"># Server 类（04/05/06 组合复用）</span>
+<span style="color:#67e8f9">A2AServer</span>  → verify_auth() / match_skill() / message_send()
+<span style="color:#67e8f9">MCPServer</span>  → tools_list() / tools_call() / resources_read()</code></pre>
+
+<h2>八、资源卡片</h2>
+<div class="card">
+  <h3>规范文档</h3>
+  <ul>
+    <li><a href="https://google.github.io/A2A/">A2A v1.0 协议规范</a>（Agent-to-Agent Protocol, Google/Linux Foundation 2025）</li>
+    <li><a href="https://modelcontextprotocol.io/specification/2025-03-26/">MCP 规范（2025-03-26 版）</a>（Model Context Protocol, Anthropic）</li>
+    <li><a href="https://www.jsonrpc.org/specification">JSON-RPC 2.0 规范</a>（A2A 和 MCP 共用的信封）</li>
+  </ul>
+  <h3>官方 SDK</h3>
+  <ul>
+    <li><code>pip install mcp</code> — Anthropic 官方 MCP Python SDK</li>
+    <li>A2A Python SDK：<a href="https://github.com/a2aproject/python-a2a-sdk">github.com/a2aproject/python-a2a-sdk</a></li>
+  </ul>
+  <h3>本地运行</h3>
+  <pre><code><span style="color:#22c55e"># 设置 API Key</span>
+$env:DASHSCOPE_API_KEY = "sk-xxxxxxxx"
+<span style="color:#22c55e"># 运行任意示例</span>
+d:/MyCode/.venv/Scripts/python.exe char10/01_a2a的消息格式与语义设计规范.py</code></pre>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 10-6 讲解：多智能体协商与竞标系统</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}pre .k{color:#f472b6}pre .s{color:#86efac}pre .n{color:#fbbf24}pre .cm{color:#67e8f9}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:20px 24px;margin:20px 0;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.flow{background:#fff;border:1px solid #22d3ee;border-radius:8px;padding:16px;margin:16px 0;font-family:Consolas,monospace;font-size:13px;color:#0e7490;line-height:2}
+.step{display:inline-block;background:#0f172a;color:#22d3ee;border-radius:50%;width:28px;height:28px;text-align:center;line-height:28px;font-size:13px;font-weight:bold;margin-right:8px}
+.bid-row{border-left:4px solid #0f172a;padding:12px 16px;margin:12px 0;background:#fff;border-radius:0 8px 8px 0}
+.bid-row.winner{border-left-color:#22c55e;background:#f0fdf4}
+.bid-num{display:inline-block;background:#0f172a;color:#fff;border-radius:6px;padding:2px 10px;font-size:13px;font-weight:bold;margin-right:8px}
+.bid-num.winner{background:#22c55e}
+</style>
+</head>
+<body>
+
+<h1>例 10-6 讲解：多智能体协商与竞标系统</h1>
+
+<div class="highlight">
+  <strong>本节核心概念：</strong>当多个 Agent 都能完成同一 Task 时，怎么选？教材用 <code>random.uniform</code> 模拟评分，真实 A2A 协议组合了 <strong>Pub/Sub 广播（例 10-5）</strong> + <strong>message.send 投标（例 10-4）</strong> + <strong>Agent Card skills 匹配（例 10-2）</strong>，形成"广播 → 投标 → 评标"三阶段协商闭环。A2A 协议本身没有专门的"竞标"方法，但所有基本组件在 01-05 篇里都已经有了。
+</div>
+
+<!-- ========== Section 1 ========== -->
+<h2>一、本节要解决什么问题</h2>
+
+<p>前面 5 篇讲的都是"一对一"通信：要么 Request-Response（A → B），要么 Pub/Sub（Publisher 广播给 Subscribers，但 Subscriber 不发投标回来）。到这一篇，我们要解决：</p>
+
+<p><strong>多个 Agent 都有能力干同一件事，选谁？怎么选？</strong></p>
+
+<p>教材原版的问题：</p>
+<ul>
+  <li><code>CompetitiveAgent.evaluate_score()</code> 用 <code>random.uniform(-0.3, 0.3)</code> 模拟评分——<strong>完全随机，Agent 根本不知道自己能不能干这个活</strong></li>
+  <li><code>TaskOrchestrator.dispatch_task()</code> 里用 <code>for agent in self.agents: agent.bid_for_task()</code> 拉模式——<strong>Orchestrator 主动拉每个 Agent，Agent 被动响应</strong></li>
+  <li>虚构框架 <code>qwen_agent.Agent</code> 拼三段 prompt</li>
+</ul>
+
+<p>本次改写的核心目标：<strong>用真实 A2A v1.0 协议组合出完整的协商-竞标闭环</strong>，Agent 主动评估自己能不能干（Agent Card skills 匹配），Orchestrator 用 Pub/Sub 广播 Task 让 Agent 主动投标。</p>
+
+<!-- ========== Section 2 ========== -->
+<h2>二、教材 vs 真实 A2A 的核心区别</h2>
+
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>真实 A2A 协议组合</th></tr>
+  <tr><td><strong>通信模式</strong></td><td>拉模式（Orchestrator 主动遍历 Agent）</td><td>推模式（Pub/Sub 广播 → Agent 主动订阅投标）</td></tr>
+  <tr><td><strong>能力判断</strong></td><td><code>random.uniform</code> 随机评分</td><td>Agent Card <code>skills</code> 三级匹配（例 10-2 模式）</td></tr>
+  <tr><td><strong>投标载体</strong></td><td>自定义 <code>BidMessage(sender, proposal, score)</code></td><td>A2A <code>message.send</code>（含 Agent Card skills 匹配分）</td></tr>
+  <tr><td><strong>广播方式</strong></td><td>无广播，<code>for</code> 循环</td><td>JSON-RPC <strong>Notification</strong>（例 10-5）</td></tr>
+  <tr><td><strong>评标</strong></td><td>简单 <code>max(bids, key=score)</code></td><td>基础 score 排序 + 可选 dashscope LLM 辅助评标</td></tr>
+  <tr><td><strong>动态扩展</strong></td><td>静态注册，Agent 无法主动放弃</td><td>匹配度 < 阈值 → Agent 主动放弃不投标</td></tr>
+</table>
+
+<!-- ========== Section 3 ========== -->
+<h2>三、系统架构（6 个核心组件，全部复用 01-05 篇）</h2>
+
+<pre>
+A2ANegotiationOrchestrator（协商调度器——新增）
+├── registry: BidderRegistry（← 例 10-2 的 A2ARegistry 模式）
+│   ├── register(bidder)
+│   └── all_bidders() → List[BidderAgent]
+├── _subscriptions: task_id → [BidderAgent]（← 例 10-5 的注册表）
+├── _bids: task_id → [bid dict]
+└── run_negotiation() → 完整 4 步流程
+    Step 1: 构造 Task + broadcast JSON-RPC Notification（← 例 10-5）
+    Step 2: 遍历 Registry → 每个 BidderAgent.create_bid()
+    Step 3: _evaluate_bids() → score 排序 + 可选 dashscope 辅助
+    Step 4: broadcast task.winner Notification
+
+BidderAgent（投标 Agent——新增）
+├── agent_card: {skills: [{id, description, tags}]}  ← 例 10-2 Agent Card
+├── match_skill(task_desc) → float  ← 例 10-2 三级匹配（中文描述 → tags → skill_id）
+├── generate_bid_proposal() → dashscope.Generation.call()  ← 例 10-4 LLM 能力层
+└── create_bid(task_id, desc) → {bidder, score, match_score, proposal}
+</pre>
+
+<!-- ========== Section 4 ========== -->
+<h2>四、3 个投标 Agent 的 Agent Card skills 设计</h2>
+
+<p>这是 Agent 能力声明的核心（A2A 规范 § Agent Card → skills）。三个 Agent 各有不同专长，Task 是"人民币汇率波动对外贸企业的影响"——谁的 skills 匹配度最高？</p>
+
+<table>
+  <tr><th>BidderAgent</th><th>skills</th><th>Task 关键词匹配</th><th>match_score</th></tr>
+  <tr>
+    <td><strong>agent:qwen_finance</strong></td>
+    <td>macro_analysis（宏观经济） + exchange_rate（汇率波动）</td>
+    <td>"汇率" → tags 匹配 ✓<br>"外贸" → exchange_rate description ✓</td>
+    <td><strong>1.00</strong></td>
+  </tr>
+  <tr>
+    <td><strong>agent:coze_sentiment</strong></td>
+    <td>sentiment（舆情解读） + risk_analysis（风险评估）</td>
+    <td>"波动" → risk_analysis ✓<br>"影响" → 部分匹配</td>
+    <td><strong>1.00</strong></td>
+  </tr>
+  <tr>
+    <td><strong>agent:deepseek_data</strong></td>
+    <td>data_mining（数据挖掘） + trade_analysis（外贸数据）</td>
+    <td>"外贸" → trade_analysis tags ✓<br>"汇率" → 无匹配 ✗</td>
+    <td><strong>0.50</strong></td>
+  </tr>
+</table>
+
+<p>最终评分公式：<code>combined_score = base_capability × (0.5 + 0.5 × match_score)</code></p>
+<p>• qwen_finance: 8.7 × (0.5 + 0.5 × 1.0) = <strong>8.70</strong><br>
+• coze_sentiment: 8.6 × (0.5 + 0.5 × 1.0) = <strong>8.60</strong><br>
+• deepseek_data: 8.4 × (0.5 + 0.5 × 0.5) = <strong>6.30</strong>（匹配度低 → 分数大幅下降）</p>
+
+<!-- ========== Section 5 ========== -->
+<h2>五、完整 4 步协商流程</h2>
+
+<div class="flow">
+  <span class="step">1</span>Orchestrator 创建 Task + 广播 submitted<br>
+  &nbsp;&nbsp;{"jsonrpc","2.0", method:"task.submitted", params:{taskId, description}}<br>
+  <span class="step">2</span>每个 BidderAgent 收到广播 → match_skill() → score<br>
+  &nbsp;&nbsp;match >= 阈值 → generate_bid_proposal(dashscope) → create_bid()<br>
+  &nbsp;&nbsp;match < 阈值 → 主动放弃不投标<br>
+  <span class="step">3</span>Orchestrator 收集所有投标 → _evaluate_bids()<br>
+  &nbsp;&nbsp;默认按 score 降序 → 可选 dashscope 辅助综合评审<br>
+  <span class="step">4</span>Orchestrator 广播 task.winner Notification<br>
+  &nbsp;&nbsp;中标者收到 → 开始执行 Task（返回 Artifact）
+</div>
+
+<!-- ========== Section 6 ========== -->
+<h2>六、改写前后对照</h2>
+
+<table>
+  <tr><th>教材原版（已注释）</th><th>改写后（真实 A2A 规范）</th></tr>
+  <tr><td><code>class BidMessage(sender, task, proposal, score)</code></td><td>Agent Card skills + match_score + dashscope proposal</td></tr>
+  <tr><td><code>evaluate_score(): random.uniform(-0.3, 0.3)</code></td><td><code>match_skill()</code> Agent Card 三级匹配 + <code>base_capability</code> 加权</td></tr>
+  <tr><td><code>for agent in agents: agent.bid_for_task()</code> 拉模式</td><td>Pub/Sub Notification 广播 → Agent 主动投标 推模式</td></tr>
+  <tr><td>所有 Agent 必须投标</td><td>match_score < 0.25 → Agent 主动放弃（可扩展）</td></tr>
+  <tr><td><code>max(bids, key=score)</code> 简单排序</td><td>score 排序 + 可选 dashscope LLM 辅助评标</td></tr>
+  <tr><td><code>from qwen_agent import Agent, PromptEntry</code></td><td><code>dashscope.Generation.call</code></td></tr>
+</table>
+
+<!-- ========== Section 7 ========== -->
+<h2>七、实测验证（真实运行结果）</h2>
+
+<h3>3 份投标完整输出</h3>
+
+<div class="bid-row winner">
+  <span class="bid-num winner">1</span>
+  <strong>agent:qwen_finance</strong> — score=8.7, match=1.00 ★ 中标<br>
+  <em>"我将基于 macro_analysis 专长，结合当前中美利差、国内 PMI 与出口景气度等宏观指标，研判人民币汇率波动的驱动逻辑；再依托 exchange_rate 专长，量化分析汇率弹性对不同外贸企业利润率与订单周期的实际冲击..."</em>
+</div>
+
+<div class="bid-row">
+  <span class="bid-num">2</span>
+  <strong>agent:coze_sentiment</strong> — score=8.6, match=1.00<br>
+  <em>（方案概要：基于 risk_analysis 专长，聚焦企业风控视角，分析汇率波动风险敞口...）</em>
+</div>
+
+<div class="bid-row">
+  <span class="bid-num">3</span>
+  <strong>agent:deepseek_data</strong> — score=6.3, match=0.50<br>
+  <em>（方案概要：基于 data_mining + trade_analysis，侧重外贸历史数据挖掘分析...）</em>
+</div>
+
+<h3>dashscope 辅助评标意见</h3>
+<div class="ok">
+  <strong>LLM 评标：</strong>"综合评估：Qwen Finance 得分最高且匹配度满分。推荐最优投标者编号：[1]"
+</div>
+
+<div class="card">
+  <h3>关键验证点</h3>
+  <ul>
+    <li><strong>skills 匹配正确</strong>：deepseek_data 只有 trade_analysis 一个 skill 匹配（"外贸"），所以 match_score=0.50，综合分被大幅拉低</li>
+    <li><strong>中标合理</strong>：qwen_finance 的两个 skills（macro_analysis + exchange_rate）都完美覆盖 Task，LLM 评标也确认它最优</li>
+    <li><strong>所有 Agent 真实调用了 dashscope</strong>：每个投标方案都是 qwen-plus 实时生成的，不是硬编码</li>
+  </ul>
+</div>
+
+<!-- ========== Section 8 ========== -->
+<h2>八、动手练习</h2>
+
+<ol>
+  <li><strong>加 Agent 主动放弃</strong>：当前所有 Agent 都投标（match_score >= 0.25）。把阈值调高到 0.7，再看 deepseek_data（match=0.50）会不会放弃投标——这就是"Agent 有自知之明"的真实体现。</li>
+  <li><strong>加多 Task 并行协商</strong>：Orchestrator 同时广播 2 个 Task，看 3 个 Agent 会不会对每个 Task 独立评估、独立投标。可以让不同 Task 匹配不同 Agent。</li>
+  <li><strong>加中标者执行阶段</strong>：当前中标后只打印结果。让 Orchestrator 把 Task 真正交给中标 Agent，中标 Agent 用 dashscope 执行完整分析并返回 Artifact（例 10-3 的 MCP + LLM 模式）。</li>
+  <li><strong>加多轮协商</strong>：第一轮中标者如果无法满足所有需求（比如缺少某些 resources），Orchestrator 发起第二轮协商让剩余 Agent 重新投标——这就是真实世界"谈判"的过程。</li>
+</ol>
+
+</body>
+</html>

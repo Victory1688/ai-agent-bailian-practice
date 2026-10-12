@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 880" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1280" height="880" fill="#0f172a"/>
+  <!-- 标题 -->
+  <text x="640" y="44" font-size="26" font-weight="bold" fill="#22d3ee" text-anchor="middle">char10 · A2A 核心对象生命周期</text>
+  <text x="640" y="68" font-size="13" fill="#94a3b8" text-anchor="middle">Task 七态流转 + Message/Part/Artifact/Agent Card 对象结构</text>
+  <line x1="60" y1="80" x2="1220" y2="80" stroke="#334155" stroke-width="1"/>
+
+  <!-- ============ 左：Task 七态生命周期 ============ -->
+  <rect x="40" y="100" width="610" height="560" rx="10" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+  <text x="60" y="130" font-size="17" font-weight="bold" fill="#22d3ee">A2A Task 七态生命周期</text>
+  <text x="640" y="130" font-size="12" fill="#94a3b8" text-anchor="end">规范 § Task States</text>
+
+  <!-- 七态圆圈 -->
+  <circle cx="130" cy="200" r="42" fill="#064e3b" stroke="#22c55e" stroke-width="2"/>
+  <text x="130" y="196" font-size="13" font-weight="bold" fill="#22c55e" text-anchor="middle">submitted</text>
+  <text x="130" y="214" font-size="10" fill="#94a3b8" text-anchor="middle">已提交</text>
+
+  <circle cx="300" cy="200" r="42" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+  <text x="300" y="196" font-size="13" font-weight="bold" fill="#22d3ee" text-anchor="middle">working</text>
+  <text x="300" y="214" font-size="10" fill="#94a3b8" text-anchor="middle">处理中</text>
+
+  <circle cx="470" cy="200" r="42" fill="#78350f" stroke="#fbbf24" stroke-width="2"/>
+  <text x="470" y="196" font-size="11" font-weight="bold" fill="#fbbf24" text-anchor="middle">input-required</text>
+  <text x="470" y="214" font-size="10" fill="#94a3b8" text-anchor="middle">需输入</text>
+
+  <circle cx="130" cy="360" r="42" fill="#14532d" stroke="#22c55e" stroke-width="2.5"/>
+  <text x="130" y="356" font-size="13" font-weight="bold" fill="#86efac" text-anchor="middle">completed</text>
+  <text x="130" y="374" font-size="10" fill="#94a3b8" text-anchor="middle">完成</text>
+
+  <circle cx="300" cy="360" r="42" fill="#7f1d1d" stroke="#ef4444" stroke-width="2"/>
+  <text x="300" y="356" font-size="13" font-weight="bold" fill="#fca5a5" text-anchor="middle">failed</text>
+  <text x="300" y="374" font-size="10" fill="#94a3b8" text-anchor="middle">失败</text>
+
+  <circle cx="470" cy="360" r="42" fill="#78350f" stroke="#fbbf24" stroke-width="2"/>
+  <text x="470" y="356" font-size="13" font-weight="bold" fill="#fbbf24" text-anchor="middle">canceled</text>
+  <text x="470" y="374" font-size="10" fill="#94a3b8" text-anchor="middle">取消</text>
+
+  <!-- 箭头 submitted → working -->
+  <path d="M172 200 L258 200" stroke="#22d3ee" stroke-width="2" fill="none" marker-end="url(#arr2-c)"/>
+  <!-- working → input-required -->
+  <path d="M342 200 L428 200" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#arr2-a)"/>
+  <!-- working → completed -->
+  <path d="M300 242 L300 318" stroke="#22c55e" stroke-width="2" fill="none" marker-end="url(#arr2-g)"/>
+  <!-- working → failed -->
+  <path d="M318 242 L318 318" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#arr2-r)"/>
+  <!-- working → canceled -->
+  <path d="M410 242 L448 318" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#arr2-a)"/>
+  <!-- input-required → working (补充后继续) -->
+  <path d="M470 242 L470 100 L342 100 L342 200" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="4,3" fill="none"/>
+  <text x="400" y="92" font-size="10" fill="#22d3ee">用户补充后继续</text>
+
+  <!-- 状态流转说明 -->
+  <rect x="60" y="420" width="570" height="220" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="80" y="444" font-size="14" font-weight="bold" fill="#22d3ee">状态流转规则（来自规范）</text>
+  <text x="80" y="468" font-size="12" fill="#e2e8f0">• <tspan fill="#22c55e">submitted</tspan> → <tspan fill="#22d3ee">working</tspan>：Agent 接收任务开始处理</text>
+  <text x="80" y="488" font-size="12" fill="#e2e8f0">• <tspan fill="#22d3ee">working</tspan> → <tspan fill="#fbbf24">input-required</tspan>：Agent 需要额外输入（多轮对话）</text>
+  <text x="80" y="508" font-size="12" fill="#e2e8f0">• <tspan fill="#22d3ee">working</tspan> → <tspan fill="#86efac">completed</tspan>：成功完成，必须含 Artifact</text>
+  <text x="80" y="528" font-size="12" fill="#e2e8f0">• <tspan fill="#22d3ee">working</tspan> → <tspan fill="#fca5a5">failed</tspan>：处理失败</text>
+  <text x="80" y="548" font-size="12" fill="#e2e8f0">• <tspan fill="#22d3ee">working</tspan> → <tspan fill="#fbbf24">canceled</tspan>：被请求方或系统取消</text>
+  <text x="80" y="568" font-size="12" fill="#e2e8f0">• <tspan fill="#fbbf24">input-required</tspan> → <tspan fill="#22d3ee">working</tspan>（虚线）：用户补充后继续</text>
+  <text x="80" y="600" font-size="12" fill="#94a3b8">terminal（终态）：completed / failed / canceled — 不再变化</text>
+  <text x="80" y="618" font-size="12" fill="#94a3b8">非终态：submitted / working / input-required — 可继续流转</text>
+
+  <!-- ============ 右：对象结构 ============ -->
+  <rect x="680" y="100" width="560" height="250" rx="10" fill="#1e293b" stroke="#60a5fa" stroke-width="2"/>
+  <text x="700" y="130" font-size="15" font-weight="bold" fill="#60a5fa">A2A Message 对象结构</text>
+  <pre x="700" y="152" font-family="Consolas,monospace" font-size="12" fill="#e2e8f0">
+{
+  "messageId": "msg-abc123",
+  "role": "user | agent",       <tspan fill="#22c55e">// 谁发的</tspan>
+  "parts": [
+    { "kind": "text", "text": "..." },
+    { "kind": "file", "name": "report.pdf", "mimeType": "application/pdf" },
+    { "kind": "data", "data": {...} }
+  ],
+  "contextId": "ctx-xxx",        <tspan fill="#fbbf24">// SERVER 生成，多轮复用</tspan>
+  "referenceTaskIds": [...]      <tspan fill="#c4b5fd">// 关联前置 Task</tspan>
+}</pre>
+
+  <rect x="680" y="370" width="560" height="180" rx="10" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+  <text x="700" y="400" font-size="15" font-weight="bold" fill="#fbbf24">A2A Task + Artifact 结构</text>
+  <pre x="700" y="422" font-family="Consolas,monospace" font-size="12" fill="#e2e8f0">
+{
+  "id": "task-def456",
+  "contextId": "ctx-xxx",
+  "status": { "state": "completed", "message": {...} },
+  "artifacts": [                 <tspan fill="#22d3ee">// 最终产出（可多个）</tspan>
+    {
+      "artifactId": "art-xyz",
+      "name": "analysis_report",
+      "parts": [{"kind":"text","text":"..."}]
+    }
+  ]
+}</pre>
+
+  <rect x="680" y="570" width="560" height="90" rx="10" fill="#1e293b" stroke="#c4b5fd" stroke-width="2"/>
+  <text x="700" y="600" font-size="15" font-weight="bold" fill="#c4b5fd">Agent Card 对象（/.well-known/agent.json）</text>
+  <text x="700" y="624" font-size="12" fill="#e2e8f0">name · description · endpoint · authentication(schemes) · capabilities(streaming/pushNotifications) · <tspan fill="#22d3ee">skills[]</tspan></text>
+  <text x="700" y="642" font-size="11" fill="#94a3b8">每个 skill: {id, description, tags, inputModes, outputModes}</text>
+
+  <!-- 底部：TaskStatusUpdateEvent -->
+  <rect x="40" y="690" width="1200" height="150" rx="10" fill="#0f172a" stroke="#334155"/>
+  <text x="60" y="720" font-size="16" font-weight="bold" fill="#22d3ee">A2A SSE 推送事件：TaskStatusUpdateEvent（例 10-5 Pub/Sub 核心）</text>
+
+  <rect x="70" y="736" width="370" height="80" rx="6" fill="#1e293b" stroke="#22d3ee"/>
+  <text x="255" y="760" font-size="13" fill="#22d3ee" text-anchor="middle">Notification 信封（无 id）</text>
+  <text x="255" y="780" font-size="11" fill="#94a3b8" text-anchor="middle">{"jsonrpc":"2.0", "method":"task.status", "params":{"event":...}}</text>
+
+  <rect x="470" y="736" width="370" height="80" rx="6" fill="#1e293b" stroke="#60a5fa"/>
+  <text x="655" y="760" font-size="13" fill="#60a5fa" text-anchor="middle">Event 字段</text>
+  <text x="655" y="780" font-size="11" fill="#94a3b8" text-anchor="middle">taskId + state(submitted/working/completed...) + timestamp + message + artifacts(可选)</text>
+
+  <rect x="870" y="736" width="340" height="80" rx="6" fill="#1e293b" stroke="#22c55e"/>
+  <text x="1040" y="760" font-size="13" fill="#22c55e" text-anchor="middle">传输方式</text>
+  <text x="1040" y="780" font-size="11" fill="#94a3b8" text-anchor="middle">SSE (text/event-stream) · HTTP 长连接 · 单向推送</text>
+
+  <!-- defs -->
+  <defs>
+    <marker id="arr2-c" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#22d3ee"/></marker>
+    <marker id="arr2-a" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#fbbf24"/></marker>
+    <marker id="arr2-g" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#22c55e"/></marker>
+    <marker id="arr2-r" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#ef4444"/></marker>
+  </defs>
+</svg>

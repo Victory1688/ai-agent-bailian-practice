@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 780" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1280" height="780" fill="#0f172a"/>
+  <!-- 标题 -->
+  <text x="640" y="44" font-size="26" font-weight="bold" fill="#22d3ee" text-anchor="middle">char10 · A2A 认证 + 能力匹配 完整时序</text>
+  <text x="640" y="68" font-size="13" fill="#94a3b8" text-anchor="middle">例 10-2（Agent Card + Bearer）+ 例 10-6（skills 匹配用于竞标）</text>
+  <line x1="60" y1="80" x2="1220" y2="80" stroke="#334155" stroke-width="1"/>
+
+  <!-- 四列 -->
+  <line x1="160" y1="100" x2="160" y2="740" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="400" y1="100" x2="400" y2="740" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="720" y1="100" x2="720" y2="740" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="1040" y1="100" x2="1040" y2="740" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- 四列标题 -->
+  <rect x="60" y="100" width="200" height="40" rx="6" fill="#1e293b" stroke="#7c3aed"/>
+  <text x="160" y="126" font-size="14" fill="#c4b5fd" text-anchor="middle">Client / Requester</text>
+
+  <rect x="290" y="100" width="220" height="40" rx="6" fill="#1e293b" stroke="#60a5fa"/>
+  <text x="400" y="126" font-size="14" fill="#93c5fd" text-anchor="middle">A2A Agent Card 发现</text>
+
+  <rect x="600" y="100" width="240" height="40" rx="6" fill="#1e293b" stroke="#22d3ee"/>
+  <text x="720" y="126" font-size="14" fill="#67e8f9" text-anchor="middle">A2A Server (Agent)</text>
+
+  <rect x="930" y="100" width="220" height="40" rx="6" fill="#1e293b" stroke="#22c55e"/>
+  <text x="1040" y="126" font-size="14" fill="#86efac" text-anchor="middle">dashscope LLM</text>
+
+  <!-- ===== Phase 1: Agent Card 发现 ===== -->
+  <rect x="60" y="155" width="1160" height="28" rx="4" fill="#1e293b"/>
+  <text x="80" y="175" font-size="12" fill="#22d3ee" font-weight="bold">Phase 1 · Agent Card 发现（无认证，公开）</text>
+
+  <!-- Step 1 -->
+  <path d="M160 200 L400 200" stroke="#60a5fa" stroke-width="2" marker-end="url(#arr3-b)"/>
+  <rect x="180" y="178" width="200" height="32" rx="4" fill="#1e293b" stroke="#60a5fa"/>
+  <text x="280" y="198" font-size="11" fill="#93c5fd" text-anchor="middle">GET /.well-known/agent.json</text>
+
+  <!-- Step 2 -->
+  <path d="M400 238 L160 238" stroke="#22d3ee" stroke-width="2" marker-end="url(#arr3-c)"/>
+  <rect x="180" y="216" width="340" height="32" rx="4" fill="#0f172a" stroke="#22d3ee"/>
+  <text x="350" y="236" font-size="11" fill="#67e8f9" text-anchor="middle">Agent Card JSON（公开：skills + endpoint + auth schemes）</text>
+
+  <!-- Card 内容卡片 -->
+  <rect x="200" y="260" width="320" height="60" rx="6" fill="#064e3b" stroke="#22c55e"/>
+  <text x="210" y="280" font-size="10" fill="#86efac">{"name":"agent:finance",</text>
+  <text x="210" y="296" font-size="10" fill="#86efac"> "skills":[{"id":"exchange_rate","tags":["汇率","外贸"]},...],</text>
+  <text x="210" y="312" font-size="10" fill="#86efac"> "authentication":{"schemes":["bearer"]}}</text>
+
+  <!-- ===== Phase 2: Bearer Token 认证 ===== -->
+  <rect x="60" y="335" width="1160" height="28" rx="4" fill="#1e293b"/>
+  <text x="80" y="355" font-size="12" fill="#f87171" font-weight="bold">Phase 2 · Bearer Token 认证（A2A 标准方案）</text>
+
+  <!-- Step 3 -->
+  <path d="M160 388 L720 388" stroke="#ef4444" stroke-width="2" marker-end="url(#arr3-r)"/>
+  <rect x="200" y="366" width="300" height="32" rx="4" fill="#1e293b" stroke="#ef4444"/>
+  <text x="350" y="386" font-size="11" fill="#fca5a5" text-anchor="middle">POST /a2a {"method":"message.send",...}</text>
+  <rect x="230" y="398" width="240" height="26" rx="4" fill="#7f1d1d" stroke="#f87171"/>
+  <text x="350" y="416" font-size="10" fill="#fca5a5" text-anchor="middle">Authorization: Bearer &lt;token&gt;</text>
+
+  <!-- Step 4 -->
+  <path d="M720 430 L160 430" stroke="#22c55e" stroke-width="2" marker-end="url(#arr3-g)"/>
+  <rect x="220" y="408" width="260" height="32" rx="4" fill="#0f172a" stroke="#22c55e"/>
+  <text x="350" y="428" font-size="11" fill="#86efac" text-anchor="middle">auth 校验通过 → 开始处理</text>
+
+  <!-- ===== Phase 3: Skills 匹配 ===== -->
+  <rect x="60" y="455" width="1160" height="28" rx="4" fill="#1e293b"/>
+  <text x="80" y="475" font-size="12" fill="#fbbf24" font-weight="bold">Phase 3 · Agent Card skills 匹配（三级匹配：中文描述 → tags → skill_id）</text>
+
+  <!-- Step 5 -->
+  <path d="M160 508 L720 508" stroke="#fbbf24" stroke-width="2" marker-end="url(#arr3-a)"/>
+  <rect x="230" y="486" width="220" height="32" rx="4" fill="#1e293b" stroke="#fbbf24"/>
+  <text x="340" y="506" font-size="11" fill="#fbbf24" text-anchor="middle">params.message.parts[].text</text>
+
+  <!-- match_skill 逻辑 -->
+  <rect x="200" y="520" width="440" height="70" rx="6" fill="#78350f" stroke="#fbbf24"/>
+  <text x="210" y="540" font-size="11" fill="#fde68a">match_skill("分析汇率对外贸企业的影响"):</text>
+  <text x="210" y="558" font-size="10" fill="#fbbf24">① 中文描述 → "外贸"命中 trade_analysis description ✓</text>
+  <text x="210" y="574" font-size="10" fill="#fbbf24">② tags → "汇率"命中 exchange_rate tags ✓</text>
+  <text x="210" y="590" font-size="10" fill="#fde68a">→ match_score = 1.00</text>
+
+  <!-- ===== Phase 4: LLM 调用 ===== -->
+  <rect x="60" y="605" width="1160" height="28" rx="4" fill="#1e293b"/>
+  <text x="80" y="625" font-size="12" fill="#22c55e" font-weight="bold">Phase 4 · LLM 处理（dashscope.Generation.call）</text>
+
+  <!-- Step 6 -->
+  <path d="M720 660 L1040 660" stroke="#22c55e" stroke-width="2" marker-end="url(#arr3-g)"/>
+  <rect x="800" y="638" width="220" height="32" rx="4" fill="#1e293b" stroke="#22c55e"/>
+  <text x="910" y="658" font-size="11" fill="#86efac" text-anchor="middle">prompt + skills 上下文</text>
+
+  <!-- Step 7 -->
+  <path d="M1040 700 L720 700" stroke="#22d3ee" stroke-width="2" marker-end="url(#arr3-c)"/>
+  <rect x="800" y="678" width="220" height="32" rx="4" fill="#0f172a" stroke="#22d3ee"/>
+  <text x="910" y="698" font-size="11" fill="#67e8f9" text-anchor="middle">LLM 文本响应 → Artifact</text>
+
+  <!-- 返回 Task -->
+  <path d="M720 720 L160 720" stroke="#22c55e" stroke-width="2" marker-end="url(#arr3-g)"/>
+  <rect x="220" y="700" width="440" height="26" rx="4" fill="#0f172a" stroke="#22c55e"/>
+  <text x="440" y="718" font-size="11" fill="#86efac" text-anchor="middle">→ JSON-RPC Response {id, result: Task(state:completed, artifacts:[...])}</text>
+
+  <!-- defs -->
+  <defs>
+    <marker id="arr3-b" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#60a5fa"/></marker>
+    <marker id="arr3-c" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#22d3ee"/></marker>
+    <marker id="arr3-g" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#22c55e"/></marker>
+    <marker id="arr3-r" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#ef4444"/></marker>
+    <marker id="arr3-a" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#fbbf24"/></marker>
+  </defs>
+</svg>

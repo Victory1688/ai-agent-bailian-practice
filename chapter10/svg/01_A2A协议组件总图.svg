@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 960" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1280" height="960" fill="#0f172a"/>
+  <!-- 标题 -->
+  <text x="640" y="46" font-size="28" font-weight="bold" fill="#22d3ee" text-anchor="middle">char10 · A2A 协议组件总图</text>
+  <text x="640" y="72" font-size="13" fill="#94a3b8" text-anchor="middle">Agent-to-Agent Protocol v1.0 (Google/Linux Foundation 2025) — 六层架构</text>
+  <line x1="80" y1="86" x2="1200" y2="86" stroke="#334155" stroke-width="1"/>
+
+  <!-- ============ L6 编排组合层（06） ============ -->
+  <rect x="40" y="100" width="1200" height="110" rx="10" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+  <text x="60" y="130" font-size="18" font-weight="bold" fill="#22d3ee">L6 编排组合层（06 协商与竞标）</text>
+  <text x="1220" y="130" font-size="12" fill="#94a3b8" text-anchor="end">把所有组件组合成完整多 Agent 系统</text>
+  <rect x="70" y="145" width="220" height="45" rx="6" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="180" y="172" font-size="13" fill="#22d3ee" text-anchor="middle">A2ANegotiationOrchestrator</text>
+  <rect x="320" y="145" width="250" height="45" rx="6" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="445" y="172" font-size="13" fill="#22d3ee" text-anchor="middle">BidderRegistry + BidderAgent</text>
+  <rect x="590" y="145" width="280" height="45" rx="6" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="730" y="172" font-size="13" fill="#22d3ee" text-anchor="middle">skills 匹配评分 + dashscope 辅助评标</text>
+  <rect x="890" y="145" width="320" height="45" rx="6" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="1050" y="172" font-size="13" fill="#22d3ee" text-anchor="middle">组合：Pub/Sub 广播 + message.send 投标 + Agent Card</text>
+
+  <!-- L6→L5 -->
+  <path d="M640 212 L640 234" stroke="#22d3ee" stroke-width="2" fill="none" marker-end="url(#arr-cyan)"/>
+
+  <!-- ============ L5 通信模式层（04/05） ============ -->
+  <rect x="40" y="234" width="1200" height="110" rx="10" fill="#1e3a5f" stroke="#60a5fa" stroke-width="2"/>
+  <text x="60" y="264" font-size="18" font-weight="bold" fill="#60a5fa">L5 通信模式层（04 Request-Response | 05 Pub/Sub）</text>
+  <text x="1220" y="264" font-size="12" fill="#94a3b8" text-anchor="end">两种核心通信范式</text>
+  <!-- 04 -->
+  <rect x="70" y="280" width="360" height="50" rx="6" fill="#0f172a" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="250" y="302" font-size="14" fill="#60a5fa" text-anchor="middle">Request-Response（例 10-4）</text>
+  <text x="250" y="320" font-size="11" fill="#94a3b8" text-anchor="middle">一对一 · JSON-RPC Request(id) → Response(result)</text>
+  <!-- 05 -->
+  <rect x="470" y="280" width="360" height="50" rx="6" fill="#0f172a" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="650" y="302" font-size="14" fill="#60a5fa" text-anchor="middle">Pub/Sub（例 10-5）</text>
+  <text x="650" y="320" font-size="11" fill="#94a3b8" text-anchor="middle">一对多 · Notification(无id) → subscribeToTask + SSE</text>
+  <!-- 组合示意 -->
+  <rect x="870" y="280" width="340" height="50" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="1040" y="302" font-size="14" fill="#fbbf24" text-anchor="middle">06 同时用两种！</text>
+  <text x="1040" y="320" font-size="11" fill="#94a3b8" text-anchor="middle">广播→订阅→投标→评标</text>
+
+  <!-- L5→L4 -->
+  <path d="M640 346 L640 368" stroke="#60a5fa" stroke-width="2" fill="none" marker-end="url(#arr-blue)"/>
+
+  <!-- ============ L4 核心能力层（02/03） ============ -->
+  <rect x="40" y="368" width="1200" height="110" rx="10" fill="#3b1d1d" stroke="#f87171" stroke-width="2"/>
+  <text x="60" y="398" font-size="18" font-weight="bold" fill="#f87171">L4 核心能力层（02 认证+能力声明 | 03 A2A+MCP 集成）</text>
+  <text x="1220" y="398" font-size="12" fill="#94a3b8" text-anchor="end">Agent 能证明自己是谁 + 能干什么</text>
+  <!-- 02 -->
+  <rect x="70" y="414" width="280" height="50" rx="6" fill="#0f172a" stroke="#f87171" stroke-width="1.5"/>
+  <text x="210" y="436" font-size="14" fill="#f87171" text-anchor="middle">Agent Card 能力声明</text>
+  <text x="210" y="454" font-size="11" fill="#94a3b8" text-anchor="middle">/.well-known/agent.json · skills + auth</text>
+  <rect x="370" y="414" width="250" height="50" rx="6" fill="#0f172a" stroke="#f87171" stroke-width="1.5"/>
+  <text x="495" y="436" font-size="14" fill="#f87171" text-anchor="middle">Bearer Token 认证</text>
+  <text x="495" y="454" font-size="11" fill="#94a3b8" text-anchor="middle">A2A 标准 Authorization 方案</text>
+  <!-- 03 -->
+  <rect x="650" y="414" width="280" height="50" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="790" y="436" font-size="14" fill="#fbbf24" text-anchor="middle">MCPServer（Agent→Tool）</text>
+  <text x="790" y="454" font-size="11" fill="#94a3b8" text-anchor="middle">Tools/Resources/Prompts 三原语 · tools/list/call</text>
+  <rect x="960" y="414" width="250" height="50" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="1085" y="436" font-size="14" fill="#fbbf24" text-anchor="middle">A2AServer 绑定 MCPServer</text>
+  <text x="1085" y="454" font-size="11" fill="#94a3b8" text-anchor="middle">A2A 管谁干 · MCP 管用什么干</text>
+
+  <!-- L4→L3 -->
+  <path d="M640 480 L640 502" stroke="#f87171" stroke-width="2" fill="none" marker-end="url(#arr-red)"/>
+
+  <!-- ============ L3 业务对象层（01） ============ -->
+  <rect x="40" y="502" width="1200" height="110" rx="10" fill="#78350f" stroke="#fbbf24" stroke-width="2"/>
+  <text x="60" y="532" font-size="18" font-weight="bold" fill="#fbbf24">L3 业务对象层（01 消息格式与语义设计）</text>
+  <text x="1220" y="532" font-size="12" fill="#94a3b8" text-anchor="end">A2A 协议定义的核心业务对象</text>
+  <rect x="70" y="548" width="220" height="50" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="180" y="570" font-size="14" fill="#fbbf24" text-anchor="middle">Message</text>
+  <text x="180" y="588" font-size="11" fill="#94a3b8" text-anchor="middle">role + parts + contextId</text>
+  <rect x="320" y="548" width="220" height="50" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="430" y="570" font-size="14" fill="#fbbf24" text-anchor="middle">Part</text>
+  <text x="430" y="588" font-size="11" fill="#94a3b8" text-anchor="middle">kind(text/file/data) + 内容</text>
+  <rect x="570" y="548" width="220" height="50" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="680" y="570" font-size="14" fill="#fbbf24" text-anchor="middle">Task</text>
+  <text x="680" y="588" font-size="11" fill="#94a3b8" text-anchor="middle">status + contextId + artifacts</text>
+  <rect x="820" y="548" width="220" height="50" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="930" y="570" font-size="14" fill="#fbbf24" text-anchor="middle">Artifact</text>
+  <text x="930" y="588" font-size="11" fill="#94a3b8" text-anchor="middle">最终产出（文件/文本）</text>
+  <rect x="1070" y="548" width="150" height="50" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="1145" y="570" font-size="14" fill="#fbbf24" text-anchor="middle">Agent Card</text>
+  <text x="1145" y="588" font-size="11" fill="#94a3b8" text-anchor="middle">身份 + skills + auth</text>
+
+  <!-- L3→L2 -->
+  <path d="M640 614 L640 636" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#arr-amber)"/>
+
+  <!-- ============ L2 协议信封层 ============ -->
+  <rect x="40" y="636" width="1200" height="100" rx="10" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+  <text x="60" y="666" font-size="18" font-weight="bold" fill="#94a3b8">L2 协议信封层 · JSON-RPC 2.0（A2A 和 MCP 共用）</text>
+  <text x="1220" y="666" font-size="12" fill="#94a3b8" text-anchor="end">所有消息都包裹在这个信封里</text>
+  <rect x="70" y="682" width="370" height="40" rx="6" fill="#0f172a" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="255" y="707" font-size="13" fill="#c4b5fd" text-anchor="middle">Request: {jsonrpc, id, method, params} → 期望 Response</text>
+  <rect x="470" y="682" width="370" height="40" rx="6" fill="#0f172a" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="655" y="707" font-size="13" fill="#86efac" text-anchor="middle">Notification: {jsonrpc, method, params} 无 id → 单向广播</text>
+  <rect x="870" y="682" width="340" height="40" rx="6" fill="#0f172a" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="1040" y="707" font-size="13" fill="#fca5a5" text-anchor="middle">Response: {jsonrpc, id, result | error}</text>
+
+  <!-- L2→L1 -->
+  <path d="M640 736 L640 758" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arr-gray)"/>
+
+  <!-- ============ L1 传输层 ============ -->
+  <rect x="40" y="758" width="1200" height="90" rx="10" fill="#1e1b2e" stroke="#c4b5fd" stroke-width="2"/>
+  <text x="60" y="786" font-size="18" font-weight="bold" fill="#c4b5fd">L1 传输层</text>
+  <rect x="70" y="800" width="170" height="38" rx="6" fill="#0f172a" stroke="#c4b5fd"/>
+  <text x="155" y="824" font-size="13" fill="#c4b5fd" text-anchor="middle">HTTP / HTTPS</text>
+  <rect x="260" y="800" width="170" height="38" rx="6" fill="#0f172a" stroke="#c4b5fd"/>
+  <text x="345" y="824" font-size="13" fill="#c4b5fd" text-anchor="middle">SSE (text/event-stream)</text>
+  <rect x="450" y="800" width="170" height="38" rx="6" fill="#0f172a" stroke="#c4b5fd"/>
+  <text x="535" y="824" font-size="13" fill="#c4b5fd" text-anchor="middle">gRPC</text>
+  <rect x="640" y="800" width="170" height="38" rx="6" fill="#0f172a" stroke="#c4b5fd"/>
+  <text x="725" y="824" font-size="13" fill="#c4b5fd" text-anchor="middle">HTTP-REST</text>
+  <rect x="830" y="800" width="170" height="38" rx="6" fill="#0f172a" stroke="#c4b5fd"/>
+  <text x="915" y="824" font-size="13" fill="#c4b5fd" text-anchor="middle">STDIO (MCP 本地)</text>
+  <rect x="1020" y="800" width="220" height="38" rx="6" fill="#0f172a" stroke="#22d3ee"/>
+  <text x="1130" y="824" font-size="13" fill="#22d3ee" text-anchor="middle">A2A / MCP 规范兼容多传输</text>
+
+  <!-- 图例 -->
+  <rect x="40" y="870" width="1200" height="60" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="60" y="894" font-size="12" fill="#94a3b8">六层自底向上：传输层（怎么传）→ 协议信封层（消息长啥样）→ 业务对象层（传什么对象）→ 核心能力层（Agent 认证+声明+工具集成）→ 通信模式层（一对一 vs 一对多）→ 编排组合层（多 Agent 系统组合）</text>
+  <text x="60" y="914" font-size="12" fill="#22d3ee">核心洞察：A2A 和 MCP 共用 JSON-RPC 2.0 信封（L2），A2A 管 Agent↔Agent，MCP 管 Agent↔Tool，组合覆盖完整多 Agent 通信基础设施</text>
+
+  <!-- 箭头 marker 定义 -->
+  <defs>
+    <marker id="arr-cyan" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#22d3ee"/>
+    </marker>
+    <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#60a5fa"/>
+    </marker>
+    <marker id="arr-red" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#f87171"/>
+    </marker>
+    <marker id="arr-amber" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arr-gray" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+</svg>
