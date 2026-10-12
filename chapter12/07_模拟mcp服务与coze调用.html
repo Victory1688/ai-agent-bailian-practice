@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 12-7 讲解：模拟 MCP 服务与 Coze 调用</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}pre .cm{color:#67e8f9}pre .k{color:#f472b6}pre .s{color:#86efac}pre .r{color:#fbbf24}pre .e{color:#fca5a5}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.flow{background:#fff;border:1px solid #22d3ee;border-radius:8px;padding:16px;margin:16px 0;font-family:Consolas,monospace;font-size:13px;color:#0e7490;line-height:2}
+.cb{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:bold}
+.cb-c{background:#dcfce7;color:#166534}.cb-o{background:#fee2e2;color:#991b1b}.cb-h{background:#fef3c7;color:#92400e}
+</style>
+</head>
+<body>
+
+<h1>例 12-7 讲解：模拟 MCP 服务与 Coze 调用</h1>
+
+<div class="highlight">
+  <strong>本节核心目标：把教材的"伪 MCP"换成真实 MCP。</strong>教材把对话历史存进 Redis 并给键加 <code>mcp:</code> 前缀就宣称是"MCP 协议层"——这与真实协议毫无关系。<strong>真实 MCP（Model Context Protocol）是 Anthropic 于 2024-11 发布、2025-06-18 最新修订的跨进程开放标准</strong>：JSON-RPC 2.0 信封 + initialize 生命周期握手 + tools/resources/prompts 三大原语。本篇实现一个协议最小可运行版（协议消息结构与官方 SDK 完全一致），并模拟真实扣子（Coze）Bot 通过 MCP 集成外部工具的工作流。
+</div>
+
+<!-- ========== Section 1 ========== -->
+<h2>一、教材原版问题</h2>
+
+<table>
+  <tr><th>#</th><th>问题</th><th>说明</th></tr>
+  <tr><td>1</td><td><code>import redis</code></td><td>本环境无 Redis，按约定改用运行目录 cache.json（保留 <code>mcp:{session_id}:messages</code> 键结构思想）</td></tr>
+  <tr><td>2</td><td><code>Qwen2Chat</code> / <code>DeepSeekChat</code></td><td>LangChain 虚构类（同例 12-4/05，不存在）</td></tr>
+  <tr><td>3</td><td><code>ConversationBufferMemory</code> / <code>ConversationalRetrievalChain</code></td><td>LangChain 官方已废弃</td></tr>
+  <tr><td>4</td><td>HuggingFaceEmbeddings + Chroma</td><td>需下载 90MB 本地模型；<code>./chroma_db/</code> 目录凭空出现，空库也能"检索成功"</td></tr>
+  <tr><td>5</td><td><code>memory.chat_memory.messages = history</code></td><td>直接注入绕开框架截断逻辑（char08-04 踩过的同款陷阱）</td></tr>
+  <tr><td>6</td><td><strong>"MCP 协议层"名不副实</strong></td><td>只是 Redis 键加 <code>mcp:</code> 前缀，无协议、无握手、无原语——见第二节辨析</td></tr>
+  <tr><td>7</td><td><strong>"Coze 调用"凭空</strong></td><td>真实扣子平台通过注册"MCP 扩展"（填服务 URL）集成工具，不存在进程内函数直调</td></tr>
+  <tr><td>8</td><td>消息写入顺序 bug</td><td>user 消息在 <code>qa_chain.run()</code> <strong>之后</strong>才写缓存——本轮输入不进本次上下文，调用失败还会丢消息</td></tr>
+</table>
+
+<!-- ========== Section 2 ========== -->
+<h2>二、教材"伪 MCP" vs 真实 MCP（本篇核心辨析）</h2>
+
+<table>
+  <tr><th>维度</th><th>教材（伪 MCP）</th><th>真实 MCP（2025-06-18 规范）</th></tr>
+  <tr><td>本质</td><td>给 Redis 消息键加 <code>mcp:</code> 前缀</td><td>跨进程开放标准（JSON-RPC 2.0 之上的应用协议）</td></tr>
+  <tr><td>角色模型</td><td>无</td><td>Host（如扣子/Claude Desktop）+ Client（连接器）+ Server（能力提供方）</td></tr>
+  <tr><td>消息格式</td><td><code>{"role","content"}</code> 数组</td><td>JSON-RPC 2.0 信封：<code>jsonrpc / id / method / params / error</code></td></tr>
+  <tr><td>生命周期</td><td>无</td><td><code>initialize</code> 握手（协商 protocolVersion + capabilities）→ <code>notifications/initialized</code> → 运行 → 关闭</td></tr>
+  <tr><td>能力发现</td><td>无</td><td><code>tools/list</code> / <code>resources/list</code> / <code>prompts/list</code> 动态拉取</td></tr>
+  <tr><td>错误处理</td><td>无</td><td>JSON-RPC 标准错误码（-32700 / -32601 / -32602）+ 工具级 <code>isError</code> 标记</td></tr>
+  <tr><td>传输层</td><td>进程内函数调用</td><td>stdio（本地子进程）/ Streamable HTTP（远程，2025-03 起替代旧 SSE 传输）</td></tr>
+</table>
+
+<h3>MCP 三大原语</h3>
+<table>
+  <tr><th>原语</th><th>作用</th><th>本篇实现</th></tr>
+  <tr><td><strong>Tools</strong></td><td>模型可调用的函数（带 JSON Schema 入参声明）</td><td><code>search_knowledge</code> 知识检索</td></tr>
+  <tr><td><strong>Resources</strong></td><td>客户端可读取的上下文数据（URI 寻址）</td><td><code>session://{sid}/history</code> 会话历史</td></tr>
+  <tr><td>Prompts</td><td>预置提示词模板</td><td>（最小实现未含，结构与前两者同构）</td></tr>
+</table>
+
+<div class="flow">
+  MCP 生命周期（本篇代码完整走通）：
+  Client                                          Server
+    │ ── initialize(protocolVersion, clientInfo) ──▶ │
+    │ ◀── protocolVersion + capabilities + serverInfo │
+    │ ── notifications/initialized（通知，无响应）──▶ │
+    │                                                │   ← 运行期
+    │ ── tools/list ──▶ 工具清单                      │
+    │ ── tools/call(search_knowledge) ──▶ 检索结果     │
+    │ ── resources/read(session://x/history) ──▶ 历史 │
+</div>
+
+<div class="ok">
+  <strong>为什么要先握手？</strong>initialize 让双方在发任何业务请求前协商"我会什么、你支持吗"——protocolVersion 不匹配直接失败，capabilities 声明服务器有无 tools/resources 能力。教材版本没有任何协商，客户端调什么全凭猜——这就是"协议"和"函数调用"的区别。
+</div>
+
+<!-- ========== Section 3 ========== -->
+<h2>三、核心组件 1：McpServer（JSON-RPC 2.0 单入口分发）</h2>
+
+<pre><code><span class="k">def</span> <span class="k">handle</span>(self, raw: str) -&gt; str:
+    <span class="s">"""协议单入口：解析 JSON-RPC 请求 → 分发 method → 序列化响应"""</span>
+    <span class="k">try</span>:
+        req = json.loads(raw)
+    <span class="k">except</span> json.JSONDecodeError:
+        <span class="k">return</span> self._dump(self._error(<span class="k">None</span>, <span class="r">-32700</span>, <span class="s">"Parse error"</span>))
+    req_id, method = req.get(<span class="s">"id"</span>), req.get(<span class="s">"method"</span>, <span class="s">""</span>)
+    <span class="k">if</span> req_id <span class="k">is</span> <span class="k">None</span>:
+        <span class="k">return</span> <span class="s">""</span>       <span class="c"># notification（如 initialized 通知）：按规范不回包</span>
+    handler = dispatch.get(method)
+    <span class="k">if</span> handler <span class="k">is</span> <span class="k">None</span>:
+        <span class="k">return</span> self._dump(self._error(req_id, <span class="r">-32601</span>, f<span class="s">"Method not found: {method}"</span>))
+    <span class="k">try</span>:
+        result = handler(req.get(<span class="s">"params"</span>) <span class="k">or</span> {})
+    <span class="k">except</span> ValueError <span class="k">as</span> e:
+        <span class="k">return</span> self._dump(self._error(req_id, <span class="r">-32602</span>, str(e)))   <span class="c"># 参数级错误</span>
+    <span class="k">return</span> self._dump({<span class="s">"jsonrpc"</span>: <span class="s">"2.0"</span>, <span class="s">"id"</span>: req_id, <span class="s">"result"</span>: result})</code></pre>
+
+<h3>两类错误要分清（真实 MCP 的规范细节）</h3>
+<table>
+  <tr><th>错误类型</th><th>表达方式</th><th>触发场景</th></tr>
+  <tr><td><span class="cb cb-o">协议错误</span></td><td>JSON-RPC <code>error</code> 字段（-32601 / -32602 / -32700）</td><td>方法不存在、参数非法、请求本身解析不了——<strong>协议层听不懂</strong></td></tr>
+  <tr><td><span class="cb cb-h">工具执行错误</span></td><td>result 里 <code>"isError": true</code> + 错误文案放进 content</td><td>工具跑起来了但内部失败（如 embedding 超时）——<strong>协议层懂，业务没成</strong></td></tr>
+</table>
+
+<div class="ok">
+  <strong>为什么工具失败不用 JSON-RPC error？</strong>因为请求在协议层面完全合法——服务器理解了方法、收到了合法参数、也成功执行了分发，只是"活儿没干成"。调用方（Bot 编排层）需要区分"该重试协议请求"和"该换一种方式回答"这两种情况，所以规范把业务失败放进正常响应体里。<strong>本篇 CozeBot 的兜底逻辑正依赖这个区分。</strong>
+</div>
+
+<!-- ========== Section 4 ========== -->
+<h2>四、核心组件 2：tools 原语（search_knowledge 工具）</h2>
+
+<pre><code>SEARCH_TOOL_DEF = {
+    <span class="s">"name"</span>: <span class="s">"search_knowledge"</span>,
+    <span class="s">"description"</span>: <span class="s">"在 LLM 知识库中检索与查询语义最相关的知识分块"</span>,
+    <span class="s">"inputSchema"</span>: {                      <span class="c"># ← 标准 JSON Schema（真实 MCP 格式）</span>
+        <span class="s">"type"</span>: <span class="s">"object"</span>,
+        <span class="s">"properties"</span>: {
+            <span class="s">"query"</span>:   {<span class="s">"type"</span>: <span class="s">"string"</span>},
+            <span class="s">"top_k"</span>:   {<span class="s">"type"</span>: <span class="s">"integer"</span>, <span class="s">"default"</span>: 2},
+        },
+        <span class="s">"required"</span>: [<span class="s">"query"</span>],
+    },
+}
+
+<span class="c"># tools/call 的响应格式（真实规范 CallToolResult）：</span>
+{<span class="s">"content"</span>: [{<span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"[1] RoPE（旋转位置编码）...（相似度 0.612）"</span>}],
+ <span class="s">"isError"</span>: <span class="k">false</span>}</code></pre>
+
+<p>工具实现沿用例 12-4 模式：dashscope <code>text-embedding-v3</code> 生成语义向量 + 纯 Python 余弦相似度 top-k 检索，向量缓存进 cache.json（重复运行不二次计费），替代教材的 Chroma + 90MB 本地 HuggingFace 模型。</p>
+
+<div class="highlight">
+  <strong>MCP 工具 vs Function Calling 的关系：</strong>Function Calling 是模型厂商的私有接口约定（模型决定"调哪个函数"）；MCP 是工具的<strong>开放发布与发现标准</strong>（任何符合协议的客户端都能动态拉取工具清单并调用）。二者互补：模型经 Function Calling 决策，运行时经 MCP 执行。2025 年 OpenAI、Google 相继宣布支持 MCP，工具生态正在统一到这一标准。
+</div>
+
+<!-- ========== Section 5 ========== -->
+<h2>五、核心组件 3：resources 原语 + CozeBot 工作流</h2>
+
+<pre><code><span class="c"># resources：把会话历史作为 URI 寻址的资源暴露</span>
+resources/list  →  [{<span class="s">"uri"</span>: <span class="s">"session://a1b2/history"</span>,
+                     <span class="s">"name"</span>: <span class="s">"会话 a1b2 的对话历史"</span>,
+                     <span class="s">"mimeType"</span>: <span class="s">"application/json"</span>}]
+resources/read  →  {<span class="s">"contents"</span>: [{<span class="s">"uri"</span>: ..., <span class="s">"text"</span>: <span class="s">"[{role,content},...]"</span>}]}</code></pre>
+
+<h3>CozeBot：真实扣子平台的工作流模拟</h3>
+
+<div class="flow">
+  CozeBot.chat(session_id, user_input)
+      │
+      ▼
+  ① user 消息先写历史（cache.json）── 修复教材"后写"顺序 bug
+      │
+      ▼
+  ② MCP 工具调用：tools/call search_knowledge(query)
+      │   isError=true 或异常 → 知识置空（不炸主流程）
+      ▼
+  ③ 组装上下文：system（知识增强）+ 完整会话历史
+      │
+      ▼
+  ④ qwen-plus 生成 → assistant 消息回写历史 → 返回
+</div>
+
+<p>真实扣子平台的集成方式：在 Bot 中添加 <strong>MCP 扩展</strong>并填入 MCP 服务 URL（Streamable HTTP / SSE），运行时平台按 MCP 协议拉取工具清单、在对话中调用工具——与本篇 <code>McpClient</code> 的行为一致，只是传输层换成 HTTP。</p>
+
+<!-- ========== Section 6 ========== -->
+<h2>六、实测验证（6 项 self-test 全部通过）</h2>
+
+<div class="ok">
+  <strong>Test 1 - initialize 握手：</strong><code>protocolVersion=2025-06-18，capabilities 含 tools/resources，initialized 通知已发</code><br>
+  <strong>Test 2 - tools/list：</strong><code>search_knowledge 工具暴露，inputSchema 为合法 JSON Schema</code><br>
+  <strong>Test 3 - tools/call：</strong><code>真实 embedding 检索命中知识分块（相似度排序输出）</code><br>
+  <strong>Test 4 - Coze 两轮对话：</strong><code>第 1 轮答"位置编码"，第 2 轮 RoPE 语义承接第一轮 + 知识增强</code><br>
+  <strong>Test 5 - resources：</strong><code>resources/read 返回 4 条历史，角色顺序 [user, assistant, user, assistant]</code><br>
+  <strong>Test 6 - 错误码：</strong><code>-32601（未知方法）/ -32602（非法 URI）/ -32700（非法 JSON）全部正确</code>
+</div>
+
+<h3>Test 4 的真实 LLM 回复（节选）</h3>
+<pre><code>第 1 轮: 位置编码是为 Transformer 模型中的每个 token 添加与其位置相关的
+         向量表示，使其能够感知输入序列的顺序信...
+第 2 轮: 位置编码（如绝对位置编码）通常为每个位置分配一个固定或可学习的
+         向量，直接加到词嵌入上，**缺乏显式的相对位置建模能力**，且...</code></pre>
+
+<p>第 2 轮回复体现了两个机制叠加生效：<strong>跨轮记忆</strong>（"位置编码"承接第一轮话题，未重复解释）与 <strong>MCP 知识增强</strong>（回答里出现相对位置建模——来自检索命中的 RoPE 知识分块）。</p>
+
+<!-- ========== Section 7 ========== -->
+<h2>七、改写前后对照总表</h2>
+
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td><strong>协议层</strong></td><td>Redis 键加 <code>mcp:</code> 前缀（伪 MCP）</td><td>JSON-RPC 2.0 + initialize 生命周期 + tools/resources 原语（真实 2025-06-18 规范）</td></tr>
+  <tr><td><strong>错误处理</strong></td><td>无</td><td>协议错误码三件套 + 工具级 isError 区分</td></tr>
+  <tr><td><strong>模型</strong></td><td>虚构 Qwen2Chat/DeepSeekChat 本地 GPU</td><td>qwen-plus（dashscope 原生协议）</td></tr>
+  <tr><td><strong>记忆</strong></td><td>废弃的 ConversationBufferMemory + 直接注入</td><td>cache.json 会话历史 + messages 组装（截断逻辑可控）</td></tr>
+  <tr><td><strong>知识库</strong></td><td>Chroma + 90MB 本地模型，空库也"成功"</td><td>dashscope 向量 + 余弦检索，向量缓存落盘</td></tr>
+  <tr><td><strong>消息顺序</strong></td><td>user 消息生成后才写缓存（顺序 bug）</td><td>先写历史再生成（本轮输入进本次上下文）</td></tr>
+  <tr><td><strong>Coze 集成</strong></td><td>虚构的进程内函数直调</td><td>MCP 工具发现 + 调用的 Bot 编排模拟（与真实平台一致）</td></tr>
+  <tr><td><strong>验证</strong></td><td>无 self-test</td><td>6 项：握手 / 工具清单 / 工具调用 / 两轮对话 / 资源读取 / 错误码</td></tr>
+</table>
+
+<!-- ========== Section 8 ========== -->
+<h2>八、与前后章节的衔接</h2>
+
+<table>
+  <tr><th>章节</th><th>内容</th><th>衔接</th></tr>
+  <tr><td>char07</td><td>教材虚构"MCP 上下文段"（role/content/type/task_id/meta 五字段）</td><td>本篇给出真实答案：MCP 是 JSON-RPC 2.0 应用协议，上下文经 resources 原语按 URI 读取</td></tr>
+  <tr><td>char10-05</td><td>A2A 协议（Google 2025）</td><td>A2A 管<strong> agent 与 agent</strong> 的跨进程协作；MCP 管 <strong>agent 与工具/数据</strong>的连接——互补而非竞争</td></tr>
+  <tr><td>char12-04</td><td>多层缓存与记忆</td><td>知识库检索（embedding + 余弦 + 向量缓存）与 JSONCache 模式直接复用</td></tr>
+  <tr><td>char12-06</td><td>限流与降级</td><td>CozeBot 对工具失败的兜底（isError → 知识置空继续生成）是降级思想的应用</td></tr>
+</table>
+
+<div class="flow">
+  Agent 互操作协议定位：Function Calling（模型 ↔ 运行时，私有约定）→ MCP（agent ↔ 工具/数据，开放标准）→ A2A（agent ↔ agent，开放标准）——三者各管一段，共同构成 2025 年 Agent 互操作栈
+</div>
+
+<!-- ========== Section 9 ========== -->
+<h2>九、动手练习</h2>
+
+<ol>
+  <li><strong>补 prompts 原语</strong>：实现 <code>prompts/list</code> 与 <code>prompts/get</code>，暴露一个" RoPE 对比分析"预置提示词模板（体会三大原语的同构性）。</li>
+  <li><strong>换传输层</strong>：把 <code>handle()</code> 接上 stdio——父进程 <code>subprocess.Popen</code> 启动本脚本，按行读写 JSON-RPC（协议层代码零改动，体会协议/传输解耦）。</li>
+  <li><strong>多工具注册</strong>：再加一个 <code>save_note</code> 工具（写 cache.json），验证 tools/list 动态出现两个工具，并在 tools/call 分发表里注册。</li>
+  <li><strong>isError 路径实测</strong>：给 KnowledgeBase 注入 embedding 故障（如改错模型名），验证工具返回 <code>isError: true</code> 而 CozeBot 仍能无知识生成回复——对照协议错误码的区别。</li>
+  <li><strong>资源分页</strong>：当会话超过 50 条时让 resources/read 只返回最近 20 条，思考 MCP 对大资源的推荐做法（分页 vs URI 子资源）。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li>MCP 官方规范（2025-06-18 版，含生命周期/三大原语/传输层）：<a href="https://modelcontextprotocol.io/specification/2025-06-18">modelcontextprotocol.io</a></li>
+  <li>MCP 官方 GitHub（协议仓库 + Python/TypeScript SDK）：<a href="https://github.com/modelcontextprotocol">github.com/modelcontextprotocol</a></li>
+  <li>扣子（Coze）平台的 MCP 扩展接入文档：<a href="https://www.coze.cn/open/docs">coze.cn/open/docs</a></li>
+</ul>
+
+</body>
+</html>

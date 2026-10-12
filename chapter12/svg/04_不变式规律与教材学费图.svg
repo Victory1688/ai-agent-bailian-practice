@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1000" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1400" height="1000" fill="#0f172a"/>
+  <text x="700" y="52" text-anchor="middle" fill="#22d3ee" font-size="30" font-weight="bold">char12 不变式规律图 —— 穿透七篇示例的五条铁律</text>
+  <text x="700" y="82" text-anchor="middle" fill="#64748b" font-size="15">无论组件怎么变（日志/安全/队列/缓存/熔断/限流/协议），这五条规律在每一篇都被重复执行</text>
+
+  <!-- 铁律 1 -->
+  <rect x="80" y="115" width="1240" height="120" rx="12" fill="#1e293b" stroke="#22d3ee"/>
+  <rect x="80" y="115" width="64" height="120" rx="12" fill="#164e63"/>
+  <text x="112" y="185" text-anchor="middle" fill="#67e8f9" font-size="26" font-weight="bold">一</text>
+  <text x="175" y="150" fill="#67e8f9" font-size="18" font-weight="bold">外部接口必有兜底 —— 任何网络调用都假设会失败</text>
+  <text x="175" y="180" fill="#e2e8f0" font-size="13">LLM 调用失败 → 兜底文案（05/06）；embedding 失败 → 检索降级为空（04/07）；MCP 工具失败 → isError 标记不炸协议层（07）</text>
+  <text x="175" y="208" fill="#94a3b8" font-size="12">反例：教材的 qa_chain.run() 无任何 try/except，一次网络抖动整个服务崩溃</text>
+
+  <!-- 铁律 2 -->
+  <rect x="80" y="255" width="1240" height="120" rx="12" fill="#1e293b" stroke="#22d3ee"/>
+  <rect x="80" y="255" width="64" height="120" rx="12" fill="#164e63"/>
+  <text x="112" y="325" text-anchor="middle" fill="#67e8f9" font-size="26" font-weight="bold">二</text>
+  <text x="175" y="290" fill="#67e8f9" font-size="18" font-weight="bold">状态必须落盘 —— cache.json 替代 Redis（本项目硬约定）</text>
+  <text x="175" y="320" fill="#e2e8f0" font-size="13">会话历史（04/07）· 任务状态（03）· 令牌桶余量（06）· 语义向量（04/07）—— 重启不丢状态，令牌桶重启不回满（防绕过限流）</text>
+  <text x="175" y="348" fill="#94a3b8" font-size="12">关键细节：持久化不只是"能存"，还要"恢复语义正确"——06 的 bucket.reset() 就是为此测试确定性而生</text>
+
+  <!-- 铁律 3 -->
+  <rect x="80" y="395" width="1240" height="120" rx="12" fill="#1e293b" stroke="#22d3ee"/>
+  <rect x="80" y="395" width="64" height="120" rx="12" fill="#164e63"/>
+  <text x="112" y="465" text-anchor="middle" fill="#67e8f9" font-size="26" font-weight="bold">三</text>
+  <text x="175" y="430" fill="#67e8f9" font-size="18" font-weight="bold">可观测性三件套 —— 日志、统计、健康端点缺一不可</text>
+  <text x="175" y="460" fill="#e2e8f0" font-size="13">request_id 双通道日志（01）· 每后端 ok/fail/skip 统计（05）· processed/failed + /health 指标（06）—— 出问题先看数据再猜原因</text>
+  <text x="175" y="488" fill="#94a3b8" font-size="12">并发正确性的证明方式就是观测：max_active≥3 证明真并发，轮询 3:2 证明均衡，[200×5,429×5] 证明限流精确</text>
+
+  <!-- 铁律 4 -->
+  <rect x="80" y="535" width="1240" height="120" rx="12" fill="#1e293b" stroke="#f87171"/>
+  <rect x="80" y="535" width="64" height="120" rx="12" fill="#7f1d1d"/>
+  <text x="112" y="605" text-anchor="middle" fill="#fca5a5" font-size="26" font-weight="bold">四</text>
+  <text x="175" y="570" fill="#fca5a5" font-size="18" font-weight="bold">故障必须被实测触发 —— 只走 happy path 的容错等于没写</text>
+  <text x="175" y="600" fill="#e2e8f0" font-size="13">故障注入器（05）让重试/切换/熔断/降级真实发生；限流靠 10 线程突发触发（06）；插队靠三线程错峰构造排队场景（06）</text>
+  <text x="175" y="628" fill="#94a3b8" font-size="12">方法论：验证一个防御机制 = 精确构造它防御的那个故障 + 断言防御行为 + 清理注入恢复现场</text>
+
+  <!-- 铁律 5 -->
+  <rect x="80" y="675" width="1240" height="120" rx="12" fill="#1e293b" stroke="#a78bfa"/>
+  <rect x="80" y="675" width="64" height="120" rx="12" fill="#4c1d95"/>
+  <text x="112" y="745" text-anchor="middle" fill="#c4b5fd" font-size="26" font-weight="bold">五</text>
+  <text x="175" y="710" fill="#c4b5fd" font-size="18" font-weight="bold">协议与传输解耦 —— 按真实开放标准实现，而非私有线连</text>
+  <text x="175" y="740" fill="#e2e8f0" font-size="13">MCP：JSON-RPC 2.0 信封 + initialize 生命周期 + tools/resources 原语（07）—— 教学进程内传递，生产换 stdio/HTTP 协议层零改动</text>
+  <text x="175" y="768" fill="#94a3b8" font-size="12">对照：教材给 Redis 键加 mcp: 前缀冒充协议；真实标准 = 消息格式 + 生命周期 + 能力发现 + 错误码四位一体</text>
+
+  <!-- 教材学费谱系 -->
+  <text x="700" y="840" text-anchor="middle" fill="#fbbf24" font-size="17" font-weight="bold">本篇教材的五笔学费（每笔都在改写中偿还）</text>
+  <rect x="80" y="860" width="230" height="110" rx="10" fill="#1e293b" stroke="#f87171"/>
+  <text x="195" y="890" text-anchor="middle" fill="#fca5a5" font-size="14" font-weight="bold">虚构类</text>
+  <text x="195" y="915" text-anchor="middle" fill="#e2e8f0" font-size="12">Qwen2Chat / DeepSeekChat</text>
+  <text x="195" y="937" text-anchor="middle" fill="#94a3b8" font-size="11">LangChain 里根本不存在</text>
+  <rect x="330" y="860" width="230" height="110" rx="10" fill="#1e293b" stroke="#f87171"/>
+  <text x="445" y="890" text-anchor="middle" fill="#fca5a5" font-size="14" font-weight="bold">废弃 API</text>
+  <text x="445" y="915" text-anchor="middle" fill="#e2e8f0" font-size="12">ConversationChain / on_event</text>
+  <text x="445" y="937" text-anchor="middle" fill="#94a3b8" font-size="11">官方已弃用，新项目禁入</text>
+  <rect x="580" y="860" width="230" height="110" rx="10" fill="#1e293b" stroke="#f87171"/>
+  <text x="695" y="890" text-anchor="middle" fill="#fca5a5" font-size="14" font-weight="bold">非原子竞态</text>
+  <text x="695" y="915" text-anchor="middle" fill="#e2e8f0" font-size="12">Redis get/decr 三步分离</text>
+  <text x="695" y="937" text-anchor="middle" fill="#94a3b8" font-size="11">并发下桶被扣成负数</text>
+  <rect x="830" y="860" width="230" height="110" rx="10" fill="#1e293b" stroke="#f87171"/>
+  <text x="945" y="890" text-anchor="middle" fill="#fca5a5" font-size="14" font-weight="bold">伪协议</text>
+  <text x="945" y="915" text-anchor="middle" fill="#e2e8f0" font-size="12">mcp: 前缀冒充 MCP</text>
+  <text x="945" y="937" text-anchor="middle" fill="#94a3b8" font-size="11">与真实开放标准毫无关系</text>
+  <rect x="1080" y="860" width="240" height="110" rx="10" fill="#1e293b" stroke="#f87171"/>
+  <text x="1200" y="890" text-anchor="middle" fill="#fca5a5" font-size="14" font-weight="bold">零验证</text>
+  <text x="1200" y="915" text-anchor="middle" fill="#e2e8f0" font-size="12">限流/削峰/容错从未触发</text>
+  <text x="1200" y="937" text-anchor="middle" fill="#94a3b8" font-size="11">写了等于没写，灵不灵靠信仰</text>
+</svg>

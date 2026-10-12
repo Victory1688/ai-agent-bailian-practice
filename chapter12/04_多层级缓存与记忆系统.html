@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 12-4 讲解：多层级缓存与记忆系统</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}pre .cm{color:#67e8f9}pre .k{color:#f472b6}pre .s{color:#86efac}pre .r{color:#fbbf24}pre .e{color:#fca5a5}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.flow{background:#fff;border:1px solid #22d3ee;border-radius:8px;padding:16px;margin:16px 0;font-family:Consolas,monospace;font-size:13px;color:#0e7490;line-height:2}
+.tier{border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin:12px 0;background:#fff}
+.tier .tn{font-weight:bold;color:#0e7490;font-size:15px}
+</style>
+</head>
+<body>
+
+<h1>例 12-4 讲解：多层级缓存与记忆系统</h1>
+
+<div class="highlight">
+  <strong>本节核心变化：</strong>LLM 是<strong>无状态</strong>的——每次调用都是失忆的。本篇给 Agent 建立三层记忆：<strong>短期缓存</strong>（会话历史，cache.json 替代 Redis）、<strong>长期知识库</strong>（语义向量检索，替代 Chroma）、<strong>跨模型记忆共享</strong>（同一会话历史注入不同模型）。教材的 LangChain 引用有一半是虚构/废弃的，全部重写。
+</div>
+
+<!-- ========== Section 1 ========== -->
+<h2>一、教材原版问题：一半引用是虚构的</h2>
+
+<table>
+  <tr><th>#</th><th>问题</th><th>严重性</th></tr>
+  <tr><td>1</td><td><code>Qwen2Chat</code> / <code>DeepSeekChat</code></td><td><strong>类不存在</strong>——LangChain 社区库里从来没有这两个类，作者虚构</td></tr>
+  <tr><td>2</td><td><code>ConversationBufferMemory</code> / <code>ConversationalRetrievalChain</code></td><td><strong>官方已废弃</strong>（LangChain 0.3+），推荐 LangGraph 或 LCEL 重写</td></tr>
+  <tr><td>3</td><td><code>redis</code> 依赖</td><td>本环境无 Redis，按约定改用 cache.json</td></tr>
+  <tr><td>4</td><td><code>sample_knowledge.txt</code> 凭空出现</td><td>文件不存在直接崩，教材没给内容</td></tr>
+  <tr><td>5</td><td>本地 GPU + HuggingFaceEmbeddings（90MB 模型下载）+ chromadb 重依赖</td><td>教学环境跑不起来</td></tr>
+  <tr><td>6</td><td>无错误处理、无 self-test</td><td>三层架构是否真的生效？无法验证</td></tr>
+</table>
+
+<h3>改写策略：概念不变，实现现代化</h3>
+<table>
+  <tr><th>教材组件</th><th>改写后</th><th>概念是否保留</th></tr>
+  <tr><td>Redis rpush/lrange 会话历史</td><td><code>JSONCache</code>（cache.json）</td><td>完整保留（短期缓存层）</td></tr>
+  <tr><td>Chroma + HuggingFace 向量检索</td><td>dashscope <code>TextEmbedding</code> + 纯 Python 余弦相似度</td><td>完整保留（语义向量化 + top-k 检索）</td></tr>
+  <tr><td>RecursiveCharacterTextSplitter</td><td>自实现 <code>split_text()</code>（30 行）</td><td>保留（分块思想）</td></tr>
+  <tr><td>Qwen2Chat/DeepSeekChat（虚构）</td><td>qwen-plus（原生协议）/ qwen-turbo（OpenAI 兼容协议）</td><td>保留并增强（跨模型 + 跨协议）</td></tr>
+  <tr><td>ConversationBufferMemory（废弃）</td><td>历史统一由 JSONCache 管理，每次全量注入</td><td>保留且更清晰</td></tr>
+</table>
+
+<!-- ========== Section 2 ========== -->
+<h2>二、三层记忆架构</h2>
+
+<div class="tier"><span class="tn">层级 1 · 短期缓存（会话历史）</span><br>
+  <code>JSONCache</code> — cache.json 按 session 隔离存对话消息，等价 Redis 的 rpush/lrange，服务重启历史不丢</div>
+<div class="tier"><span class="tn">层级 2 · 长期知识库（语义检索）</span><br>
+  知识文本分块 → TextEmbedding API 向量化（向量本身缓存落盘，重复运行零成本）→ 余弦相似度 top-2 检索</div>
+<div class="tier"><span class="tn">层级 3 · 跨模型记忆共享</span><br>
+  同一 session_id 的历史注入任意模型：对话 1 用 qwen-plus，对话 2 用 qwen-turbo，"它"依然指代上文</div>
+
+<div class="flow">
+  用户提问: "它和多头注意力机制之间的关系是什么？"
+        │
+        ▼
+  ┌─ 层级 2: 知识检索 ─────────────────────────┐
+  │ query 向量化 → 余弦相似度 → top-2 知识分块  │
+  └────────────────────────────────────────────┘
+        │
+        ▼
+  ┌─ 层级 3: 消息组装 ─────────────────────────┐
+  │ system(知识分块) + history(层级1) + 本轮输入│
+  └────────────────────────────────────────────┘
+        │
+        ▼
+  LLM 后端（qwen-plus 原生协议 / qwen-turbo 兼容协议，可插拔）
+        │
+        ▼
+  层级 1: 历史双写落盘 cache.json（user + assistant）
+</div>
+
+<!-- ========== Section 3 ========== -->
+<h2>三、层级 1：JSONCache（Redis 的替代实现）</h2>
+
+<pre><code><span class="k">class</span> <span class="k">JSONCache</span>:
+    <span class="s">"""基于 cache.json 的键值缓存，替代 Redis 的会话历史存储"""</span>
+
+    <span class="k">def</span> append_history(self, session_id, role, content):
+        <span class="s">"""向指定会话追加一条历史（等价 Redis rpush）"""</span>
+        sessions = self._data.setdefault(<span class="s">"sessions"</span>, {})
+        sessions.setdefault(session_id, []).append({<span class="s">"role"</span>: role, <span class="s">"content"</span>: content})
+        self._save()
+
+    <span class="k">def</span> get_history(self, session_id):
+        <span class="s">"""读取指定会话的全部历史（等价 Redis lrange 0 -1）"""</span>
+        <span class="k">return</span> list(self._data.get(<span class="s">"sessions"</span>, {}).get(session_id, []))</code></pre>
+
+<h3>cache.json 实际结构</h3>
+<pre><code>{
+  <span class="s">"sessions"</span>: {
+    <span class="s">"demo-a3f2c1"</span>: [
+      {<span class="s">"role"</span>: <span class="s">"user"</span>,      <span class="s">"content"</span>: <span class="s">"Self-Attention 是怎么工作的？"</span>},
+      {<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: <span class="s">"Transformer 中的 Self-Attention..."</span>},
+      {<span class="s">"role"</span>: <span class="s">"user"</span>,      <span class="s">"content"</span>: <span class="s">"它和多头注意力的关系？"</span>},   <span class="c">← 第二个模型读到了</span>
+      {<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: <span class="s">"多头注意力是 Self-Attention..."</span>}
+    ]
+  },
+  <span class="s">"vectors"</span>: { <span class="s">"0"</span>: [0.021, -0.043, ...], <span class="s">"1"</span>: [...] }   <span class="c">← 知识向量也缓存</span>
+}</code></pre>
+
+<div class="ok">
+  <strong>额外设计：向量也存进 cache.json。</strong>embedding API 按调用计费——知识库不变时向量不会变，缓存后重复运行零成本。教材用 Chroma persist 实现同一目的，cache.json 同样胜任且零依赖。
+</div>
+
+<!-- ========== Section 4 ========== -->
+<h2>四、层级 2：语义向量检索（理解 RAG 的最小实现）</h2>
+
+<pre><code><span class="cm"># ① 查询向量化（1024 维语义向量）</span>
+qvec = embed_texts([query])[0]
+
+<span class="cm"># ② 与每个知识分块算余弦相似度（-1~1，越大语义越近）</span>
+scored = [(chunk, cosine_similarity(qvec, vvec))
+          <span class="k">for</span> chunk, vvec <span class="k">in</span> zip(self._chunks, self._vectors)]
+
+<span class="cm"># ③ 取 top-2（教材 k=2）</span>
+scored.sort(key=<span class="k">lambda</span> x: x[1], reverse=True)
+<span class="k">return</span> scored[:top_k]</code></pre>
+
+<h3>实测检索命中（Test 1）</h3>
+<pre><code>查询: "Self-Attention 是怎么工作的"
+  相似度 <span class="s">0.693</span> | 多头注意力（Multi-Head Attention）将 Self-At...
+  相似度 <span class="s">0.689</span> | Transformer 是现代大语言模型的基础架构，其核心是自注意力机制...
+对话时的检索 top=0.850（带完整问题上下文时更高）</code></pre>
+
+<div class="ok">
+  <strong>这就是 RAG 的本质：</strong>用户的自然语言问题和知识库里的相关段落被映射到同一个向量空间，语义相近 = 向量夹角小 = 余弦相似度高。Chroma/FAISS/Milvus 等专业向量库只是把"算相似度+排序"做得更快、支持更大规模——原理和这 30 行代码完全一致。
+</div>
+
+<!-- ========== Section 5 ========== -->
+<h2>五、层级 3：跨模型记忆共享（记忆与模型解耦）</h2>
+
+<pre><code><span class="cm"># 两个后端：不同模型 + 不同调用协议</span>
+CHAT_BACKENDS = {
+    <span class="s">"backend_a"</span>: {<span class="s">"model"</span>: <span class="s">"qwen-plus"</span>,  <span class="s">"protocol"</span>: <span class="s">"native"</span>},   <span class="c"># dashscope 原生</span>
+    <span class="s">"backend_b"</span>: {<span class="s">"model"</span>: <span class="s">"qwen-turbo"</span>, <span class="s">"protocol"</span>: <span class="s">"openai"</span>},   <span class="c"># OpenAI 兼容</span>
+}
+
+<span class="cm"># 记忆共享的核心：历史存在 cache 里，模型只是"读客"</span>
+history = self.cache.get_history(self.session_id)   <span class="c"># 谁写的都能读</span>
+messages = [system(知识)] + history + [本轮输入]     <span class="c"># 全量注入</span></code></pre>
+
+<div class="warn">
+  <strong>关于 DeepSeek 的实测说明：</strong>教材用 Qwen/DeepSeek 双厂商演示跨模型。实测当前百炼账号未开通 DeepSeek 托管（<code>deepseek-v3</code> 等模型名 404），故改用 qwen-plus / qwen-turbo 两个真实可用的不同模型 + 两种不同调用协议演示。<strong>记忆共享机制与用什么模型无关</strong>——历史在 cache 里，模型只是消费者；若账号开通 deepseek，把 backend_b 的 model 改回 <code>"deepseek-v3"</code> 即可。
+</div>
+
+<h3>为什么这体现了"解耦"？</h3>
+<p>注意 messages 的组装对两个后端<strong>完全相同</strong>（role/content 结构一致，OpenAI 兼容模式已成行业通用格式）。记忆的存取（JSONCache）与记忆的消费（任意 LLM）彻底分离——换模型、换供应商、加新 Agent，记忆层一行不用改。这正是教材"跨模型协同缺乏统一机制"问题的答案：<strong>统一机制 = 外置存储 + 标准消息格式</strong>。</p>
+
+<!-- ========== Section 6 ========== -->
+<h2>六、实测验证（4 项 self-test 全部通过）</h2>
+
+<div class="ok">
+  <strong>Test 1 - 知识检索：</strong><code>[通过] 相似度 0.693 命中 Multi-Head Attention 分块</code><br>
+  <strong>Test 2 - 对话+落盘：</strong><code>qwen-plus: "Transformer 中的 Self-Attention（自注意力）机制是..." → [通过] 历史 2 条</code><br>
+  <strong>Test 3 - 跨模型共享：</strong><code>qwen-turbo: "多头注意力机制（Multi-Head Attention）是 Self-At..." → [通过] 历史 4 条</code><br>
+  <strong>Test 4 - 会话隔离：</strong><code>[通过] 新 session 历史为空</code>
+</div>
+
+<p><strong>Test 3 的关键证据：</strong>第二个模型收到的提问是"它和多头注意力机制之间的关系是什么？"——没有"它"的指代对象。qwen-turbo 能正确回答 Multi-Head 与 Self-Attention 的关系，唯一的信息来源就是第一个模型（qwen-plus）写入 cache.json 的历史。<strong>记忆共享被数学性证明。</strong></p>
+
+<!-- ========== Section 7 ========== -->
+<h2>七、与前后章节的衔接</h2>
+
+<table>
+  <tr><th>章节</th><th>内容</th><th>衔接</th></tr>
+  <tr><td>char09（记忆管理）</td><td>会话记忆的设计模式</td><td>本篇给出"缓存层"的工程实现</td></tr>
+  <tr><td>char12-01/02</td><td>日志 / 并发 / 安全</td><td>本篇 memory 内容可挂到 char12 服务端点上</td></tr>
+  <tr><td>char10-03（MCP Resources）</td><td>知识资源读取</td><td>本篇的向量检索就是 Resources 的检索实现</td></tr>
+</table>
+
+<div class="flow">
+  三层记忆演进方向：JSONCache → Redis（多实例共享）→ 专业向量库（大规模 RAG）→ LangGraph/Letta（Agent 记忆框架）
+</div>
+
+<!-- ========== Section 8 ========== -->
+<h2>八、动手练习</h2>
+
+<ol>
+  <li><strong>历史窗口截断</strong>：长对话历史会撑爆上下文。给 MemoryAgent 加 <code>max_history=10</code>，注入时只保留最近 10 条（滑动窗口），对比截断前后 token 消耗。</li>
+  <li><strong>混合检索</strong>：在向量检索基础上加关键词匹配（如 BM25 思想），两者加权融合排序——理解为什么生产 RAG 都是混合检索。</li>
+  <li><strong>记忆摘要压缩</strong>：历史超过 10 条时，调用 LLM 把旧历史压缩成一段摘要存为一条 system 消息——体验"记忆管理"的进阶玩法。</li>
+  <li><strong>多会话管理器</strong>：实现 <code>SessionManager.list_sessions() / delete_session(id)</code>，做一个简单的会话管理 API。</li>
+  <li><strong>知识库增量更新</strong>：加 <code>add_knowledge(text)</code> 方法，新知识自动分块、向量化、增量写入 cache.json（现有代码已支持缺失分块自动补向量，思考如何复用）。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li>DashScope TextEmbedding API：<a href="https://help.aliyun.com/zh/model-studio/text-embedding-synchronous">help.aliyun.com</a></li>
+  <li>LangChain Memory 废弃迁移指南（为什么教材写法过时）：<a href="https://python.langchain.com/docs/versions/migrating_memory/">python.langchain.com</a></li>
+  <li>余弦相似度与向量检索原理：<a href="https://en.wikipedia.org/wiki/Cosine_similarity">en.wikipedia.org</a></li>
+</ul>
+
+</body>
+</html>

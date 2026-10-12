@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 12-1 讲解：Web 服务记录日志与并发</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}pre .cm{color:#67e8f9}pre .k{color:#f472b6}pre .s{color:#86efac}pre .r{color:#fbbf24}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.flow{background:#fff;border:1px solid #22d3ee;border-radius:8px;padding:16px;margin:16px 0;font-family:Consolas,monospace;font-size:13px;color:#0e7490;line-height:2}
+.step{display:inline-block;background:#0f172a;color:#22d3ee;border-radius:50%;width:28px;height:28px;text-align:center;line-height:28px;font-size:13px;font-weight:bold;margin-right:8px}
+</style>
+</head>
+<body>
+
+<h1>例 12-1 讲解：Web 服务记录日志与并发</h1>
+
+<div class="highlight">
+  <strong>本节核心变化：</strong>char11 学了"怎么把 Agent 部署成 Web 服务"，char12 开始"部署之后怎么运维"。本篇聚焦两个运维基石：<strong>日志</strong>（出了问题怎么查）和<strong>并发</strong>（很多人同时调用怎么办）。同时修复教材的 <code>torch.time.time()</code> bug，并把本地 GPU 推理改为全书统一的 dashscope API 模式。
+</div>
+
+<!-- ========== Section 1 ========== -->
+<h2>一、本节要解决什么问题</h2>
+
+<p>char11 的 Flask 服务是"能用"水平：一个 /ask 端点、一次调用验证。但生产环境要回答两个致命问题：</p>
+<ul>
+  <li><strong>出了错怎么查？</strong>——用户说"我调你的接口报错了"，没有日志你两眼一抹黑：请求什么时候来的？参数是什么？哪一步失败的？耗时多久？</li>
+  <li><strong>100 个人同时调用怎么办？</strong>——教材用本地 GPU 推理，必须 <code>model_lock</code> 串行化（显存只够一次跑一个）；API 化之后并发难题交给云端，但你要<strong>观测</strong>并发水位。</li>
+</ul>
+
+<h3>教材原版的 6 个问题</h3>
+<table>
+  <tr><th>#</th><th>问题</th><th>说明</th></tr>
+  <tr><td>1</td><td><code>torch.time.time()</code> bug</td><td>torch 没有 time 模块，运行必报 AttributeError。应为 <code>time.time()</code></td></tr>
+  <tr><td>2</td><td>本地加载 Qwen3-7B + .cuda()</td><td>需要约 15GB 显存的 GPU，普通开发机跑不起来；且与全书 dashscope API 模式脱节</td></tr>
+  <tr><td>3</td><td><strong>配置了日志却从未使用</strong></td><td>章节标题是"记录日志并发"，但请求处理中没有任何一行 logger 输出——logging.basicConfig 是死代码</td></tr>
+  <tr><td>4</td><td>并发只有一把锁没有演示</td><td>model_lock 锁住了模型，但无法验证"多个请求同时来"会发生什么</td></tr>
+  <tr><td>5</td><td>没有 /health 端点</td><td>K8s/负载均衡无法探活</td></tr>
+  <tr><td>6</td><td>没有 main self-test</td><td>app.run() 直接阻塞，无法自动验证</td></tr>
+</table>
+
+<!-- ========== Section 2 ========== -->
+<h2>二、改写后的整体架构</h2>
+
+<div class="flow">
+  外部客户端（APP / 网站 / 其他 Agent）
+        │
+        ▼
+  Flask 路由层（两个端点）
+    ├─ GET  /health                    → 健康检查 + 并发统计
+    └─ POST /v1/chat/completions       → OpenAI 兼容 Chat API
+        │
+        ▼
+  请求处理 5 步（每步都有日志）
+    ① request_id 生成（uuid 8 位）
+    ② JSON 解析 + 参数校验        ← 失败记 warning 日志
+    ③ 并发计数 +1（加锁）          ← 记"请求开始"日志
+    ④ dashscope.Generation.call   ← 失败记 error 日志
+    ⑤ 并发计数 -1（finally 保证）  ← 记"请求完成"日志（耗时+tokens）
+        │
+        ▼
+  LLM 后端：DashScope qwen-plus（前 10 章统一模式）
+</div>
+
+<h3>日志双通道输出</h3>
+<ul>
+  <li><strong>控制台</strong>（StreamHandler）—— 开发时实时看</li>
+  <li><strong>日志文件</strong>（FileHandler → <code>agent_server.log</code>）—— 生产排查依据，UTF-8 落盘持久化</li>
+</ul>
+
+<!-- ========== Section 3 ========== -->
+<h2>三、核心概念 1：request_id 请求链路追踪</h2>
+
+<pre><code><span class="cm"># 每个请求生成 8 位唯一标识，日志用它能串联完整链路</span>
+request_id = uuid.uuid4().hex[:8]
+
+<span class="cm"># 之后所有日志都带上这个前缀：</span>
+logger.info(<span class="s">f"[{request_id}] 请求开始 messages={len(messages)} 并发={active_now}"</span>)
+logger.info(<span class="s">f"[{request_id}] 请求完成 耗时={elapsed_ms}ms tokens={usage['total_tokens']}"</span>)</code></pre>
+
+<div class="ok">
+  <strong>为什么需要 request_id？</strong> 并发时日志是交叉的——10 个请求的日志混在一起根本分不清谁是谁。有了 request_id，grep 一下 <code>[6c984fc8]</code> 就能抽出这一个请求的完整生命周期。这是生产级日志的第一要素。
+</div>
+
+<h3>实测日志长这样</h3>
+<pre><code><span class="c">17:38:12 [INFO] [e81f1e96] 请求开始 messages=1 并发=1</span>
+<span class="c">17:38:12 [INFO] [4f15899e] 请求开始 messages=1 并发=2</span>
+<span class="c">17:38:12 [INFO] [4b7a5d45] 请求开始 messages=1 并发=3</span>   <span class="cm">← 3 个请求真并发</span>
+<span class="c">17:38:13 [INFO] [e81f1e96] 请求完成 耗时=427ms tokens=22</span>
+<span class="c">17:38:13 [INFO] [4f15899e] 请求完成 耗时=998ms tokens=25</span>
+<span class="c">17:38:13 [INFO] [4b7a5d45] 请求完成 耗时=995ms tokens=22</span></code></pre>
+
+<!-- ========== Section 4 ========== -->
+<h2>四、核心概念 2：并发观测与锁</h2>
+
+<h3>教材的锁 vs 改写后的观测</h3>
+<table>
+  <tr><th>维度</th><th>教材（本地 GPU 推理）</th><th>改写后（云端 API）</th></tr>
+  <tr><td>为什么处理并发</td><td><code>model_lock</code> 必须加——GPU 显存只够一次跑一个请求，不加锁会 OOM</td><td><strong>不需要加锁</strong>——dashscope 云端天然支持并发</td></tr>
+  <tr><td>并发能力</td><td>串行（一次一个）</td><td>受 Flask 线程数和 API 限流约束</td></tr>
+  <tr><td>可观测性</td><td>无</td><td>计数器统计 total / active / max_active</td></tr>
+</table>
+
+<pre><code><span class="cm"># 并发计数器：观测并发水位（加锁保护，避免竞态条件）</span>
+_stats = {<span class="s">"total"</span>: 0, <span class="s">"active"</span>: 0, <span class="s">"max_active"</span>: 0}
+_stats_lock = threading.Lock()
+
+<span class="cm"># 请求开始：active +1，并刷新峰值</span>
+<span class="k">with</span> _stats_lock:
+    _stats[<span class="s">"total"</span>] += 1
+    _stats[<span class="s">"active"</span>] += 1
+    _stats[<span class="s">"max_active"</span>] = max(_stats[<span class="s">"max_active"</span>], _stats[<span class="s">"active"</span>])
+
+<span class="cm"># 请求结束：active -1（放在 finally 里，出错也必须释放）</span>
+<span class="k">try</span>:
+    response = dashscope.Generation.call(...)
+<span class="k">finally</span>:
+    <span class="k">with</span> _stats_lock:
+        _stats[<span class="s">"active"</span>] -= 1</code></pre>
+
+<div class="warn">
+  <strong>两个易错点：</strong><br>
+  ① <strong>计数 -1 必须放 <code>finally</code></strong>——如果放 try 正常分支，LLM 抛异常后 active 永远不减，统计就废了。<br>
+  ② <strong>读写计数必须加锁</strong>——<code>_stats["active"] += 1</code> 看似一行，实际是"读-改-写"三步，多线程不加锁会丢更新（竞态条件）。
+</div>
+
+<h3>max_active 的意义</h3>
+<p><code>max_active</code>（同时处理峰值）是容量规划的核心指标：如果压测发现 max_active 长期顶在 Flask 默认线程上限，就该考虑 gunicorn/workers 扩容或异步队列了。</p>
+
+<!-- ========== Section 5 ========== -->
+<h2>五、OpenAI 兼容响应格式（保留的教学核心）</h2>
+
+<p>教材的响应格式是 <strong>OpenAI Chat Completions 兼容格式</strong>——这一点值得保留，因为 <code>/v1/chat/completions</code> + <code>{choices, usage}</code> 结构已是行业事实标准：vLLM、Ollama、各类推理服务都遵循它。改写只修 bug，不动格式：</p>
+
+<table>
+  <tr><th>字段</th><th>教材写法</th><th>改写后</th></tr>
+  <tr><td>id</td><td>硬编码 "chatcmpl-123"</td><td><code>f"chatcmpl-{request_id}"</code>（可追踪）</td></tr>
+  <tr class="warn" style="background:#fee2e2"><td>created</td><td><code>int(torch.time.time())</code> <strong>bug！</strong></td><td><code>int(time.time())</code> 修复</td></tr>
+  <tr><td>usage.prompt_tokens</td><td><code>inputs.shape[1]</code>（本地 tensor 推断）</td><td><code>response.usage.input_tokens</code>（API 直接返回）</td></tr>
+  <tr><td>model</td><td>"Qwen/Qwen3-7B"</td><td>"qwen-plus"（API 模型名）</td></tr>
+</table>
+
+<!-- ========== Section 6 ========== -->
+<h2>六、实测验证（4 项 self-test 全部通过）</h2>
+
+<div class="ok">
+  <strong>Test 1 - GET /health：</strong><code>[通过] status=ok</code><br>
+  <strong>Test 2 - 单请求：</strong><code>[通过] answer=2, usage={'prompt_tokens': 21, 'completion_tokens': 1, 'total_tokens': 22}</code><br>
+  <strong>Test 3 - 并发 3 请求：</strong><code>[通过] 日志交叉显示 并发=1→2→3，3 个请求全部完成</code><br>
+  <strong>Test 4 - 并发统计：</strong><code>total=4 max_active=3 → [通过] max_active >= 3，并发处理得到验证</code>
+</div>
+
+<h3>Test 4 的设计意图</h3>
+<p>为什么专门校验 <code>max_active >= 3</code>？如果 Flask 被配置成单线程串行处理，3 个请求会排队，计数器最多到 1。max_active 达到 3 <strong>数学上证明了真并发</strong>——这比"看起来跑完了"严格得多。</p>
+
+<h3>curl 调用示例</h3>
+<pre><code><span class="cm"># 健康检查（含并发统计）</span>
+curl http://localhost:8000/health
+
+<span class="cm"># OpenAI 兼容调用</span>
+curl -X POST http://localhost:8000/v1/chat/completions \
+     -H "Content-Type: application/json" \
+     -d '{ "messages": [{"role": "user", "content": "你好，介绍一下你自己。"}],
+           "max_tokens": 100,
+           "temperature": 0.7 }'</code></pre>
+
+<!-- ========== Section 7 ========== -->
+<h2>七、与前面章节的衔接</h2>
+
+<table>
+  <tr><th>章节</th><th>内容</th><th>本篇的演进</th></tr>
+  <tr><td>char11-01</td><td>Flask 基础部署（/ask 端点）</td><td>本篇端点升级为 OpenAI 兼容标准格式</td></tr>
+  <tr><td>char01-10</td><td>dashscope.Generation.call 调用模式</td><td>完全复用，LLM 后端零改动</td></tr>
+  <tr><td>char10</td><td>A2A 协议（Agent Card / Task）</td><td>本篇是"服务运维"侧：日志与并发是 A2A 服务上生产前的必修课</td></tr>
+</table>
+
+<h3>运维能力阶梯（char12 全章主线）</h3>
+<div class="flow">
+  例 12-1 日志 + 并发（本篇）→ 后续小节：监控告警 / 容器化 / 弹性扩缩容
+</div>
+
+<!-- ========== Section 8 ========== -->
+<h2>八、动手练习</h2>
+
+<ol>
+  <li><strong>加日志级别区分</strong>：给 /v1/chat/completions 加 <code>logger.debug</code> 记录完整请求体，并把 FileHandler 级别改为 DEBUG、控制台保持 INFO——体验"文件记详细、控制台记摘要"的双级别策略。</li>
+  <li><strong>加日志轮转</strong>：把 FileHandler 换成 <code>logging.handlers.RotatingFileHandler(maxBytes=1_000_000, backupCount=5)</code>，防止日志文件无限增长。</li>
+  <li><strong>模拟慢请求</strong>：加一个 <code>/slow</code> 端点内部 <code>time.sleep(5)</code>，同时发 10 个请求，观察 max_active 变化——理解 Flask 默认线程模型的并发上限。</li>
+  <li><strong>接入 gunicorn/waitress</strong>：用 waitress（Windows）以 4 线程启动同一个 app，对比并发能力差异。</li>
+  <li><strong>失败请求统计</strong>：给 _stats 加 <code>"errors": 0</code>，LLM 调用失败时 +1，/health 里展示错误率。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li>logging 官方教程：<a href="https://docs.python.org/zh-cn/3/howto/logging.html">docs.python.org/zh-cn/3/howto/logging.html</a></li>
+  <li>OpenAI Chat Completions API 参考（响应格式标准）：<a href="https://platform.openai.com/docs/api-reference/chat">platform.openai.com</a></li>
+  <li>Flask 部署生产级 WSGI：waitress（Windows）/ gunicorn（Linux）</li>
+</ul>
+
+</body>
+</html>

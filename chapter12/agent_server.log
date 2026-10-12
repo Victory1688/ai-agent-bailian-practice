@@ -1,0 +1,20 @@
+17:38:03 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8000
+ * Running on http://192.168.3.22:8000
+17:38:03 [INFO] [33mPress CTRL+C to quit[0m
+17:38:05 [INFO] 127.0.0.1 - - [12/Oct/2026 17:38:05] "GET /health HTTP/1.1" 200 -
+17:38:07 [INFO] 127.0.0.1 - - [12/Oct/2026 17:38:07] "GET /health HTTP/1.1" 200 -
+17:38:09 [INFO] [6c984fc8] 请求开始 messages=1 并发=1
+17:38:10 [INFO] [6c984fc8] 请求完成 耗时=740ms tokens=22
+17:38:10 [INFO] 127.0.0.1 - - [12/Oct/2026 17:38:10] "POST /v1/chat/completions HTTP/1.1" 200 -
+17:38:12 [INFO] [e81f1e96] 请求开始 messages=1 并发=1
+17:38:12 [INFO] [4f15899e] 请求开始 messages=1 并发=2
+17:38:12 [INFO] [4b7a5d45] 请求开始 messages=1 并发=3
+17:38:13 [INFO] [e81f1e96] 请求完成 耗时=427ms tokens=22
+17:38:13 [INFO] 127.0.0.1 - - [12/Oct/2026 17:38:13] "POST /v1/chat/completions HTTP/1.1" 200 -
+17:38:13 [INFO] [4f15899e] 请求完成 耗时=998ms tokens=25
+17:38:13 [INFO] [4b7a5d45] 请求完成 耗时=995ms tokens=22
+17:38:13 [INFO] 127.0.0.1 - - [12/Oct/2026 17:38:13] "POST /v1/chat/completions HTTP/1.1" 200 -
+17:38:13 [INFO] 127.0.0.1 - - [12/Oct/2026 17:38:13] "POST /v1/chat/completions HTTP/1.1" 200 -
+17:38:15 [INFO] 127.0.0.1 - - [12/Oct/2026 17:38:15] "GET /health HTTP/1.1" 200 -

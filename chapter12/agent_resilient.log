@@ -1,0 +1,68 @@
+19:56:17 [INFO] [尝试] qwen-plus 第 1 次
+19:56:18 [INFO] [尝试] broken-primary 第 1 次
+19:56:18 [WARNING] [失败] broken-primary 第 1 次: [故障注入] broken-primary 第 1 次调用失败
+19:56:18 [INFO] [退避] 0.1s 后重试
+19:56:18 [INFO] [尝试] broken-primary 第 2 次
+19:56:18 [WARNING] [熔断] broken-primary 连续失败 2 次，熔断打开 30.0s
+19:56:18 [WARNING] [失败] broken-primary 第 2 次: [故障注入] broken-primary 第 2 次调用失败
+19:56:18 [INFO] [尝试] qwen-turbo 第 1 次
+19:56:18 [INFO] [尝试] flaky-primary 第 1 次
+19:56:18 [WARNING] [失败] flaky-primary 第 1 次: [故障注入] flaky-primary 第 1 次调用失败
+19:56:18 [INFO] [退避] 0.1s 后重试
+19:56:19 [INFO] [尝试] flaky-primary 第 2 次
+19:56:19 [INFO] [尝试] dead-1 第 1 次
+19:56:19 [WARNING] [失败] dead-1 第 1 次: [故障注入] dead-1 第 1 次调用失败
+19:56:19 [INFO] [退避] 0.1s 后重试
+19:56:19 [INFO] [尝试] dead-1 第 2 次
+19:56:19 [WARNING] [熔断] dead-1 连续失败 2 次，熔断打开 30.0s
+19:56:19 [WARNING] [失败] dead-1 第 2 次: [故障注入] dead-1 第 2 次调用失败
+19:56:19 [INFO] [尝试] dead-2 第 1 次
+19:56:19 [WARNING] [失败] dead-2 第 1 次: [故障注入] dead-2 第 1 次调用失败
+19:56:19 [INFO] [退避] 0.1s 后重试
+19:56:19 [INFO] [尝试] dead-2 第 2 次
+19:56:19 [WARNING] [熔断] dead-2 连续失败 2 次，熔断打开 30.0s
+19:56:19 [WARNING] [失败] dead-2 第 2 次: [故障注入] dead-2 第 2 次调用失败
+19:56:19 [ERROR] [降级] 全部后端不可用，返回兜底响应
+19:56:19 [INFO] [尝试] circuit-broken 第 1 次
+19:56:19 [WARNING] [失败] circuit-broken 第 1 次: [故障注入] circuit-broken 第 1 次调用失败
+19:56:19 [INFO] [尝试] healthy-backup 第 1 次
+19:56:19 [INFO] [尝试] circuit-broken 第 1 次
+19:56:19 [WARNING] [熔断] circuit-broken 连续失败 2 次，熔断打开 30.0s
+19:56:19 [WARNING] [失败] circuit-broken 第 1 次: [故障注入] circuit-broken 第 2 次调用失败
+19:56:19 [INFO] [尝试] healthy-backup 第 1 次
+19:56:19 [INFO] [跳过] circuit-broken 处于熔断打开状态
+19:56:19 [INFO] [尝试] healthy-backup 第 1 次
+20:04:22 [INFO] [尝试] qwen-plus 第 1 次
+20:04:23 [INFO] [尝试] broken-primary 第 1 次
+20:04:23 [WARNING] [失败] broken-primary 第 1 次: [故障注入] broken-primary 第 1 次调用失败
+20:04:23 [INFO] [退避] 0.1s 后重试
+20:04:23 [INFO] [尝试] broken-primary 第 2 次
+20:04:23 [WARNING] [熔断] broken-primary 连续失败 2 次，熔断打开 30.0s
+20:04:23 [WARNING] [失败] broken-primary 第 2 次: [故障注入] broken-primary 第 2 次调用失败
+20:04:23 [INFO] [尝试] qwen-turbo 第 1 次
+20:04:24 [INFO] [尝试] flaky-primary 第 1 次
+20:04:24 [WARNING] [失败] flaky-primary 第 1 次: [故障注入] flaky-primary 第 1 次调用失败
+20:04:24 [INFO] [退避] 0.1s 后重试
+20:04:24 [INFO] [尝试] flaky-primary 第 2 次
+20:04:24 [INFO] [尝试] dead-1 第 1 次
+20:04:24 [WARNING] [失败] dead-1 第 1 次: [故障注入] dead-1 第 1 次调用失败
+20:04:24 [INFO] [退避] 0.1s 后重试
+20:04:24 [INFO] [尝试] dead-1 第 2 次
+20:04:24 [WARNING] [熔断] dead-1 连续失败 2 次，熔断打开 30.0s
+20:04:24 [WARNING] [失败] dead-1 第 2 次: [故障注入] dead-1 第 2 次调用失败
+20:04:24 [INFO] [尝试] dead-2 第 1 次
+20:04:24 [WARNING] [失败] dead-2 第 1 次: [故障注入] dead-2 第 1 次调用失败
+20:04:24 [INFO] [退避] 0.1s 后重试
+20:04:24 [INFO] [尝试] dead-2 第 2 次
+20:04:24 [WARNING] [熔断] dead-2 连续失败 2 次，熔断打开 30.0s
+20:04:24 [WARNING] [失败] dead-2 第 2 次: [故障注入] dead-2 第 2 次调用失败
+20:04:24 [ERROR] [降级] 全部后端不可用，返回兜底响应
+20:04:24 [INFO] [尝试] circuit-broken 第 1 次
+20:04:24 [WARNING] [失败] circuit-broken 第 1 次: [故障注入] circuit-broken 第 1 次调用失败
+20:04:24 [INFO] [尝试] healthy-backup 第 1 次
+20:04:24 [INFO] [尝试] circuit-broken 第 1 次
+20:04:24 [WARNING] [熔断] circuit-broken 连续失败 2 次，熔断打开 30.0s
+20:04:24 [WARNING] [失败] circuit-broken 第 1 次: [故障注入] circuit-broken 第 2 次调用失败
+20:04:24 [INFO] [尝试] healthy-backup 第 1 次
+20:04:24 [INFO] [跳过] circuit-broken 处于熔断打开状态
+20:04:24 [INFO] [尝试] healthy-backup 第 1 次

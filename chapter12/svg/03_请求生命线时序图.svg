@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1080" font-family="Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#67e8f9"/>
+    </marker>
+    <marker id="arwr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arwg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="1080" fill="#0f172a"/>
+  <text x="700" y="50" text-anchor="middle" fill="#22d3ee" font-size="30" font-weight="bold">char12 请求生命线时序图 —— 一个请求穿过七道工序的全旅程</text>
+  <text x="700" y="80" text-anchor="middle" fill="#64748b" font-size="15">融合七篇组件：安全校验（02）→ 限流（06）→ 削峰排队（03/06）→ 知识增强（04/07）→ 降级调用（05/06）→ 回填与观测（01）</text>
+
+  <!-- 参与者头部 -->
+  <rect x="60" y="105" width="150" height="56" rx="10" fill="#164e63" stroke="#22d3ee"/>
+  <text x="135" y="140" text-anchor="middle" fill="#67e8f9" font-size="15" font-weight="bold">客户端</text>
+  <rect x="320" y="105" width="170" height="56" rx="10" fill="#164e63" stroke="#22d3ee"/>
+  <text x="405" y="132" text-anchor="middle" fill="#67e8f9" font-size="15" font-weight="bold">接入层 02/06</text>
+  <text x="405" y="152" text-anchor="middle" fill="#a5f3fc" font-size="11">HTTPS·Key·限流</text>
+  <rect x="610" y="105" width="170" height="56" rx="10" fill="#164e63" stroke="#22d3ee"/>
+  <text x="695" y="132" text-anchor="middle" fill="#67e8f9" font-size="15" font-weight="bold">编排层 03/06</text>
+  <text x="695" y="152" text-anchor="middle" fill="#a5f3fc" font-size="11">优先级队列·Worker</text>
+  <rect x="890" y="105" width="180" height="56" rx="10" fill="#4c1d95" stroke="#a78bfa"/>
+  <text x="980" y="132" text-anchor="middle" fill="#c4b5fd" font-size="15" font-weight="bold">模型层 05/06/07</text>
+  <text x="980" y="152" text-anchor="middle" fill="#ddd6fe" font-size="11">降级链·MCP 工具</text>
+  <rect x="1180" y="105" width="170" height="56" rx="10" fill="#134e4a" stroke="#2dd4bf"/>
+  <text x="1265" y="132" text-anchor="middle" fill="#5eead4" font-size="15" font-weight="bold">记忆层 04/07</text>
+  <text x="1265" y="152" text-anchor="middle" fill="#99f6e4" font-size="11">cache.json·知识库</text>
+
+  <!-- 生命线 -->
+  <line x1="135" y1="161" x2="135" y2="990" stroke="#334155" stroke-width="2" stroke-dasharray="6,6"/>
+  <line x1="405" y1="161" x2="405" y2="990" stroke="#334155" stroke-width="2" stroke-dasharray="6,6"/>
+  <line x1="695" y1="161" x2="695" y2="990" stroke="#334155" stroke-width="2" stroke-dasharray="6,6"/>
+  <line x1="980" y1="161" x2="980" y2="990" stroke="#334155" stroke-width="2" stroke-dasharray="6,6"/>
+  <line x1="1265" y1="161" x2="1265" y2="990" stroke="#334155" stroke-width="2" stroke-dasharray="6,6"/>
+
+  <!-- ① 请求进入 -->
+  <text x="152" y="200" fill="#fbbf24" font-size="13" font-weight="bold">①</text>
+  <line x1="135" y1="205" x2="405" y2="205" stroke="#67e8f9" stroke-width="2" marker-end="url(#arw)"/>
+  <text x="270" y="196" text-anchor="middle" fill="#e2e8f0" font-size="13">POST /chat（HTTPS + API Key + priority）</text>
+
+  <!-- ② 安全校验 -->
+  <rect x="340" y="225" width="130" height="46" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="405" y="245" text-anchor="middle" fill="#fbbf24" font-size="12">② 校验 API Key</text>
+  <text x="405" y="263" text-anchor="middle" fill="#94a3b8" font-size="11">恒时比较 → 401 拒绝</text>
+
+  <!-- ③ 令牌桶 -->
+  <rect x="340" y="291" width="130" height="56" rx="6" fill="#1e293b" stroke="#f87171"/>
+  <text x="405" y="311" text-anchor="middle" fill="#f87171" font-size="12">③ 令牌桶 acquire</text>
+  <text x="405" y="329" text-anchor="middle" fill="#94a3b8" font-size="11">桶空 → 429 快速失败</text>
+  <text x="405" y="343" text-anchor="middle" fill="#94a3b8" font-size="11">状态落盘 cache.json</text>
+
+  <!-- ④ 入队 -->
+  <text x="422" y="381" fill="#fbbf24" font-size="13" font-weight="bold">④</text>
+  <line x1="405" y1="386" x2="695" y2="386" stroke="#67e8f9" stroke-width="2" marker-end="url(#arw)"/>
+  <text x="550" y="377" text-anchor="middle" fill="#e2e8f0" font-size="13">put_nowait (priority, seq)</text>
+  <text x="550" y="404" text-anchor="middle" fill="#94a3b8" font-size="11">队满 → 503 背压</text>
+
+  <!-- ⑤ worker 取任务 -->
+  <rect x="640" y="424" width="110" height="42" rx="6" fill="#1e293b" stroke="#22d3ee"/>
+  <text x="695" y="443" text-anchor="middle" fill="#67e8f9" font-size="12">⑤ Worker 取任务</text>
+  <text x="695" y="460" text-anchor="middle" fill="#94a3b8" font-size="11">高优先级先出</text>
+
+  <!-- ⑥ 读历史 + MCP 工具 -->
+  <text x="712" y="500" fill="#fbbf24" font-size="13" font-weight="bold">⑥</text>
+  <line x1="695" y1="505" x2="1265" y2="505" stroke="#67e8f9" stroke-width="2" marker-end="url(#arw)"/>
+  <text x="980" y="496" text-anchor="middle" fill="#e2e8f0" font-size="13">读会话历史 + MCP tools/call 知识检索</text>
+  <line x1="1265" y1="530" x2="695" y2="530" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#arwg)"/>
+  <text x="980" y="549" text-anchor="middle" fill="#94a3b8" font-size="12">返回历史 + top-k 知识分块（isError 时置空兜底）</text>
+
+  <!-- ⑦ 降级链调用 -->
+  <text x="712" y="586" fill="#fbbf24" font-size="13" font-weight="bold">⑦</text>
+  <line x1="695" y1="591" x2="980" y2="591" stroke="#67e8f9" stroke-width="2" marker-end="url(#arw)"/>
+  <text x="838" y="582" text-anchor="middle" fill="#e2e8f0" font-size="13">调用 LLM（知识增强上下文）</text>
+
+  <rect x="830" y="608" width="300" height="128" rx="8" fill="#1e293b" stroke="#a78bfa"/>
+  <text x="980" y="634" text-anchor="middle" fill="#c4b5fd" font-size="13" font-weight="bold">降级链（容错五件套护航）</text>
+  <text x="850" y="662" fill="#e2e8f0" font-size="12">qwen-plus ──失败──▶ 记熔断 +1</text>
+  <text x="850" y="688" fill="#e2e8f0" font-size="12">qwen-turbo ──失败──▶ 记熔断 +1</text>
+  <text x="850" y="714" fill="#e2e8f0" font-size="12">兜底文案（永不抛给用户）</text>
+  <text x="850" y="738" fill="#94a3b8" font-size="11">超时 8s · 指数退避 · 熔断打开直接跳过</text>
+
+  <line x1="980" y1="752" x2="695" y2="752" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#arwg)"/>
+  <text x="838" y="771" text-anchor="middle" fill="#94a3b8" font-size="12">回复文本</text>
+
+  <!-- ⑧ 回写历史 -->
+  <text x="712" y="806" fill="#fbbf24" font-size="13" font-weight="bold">⑧</text>
+  <line x1="695" y1="811" x2="1265" y2="811" stroke="#67e8f9" stroke-width="2" marker-end="url(#arw)"/>
+  <text x="980" y="802" text-anchor="middle" fill="#e2e8f0" font-size="13">assistant 回复写入 cache.json（先写后生成顺序已修复）</text>
+
+  <!-- ⑨ Event 回填 -->
+  <text x="712" y="846" fill="#fbbf24" font-size="13" font-weight="bold">⑨</text>
+  <line x1="695" y1="851" x2="405" y2="851" stroke="#67e8f9" stroke-width="2" marker-end="url(#arw)"/>
+  <text x="550" y="842" text-anchor="middle" fill="#e2e8f0" font-size="13">finally: entry.event.set()（异常也回填，防挂死）</text>
+
+  <text x="152" y="886" fill="#fbbf24" font-size="13" font-weight="bold">⑩</text>
+  <line x1="405" y1="891" x2="135" y2="891" stroke="#fbbf24" stroke-width="2" marker-end="url(#arwr)"/>
+  <text x="270" y="882" text-anchor="middle" fill="#fbbf24" font-size="13">200 响应（429/503/504 在对应闸门提前返回）</text>
+
+  <!-- 横切观测条 -->
+  <rect x="60" y="915" width="1290" height="60" rx="10" fill="#134e4a" stroke="#2dd4bf"/>
+  <text x="205" y="951" text-anchor="middle" fill="#5eead4" font-size="14" font-weight="bold">每一步横切观测</text>
+  <text x="440" y="951" text-anchor="middle" fill="#e2e8f0" font-size="13">request_id 双通道日志（01）</text>
+  <text x="690" y="951" text-anchor="middle" fill="#e2e8f0" font-size="13">processed/failed 统计（06）</text>
+  <text x="910" y="951" text-anchor="middle" fill="#e2e8f0" font-size="13">/health 令牌与队列指标（06）</text>
+  <text x="1130" y="951" text-anchor="middle" fill="#e2e8f0" font-size="13">熔断器健康统计（05）</text>
+
+  <!-- 底部注释 -->
+  <text x="700" y="1020" text-anchor="middle" fill="#64748b" font-size="13">任何一道闸门失败都会提前返回，不消耗下游资源；通过全部闸门的请求由 Worker 池兜底回填，永不挂死</text>
+  <text x="700" y="1046" text-anchor="middle" fill="#475569" font-size="12">教材原版一次都不校验（先限流后校验无、异常直接崩）；改写后每个环节都有对应 self-test 实测触发</text>
+</svg>

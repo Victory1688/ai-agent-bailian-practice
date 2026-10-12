@@ -1,0 +1,244 @@
+20:07:24 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8901
+ * Running on http://192.168.3.22:8901
+20:07:24 [INFO] [33mPress CTRL+C to quit[0m
+20:07:26 [INFO] 127.0.0.1 - - [12/Oct/2026 20:07:26] "GET /health HTTP/1.1" 200 -
+20:07:29 [INFO] [LLM] 由 qwen-plus 处理成功
+20:07:29 [INFO] 127.0.0.1 - - [12/Oct/2026 20:07:29] "POST /chat HTTP/1.1" 200 -
+20:07:33 [INFO] [LLM] 由 qwen-plus 处理成功
+20:07:33 [INFO] 127.0.0.1 - - [12/Oct/2026 20:07:33] "POST /chat HTTP/1.1" 200 -
+20:07:37 [INFO] [LLM] 由 qwen-plus 处理成功
+20:07:37 [INFO] 127.0.0.1 - - [12/Oct/2026 20:07:37] "POST /chat HTTP/1.1" 200 -
+20:07:40 [INFO] [LLM] 由 qwen-plus 处理成功
+20:07:40 [INFO] 127.0.0.1 - - [12/Oct/2026 20:07:40] "POST /chat HTTP/1.1" 200 -
+20:07:44 [INFO] [LLM] 由 qwen-plus 处理成功
+20:07:44 [INFO] 127.0.0.1 - - [12/Oct/2026 20:07:44] "POST /chat HTTP/1.1" 200 -
+20:07:47 [INFO] [LLM] 由 qwen-plus 处理成功
+20:07:47 [INFO] 127.0.0.1 - - [12/Oct/2026 20:07:47] "POST /chat HTTP/1.1" 200 -
+20:07:51 [INFO] [LLM] 由 qwen-plus 处理成功
+20:07:51 [INFO] 127.0.0.1 - - [12/Oct/2026 20:07:51] "POST /chat HTTP/1.1" 200 -
+20:07:55 [INFO] [LLM] 由 qwen-plus 处理成功
+20:07:55 [INFO] 127.0.0.1 - - [12/Oct/2026 20:07:55] "POST /chat HTTP/1.1" 200 -
+20:07:58 [INFO] [LLM] 由 qwen-plus 处理成功
+20:07:58 [INFO] 127.0.0.1 - - [12/Oct/2026 20:07:58] "POST /chat HTTP/1.1" 200 -
+20:08:02 [INFO] [LLM] 由 qwen-plus 处理成功
+20:08:02 [INFO] 127.0.0.1 - - [12/Oct/2026 20:08:02] "POST /chat HTTP/1.1" 200 -
+20:08:05 [INFO] [LLM] 由 qwen-plus 处理成功
+20:08:05 [INFO] 127.0.0.1 - - [12/Oct/2026 20:08:05] "POST /chat HTTP/1.1" 200 -
+20:08:13 [INFO] [LLM] 由 qwen-plus 处理成功
+20:08:13 [INFO] 127.0.0.1 - - [12/Oct/2026 20:08:13] "POST /chat HTTP/1.1" 200 -
+20:08:15 [ERROR] [Worker] 处理异常: run_self_test.<locals>.<lambda>() missing 1 required positional argument: 'm'
+20:08:15 [INFO] 127.0.0.1 - - [12/Oct/2026 20:08:15] "POST /chat HTTP/1.1" 200 -
+20:08:18 [ERROR] [Worker] 处理异常: run_self_test.<locals>.<lambda>() missing 1 required positional argument: 'm'
+20:08:18 [INFO] 127.0.0.1 - - [12/Oct/2026 20:08:18] "POST /chat HTTP/1.1" 200 -
+20:08:20 [ERROR] [Worker] 处理异常: run_self_test.<locals>.<lambda>() missing 1 required positional argument: 'm'
+20:08:20 [INFO] 127.0.0.1 - - [12/Oct/2026 20:08:20] "POST /chat HTTP/1.1" 200 -
+20:08:23 [ERROR] [Worker] 处理异常: run_self_test.<locals>.<lambda>() missing 1 required positional argument: 'm'
+20:08:23 [INFO] 127.0.0.1 - - [12/Oct/2026 20:08:23] "POST /chat HTTP/1.1" 200 -
+20:08:25 [INFO] 127.0.0.1 - - [12/Oct/2026 20:08:25] "GET /health HTTP/1.1" 200 -
+20:09:34 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8901
+ * Running on http://192.168.3.22:8901
+20:09:34 [INFO] [33mPress CTRL+C to quit[0m
+20:09:36 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:36] "GET /health HTTP/1.1" 200 -
+20:09:39 [INFO] [LLM] 由 qwen-plus 处理成功
+20:09:39 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:39] "POST /chat HTTP/1.1" 200 -
+20:09:41 [WARNING] [限流] 拒绝请求（剩余令牌 0.22）
+20:09:41 [WARNING] [限流] 拒绝请求（剩余令牌 0.22）
+20:09:41 [WARNING] [限流] 拒绝请求（剩余令牌 0.22）
+20:09:41 [WARNING] [限流] 拒绝请求（剩余令牌 0.22）
+20:09:41 [WARNING] [限流] 拒绝请求（剩余令牌 0.22）
+20:09:41 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:41] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:09:41 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:41] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:09:41 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:41] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:09:41 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:41] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:09:41 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:41] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:09:41 [INFO] [处理] burst-1
+20:09:41 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:41] "POST /chat HTTP/1.1" 200 -
+20:09:41 [INFO] [处理] burst-6
+20:09:41 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:41] "POST /chat HTTP/1.1" 200 -
+20:09:42 [INFO] [处理] burst-2
+20:09:42 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:42] "POST /chat HTTP/1.1" 200 -
+20:09:42 [INFO] [处理] burst-0
+20:09:42 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:42] "POST /chat HTTP/1.1" 200 -
+20:09:42 [INFO] [处理] burst-9
+20:09:42 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:42] "POST /chat HTTP/1.1" 200 -
+20:09:47 [INFO] [处理] 恢复了吗？
+20:09:47 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:47] "POST /chat HTTP/1.1" 200 -
+20:09:49 [INFO] [处理] 低-1
+20:09:49 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:49] "POST /chat HTTP/1.1" 200 -
+20:09:52 [INFO] [处理] 低-2
+20:09:52 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:52] "POST /chat HTTP/1.1" 200 -
+20:09:54 [INFO] [处理] 高-0
+20:09:54 [INFO] 127.0.0.1 - - [12/Oct/2026 20:09:54] "POST /chat HTTP/1.1" 200 -
+20:10:06 [INFO] HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 404 Not Found"
+20:10:06 [WARNING] [降级] broken 失败: Error code: 404 - {'error': {'message': 'The model `not-exist-model` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}, 'request_id': 'a26c6838-3bcd-9ce5-9836-9f931d8df943'} → 尝试下一后端
+20:10:06 [INFO] [LLM] 由 qwen-turbo 处理成功
+20:10:06 [INFO] 127.0.0.1 - - [12/Oct/2026 20:10:06] "POST /chat HTTP/1.1" 200 -
+20:10:08 [INFO] 127.0.0.1 - - [12/Oct/2026 20:10:08] "GET /health HTTP/1.1" 200 -
+20:12:20 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8901
+ * Running on http://192.168.3.22:8901
+20:12:20 [INFO] [33mPress CTRL+C to quit[0m
+20:12:22 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:22] "GET /health HTTP/1.1" 200 -
+20:12:25 [INFO] [LLM] 由 qwen-plus 处理成功
+20:12:25 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:25] "POST /chat HTTP/1.1" 200 -
+20:12:27 [WARNING] [限流] 拒绝请求（剩余令牌 0.53）
+20:12:27 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:27] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:12:27 [WARNING] [限流] 拒绝请求（剩余令牌 0.61）
+20:12:27 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:27] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:12:27 [INFO] [处理] burst-0
+20:12:27 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:27] "POST /chat HTTP/1.1" 200 -
+20:12:27 [WARNING] [限流] 拒绝请求（剩余令牌 0.84）
+20:12:27 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:27] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:12:27 [INFO] [处理] burst-1
+20:12:27 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:27] "POST /chat HTTP/1.1" 200 -
+20:12:28 [WARNING] [限流] 拒绝请求（剩余令牌 0.14）
+20:12:28 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:28] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:12:28 [INFO] [处理] burst-2
+20:12:28 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:28] "POST /chat HTTP/1.1" 200 -
+20:12:28 [INFO] [处理] burst-3
+20:12:28 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:28] "POST /chat HTTP/1.1" 200 -
+20:12:28 [INFO] [处理] burst-4
+20:12:28 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:28] "POST /chat HTTP/1.1" 200 -
+20:12:28 [INFO] [处理] burst-8
+20:12:28 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:28] "POST /chat HTTP/1.1" 200 -
+20:12:33 [INFO] [处理] 恢复了吗？
+20:12:33 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:33] "POST /chat HTTP/1.1" 200 -
+20:12:36 [INFO] [处理] 低-1
+20:12:36 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:36] "POST /chat HTTP/1.1" 200 -
+20:12:39 [INFO] [处理] 低-2
+20:12:39 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:39] "POST /chat HTTP/1.1" 200 -
+20:12:42 [INFO] [处理] 高-0
+20:12:42 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:42] "POST /chat HTTP/1.1" 200 -
+20:12:56 [INFO] HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 404 Not Found"
+20:12:56 [WARNING] [降级] broken 失败: Error code: 404 - {'error': {'message': 'The model `not-exist-model` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}, 'request_id': 'cfe2e2f9-5a3e-9ae0-9d13-b01713f71e7f'} → 尝试下一后端
+20:12:56 [INFO] [LLM] 由 qwen-turbo 处理成功
+20:12:56 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:56] "POST /chat HTTP/1.1" 200 -
+20:12:59 [INFO] 127.0.0.1 - - [12/Oct/2026 20:12:59] "GET /health HTTP/1.1" 200 -
+20:17:06 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8901
+ * Running on http://192.168.3.22:8901
+20:17:06 [INFO] [33mPress CTRL+C to quit[0m
+20:17:08 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:08] "GET /health HTTP/1.1" 200 -
+20:17:11 [INFO] [LLM] 由 qwen-plus 处理成功
+20:17:11 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:11] "POST /chat HTTP/1.1" 200 -
+20:17:13 [WARNING] [限流] 拒绝请求（剩余令牌 0.18）
+20:17:13 [WARNING] [限流] 拒绝请求（剩余令牌 0.14）
+20:17:13 [WARNING] [限流] 拒绝请求（剩余令牌 0.18）
+20:17:13 [WARNING] [限流] 拒绝请求（剩余令牌 0.18）
+20:17:13 [WARNING] [限流] 拒绝请求（剩余令牌 0.18）
+20:17:13 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:13] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:17:13 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:13] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:17:13 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:13] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:17:13 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:13] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:17:13 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:13] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:17:13 [INFO] [处理] burst-6
+20:17:13 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:13] "POST /chat HTTP/1.1" 200 -
+20:17:13 [INFO] [处理] burst-1
+20:17:13 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:13] "POST /chat HTTP/1.1" 200 -
+20:17:14 [INFO] [处理] burst-3
+20:17:14 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:14] "POST /chat HTTP/1.1" 200 -
+20:17:14 [INFO] [处理] burst-8
+20:17:14 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:14] "POST /chat HTTP/1.1" 200 -
+20:17:14 [INFO] [处理] burst-0
+20:17:14 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:14] "POST /chat HTTP/1.1" 200 -
+20:17:19 [INFO] [处理] 恢复了吗？
+20:17:19 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:19] "POST /chat HTTP/1.1" 200 -
+20:17:22 [INFO] [处理] 低-1
+20:17:22 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:22] "POST /chat HTTP/1.1" 200 -
+20:17:22 [INFO] [处理] 高-0
+20:17:22 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:22] "POST /chat HTTP/1.1" 200 -
+20:17:22 [INFO] [处理] 低-2
+20:17:22 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:22] "POST /chat HTTP/1.1" 200 -
+20:17:33 [INFO] HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 404 Not Found"
+20:17:33 [WARNING] [降级] broken 失败: Error code: 404 - {'error': {'message': 'The model `not-exist-model` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}, 'request_id': 'a7a6c7b6-447a-96fd-a009-16acb03167aa'} → 尝试下一后端
+20:17:34 [INFO] [LLM] 由 qwen-turbo 处理成功
+20:17:34 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:34] "POST /chat HTTP/1.1" 200 -
+20:17:36 [INFO] 127.0.0.1 - - [12/Oct/2026 20:17:36] "GET /health HTTP/1.1" 200 -
+20:19:31 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8901
+ * Running on http://192.168.3.22:8901
+20:19:31 [INFO] [33mPress CTRL+C to quit[0m
+20:19:33 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:33] "GET /health HTTP/1.1" 200 -
+20:19:36 [INFO] [LLM] 由 qwen-plus 处理成功
+20:19:36 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:36] "POST /chat HTTP/1.1" 200 -
+20:19:38 [WARNING] [限流] 拒绝请求（剩余令牌 0.17）
+20:19:38 [WARNING] [限流] 拒绝请求（剩余令牌 0.17）
+20:19:38 [WARNING] [限流] 拒绝请求（剩余令牌 0.17）
+20:19:38 [WARNING] [限流] 拒绝请求（剩余令牌 0.17）
+20:19:38 [WARNING] [限流] 拒绝请求（剩余令牌 0.17）
+20:19:38 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:38] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:19:38 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:38] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:19:38 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:38] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:19:38 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:38] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:19:38 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:38] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:19:38 [INFO] [处理] burst-2
+20:19:38 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:38] "POST /chat HTTP/1.1" 200 -
+20:19:38 [INFO] [处理] burst-0
+20:19:38 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:38] "POST /chat HTTP/1.1" 200 -
+20:19:39 [INFO] [处理] burst-4
+20:19:39 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:39] "POST /chat HTTP/1.1" 200 -
+20:19:39 [INFO] [处理] burst-3
+20:19:39 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:39] "POST /chat HTTP/1.1" 200 -
+20:19:39 [INFO] [处理] burst-5
+20:19:39 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:39] "POST /chat HTTP/1.1" 200 -
+20:19:44 [INFO] [处理] 恢复了吗？
+20:19:44 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:44] "POST /chat HTTP/1.1" 200 -
+20:19:46 [INFO] [处理] 低-1
+20:19:46 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:46] "POST /chat HTTP/1.1" 200 -
+20:19:46 [INFO] [处理] 高-0
+20:19:46 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:46] "POST /chat HTTP/1.1" 200 -
+20:19:47 [INFO] [处理] 低-2
+20:19:47 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:47] "POST /chat HTTP/1.1" 200 -
+20:19:56 [INFO] HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 404 Not Found"
+20:19:56 [WARNING] [降级] broken 失败: Error code: 404 - {'error': {'message': 'The model `not-exist-model` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}, 'request_id': '946a5806-829e-97b2-8730-6577325b9a9b'} → 尝试下一后端
+20:19:57 [INFO] [LLM] 由 qwen-turbo 处理成功
+20:19:57 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:57] "POST /chat HTTP/1.1" 200 -
+20:19:59 [INFO] 127.0.0.1 - - [12/Oct/2026 20:19:59] "GET /health HTTP/1.1" 200 -
+20:25:11 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8901
+ * Running on http://192.168.3.22:8901
+20:25:11 [INFO] [33mPress CTRL+C to quit[0m
+20:25:13 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:13] "GET /health HTTP/1.1" 200 -
+20:25:16 [INFO] [LLM] 由 qwen-plus 处理成功
+20:25:16 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:16] "POST /chat HTTP/1.1" 200 -
+20:25:18 [WARNING] [限流] 拒绝请求（剩余令牌 0.16）
+20:25:18 [WARNING] [限流] 拒绝请求（剩余令牌 0.12）
+20:25:18 [WARNING] [限流] 拒绝请求（剩余令牌 0.16）
+20:25:18 [WARNING] [限流] 拒绝请求（剩余令牌 0.16）
+20:25:18 [WARNING] [限流] 拒绝请求（剩余令牌 0.16）
+20:25:18 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:18] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:25:18 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:18] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:25:18 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:18] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:25:18 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:18] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:25:18 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:18] "[31m[1mPOST /chat HTTP/1.1[0m" 429 -
+20:25:18 [INFO] [处理] burst-2
+20:25:18 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:18] "POST /chat HTTP/1.1" 200 -
+20:25:18 [INFO] [处理] burst-1
+20:25:18 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:18] "POST /chat HTTP/1.1" 200 -
+20:25:18 [INFO] [处理] burst-0
+20:25:18 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:18] "POST /chat HTTP/1.1" 200 -
+20:25:18 [INFO] [处理] burst-3
+20:25:18 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:18] "POST /chat HTTP/1.1" 200 -
+20:25:18 [INFO] [处理] burst-6
+20:25:18 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:18] "POST /chat HTTP/1.1" 200 -
+20:25:23 [INFO] [处理] 恢复了吗？
+20:25:23 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:23] "POST /chat HTTP/1.1" 200 -
+20:25:26 [INFO] [处理] 低-1
+20:25:26 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:26] "POST /chat HTTP/1.1" 200 -
+20:25:26 [INFO] [处理] 高-0
+20:25:26 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:26] "POST /chat HTTP/1.1" 200 -
+20:25:26 [INFO] [处理] 低-2
+20:25:26 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:26] "POST /chat HTTP/1.1" 200 -
+20:25:31 [INFO] HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 404 Not Found"
+20:25:31 [WARNING] [降级] broken 失败: Error code: 404 - {'error': {'message': 'The model `not-exist-model` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}, 'request_id': 'f5cffac2-3603-9607-a5bb-2927a7524be4'} → 尝试下一后端
+20:25:32 [INFO] [LLM] 由 qwen-turbo 处理成功
+20:25:32 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:32] "POST /chat HTTP/1.1" 200 -
+20:25:34 [INFO] 127.0.0.1 - - [12/Oct/2026 20:25:34] "GET /health HTTP/1.1" 200 -

@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 920" font-family="Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#22d3ee"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="920" fill="#0f172a"/>
+  <text x="700" y="52" text-anchor="middle" fill="#22d3ee" font-size="30" font-weight="bold">char12 七篇演进线全景图 —— 上线部署的七步进阶路线</text>
+  <text x="700" y="82" text-anchor="middle" fill="#64748b" font-size="15">每一步回答一个生产化必答题：请求看得见吗？安全吗？扛得住吗？记得住吗？挂得了吗？压不垮吗？连得上吗？</text>
+
+  <!-- 主时间轴 -->
+  <line x1="70" y1="470" x2="1330" y2="470" stroke="#334155" stroke-width="4"/>
+  <line x1="70" y1="470" x2="1330" y2="470" stroke="#22d3ee" stroke-width="2" stroke-dasharray="8,6"/>
+
+  <!-- 01 -->
+  <circle cx="145" cy="470" r="24" fill="#164e63" stroke="#22d3ee" stroke-width="2"/>
+  <text x="145" y="477" text-anchor="middle" fill="#67e8f9" font-size="16" font-weight="bold">01</text>
+  <rect x="55" y="110" width="185" height="300" rx="12" fill="#1e293b" stroke="#22d3ee"/>
+  <text x="147" y="140" text-anchor="middle" fill="#67e8f9" font-size="15" font-weight="bold">Web 服务日志并发</text>
+  <text x="147" y="166" text-anchor="middle" fill="#fbbf24" font-size="12">问题：并发请求混作一团</text>
+  <line x1="75" y1="180" x2="220" y2="180" stroke="#334155"/>
+  <text x="75" y="205" fill="#e2e8f0" font-size="12">· Flask threaded 真并发</text>
+  <text x="75" y="228" fill="#e2e8f0" font-size="12">· request_id 链路追踪</text>
+  <text x="75" y="251" fill="#e2e8f0" font-size="12">· 控制台+文件双通道</text>
+  <text x="75" y="274" fill="#e2e8f0" font-size="12">· /health 健康端点</text>
+  <text x="75" y="305" fill="#94a3b8" font-size="11">实测：max_active ≥ 3</text>
+  <text x="75" y="322" fill="#94a3b8" font-size="11">证明多线程并发执行</text>
+  <text x="147" y="380" text-anchor="middle" fill="#22d3ee" font-size="12" font-weight="bold">看得见</text>
+  <line x1="145" y1="410" x2="145" y2="446" stroke="#22d3ee" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- 02 -->
+  <circle cx="330" cy="470" r="24" fill="#164e63" stroke="#22d3ee" stroke-width="2"/>
+  <text x="330" y="477" text-anchor="middle" fill="#67e8f9" font-size="16" font-weight="bold">02</text>
+  <rect x="240" y="110" width="185" height="300" rx="12" fill="#1e293b" stroke="#22d3ee"/>
+  <text x="332" y="140" text-anchor="middle" fill="#67e8f9" font-size="15" font-weight="bold">部署环境安全架构</text>
+  <text x="332" y="166" text-anchor="middle" fill="#fbbf24" font-size="12">问题：HTTP 明文裸奔</text>
+  <line x1="260" y1="180" x2="405" y2="180" stroke="#334155"/>
+  <text x="260" y="205" fill="#e2e8f0" font-size="12">· HTTPS（adhoc 证书）</text>
+  <text x="260" y="228" fill="#e2e8f0" font-size="12">· API Key 恒时比较</text>
+  <text x="260" y="251" fill="#e2e8f0" font-size="12">· flask-limiter 429</text>
+  <text x="260" y="274" fill="#e2e8f0" font-size="12">· 安全响应头全家桶</text>
+  <text x="260" y="305" fill="#94a3b8" font-size="11">实测：401 拒无钥 · 429 拒</text>
+  <text x="260" y="322" fill="#94a3b8" font-size="11">超频 · 响应头逐项可验</text>
+  <text x="332" y="380" text-anchor="middle" fill="#22d3ee" font-size="12" font-weight="bold">安全吗</text>
+  <line x1="330" y1="410" x2="330" y2="446" stroke="#22d3ee" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- 03 -->
+  <circle cx="515" cy="470" r="24" fill="#164e63" stroke="#22d3ee" stroke-width="2"/>
+  <text x="515" y="477" text-anchor="middle" fill="#67e8f9" font-size="16" font-weight="bold">03</text>
+  <rect x="425" y="110" width="185" height="300" rx="12" fill="#1e293b" stroke="#22d3ee"/>
+  <text x="517" y="140" text-anchor="middle" fill="#67e8f9" font-size="15" font-weight="bold">负载均衡与异步</text>
+  <text x="517" y="166" text-anchor="middle" fill="#fbbf24" font-size="12">问题：单实例扛不住</text>
+  <line x1="445" y1="180" x2="590" y2="180" stroke="#334155"/>
+  <text x="445" y="205" fill="#e2e8f0" font-size="12">· ThreadPoolExecutor 池</text>
+  <text x="445" y="228" fill="#e2e8f0" font-size="12">· RoundRobin 轮询分发</text>
+  <text x="445" y="251" fill="#e2e8f0" font-size="12">· 异步任务状态机</text>
+  <text x="445" y="274" fill="#e2e8f0" font-size="12">· 任务状态落盘</text>
+  <text x="445" y="305" fill="#94a3b8" font-size="11">实测：轮询 3:2 分配比</text>
+  <text x="445" y="322" fill="#94a3b8" font-size="11">PENDING→COMPLETED 验证</text>
+  <text x="517" y="380" text-anchor="middle" fill="#22d3ee" font-size="12" font-weight="bold">扛得住</text>
+  <line x1="515" y1="410" x2="515" y2="446" stroke="#22d3ee" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- 04 -->
+  <circle cx="700" cy="470" r="24" fill="#164e63" stroke="#22d3ee" stroke-width="2"/>
+  <text x="700" y="477" text-anchor="middle" fill="#67e8f9" font-size="16" font-weight="bold">04</text>
+  <rect x="610" y="110" width="185" height="300" rx="12" fill="#1e293b" stroke="#22d3ee"/>
+  <text x="702" y="140" text-anchor="middle" fill="#67e8f9" font-size="15" font-weight="bold">多层缓存与记忆</text>
+  <text x="702" y="166" text-anchor="middle" fill="#fbbf24" font-size="12">问题：无状态失忆+重复计费</text>
+  <line x1="630" y1="180" x2="775" y2="180" stroke="#334155"/>
+  <text x="630" y="205" fill="#e2e8f0" font-size="12">· JSONCache 会话历史</text>
+  <text x="630" y="228" fill="#e2e8f0" font-size="12">· 语义向量缓存落盘</text>
+  <text x="630" y="251" fill="#e2e8f0" font-size="12">· 余弦 top-k 知识检索</text>
+  <text x="630" y="274" fill="#e2e8f0" font-size="12">· 跨模型记忆共享</text>
+  <text x="630" y="305" fill="#94a3b8" font-size="11">实测：对话 2 的"它"正确</text>
+  <text x="630" y="322" fill="#94a3b8" font-size="11">指代对话 1 的实体</text>
+  <text x="702" y="380" text-anchor="middle" fill="#22d3ee" font-size="12" font-weight="bold">记得住</text>
+  <line x1="700" y1="410" x2="700" y2="446" stroke="#22d3ee" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- 05 -->
+  <circle cx="885" cy="470" r="24" fill="#7f1d1d" stroke="#f87171" stroke-width="2"/>
+  <text x="885" y="477" text-anchor="middle" fill="#fca5a5" font-size="16" font-weight="bold">05</text>
+  <rect x="795" y="530" width="185" height="300" rx="12" fill="#1e293b" stroke="#f87171"/>
+  <text x="887" y="560" text-anchor="middle" fill="#fca5a5" font-size="15" font-weight="bold">容错五件套</text>
+  <text x="887" y="586" text-anchor="middle" fill="#fbbf24" font-size="12">问题：后端故障即雪崩</text>
+  <line x1="815" y1="600" x2="960" y2="600" stroke="#334155"/>
+  <text x="815" y="625" fill="#e2e8f0" font-size="12">· 超时 + 指数退避重试</text>
+  <text x="815" y="648" fill="#e2e8f0" font-size="12">· 后端自动切换</text>
+  <text x="815" y="671" fill="#e2e8f0" font-size="12">· 熔断器三态流转</text>
+  <text x="815" y="694" fill="#e2e8f0" font-size="12">· 故障注入器验证</text>
+  <text x="815" y="725" fill="#94a3b8" font-size="11">实测：注入故障 → 熔断打开</text>
+  <text x="815" y="742" fill="#94a3b8" font-size="11">→ 切换 → 降级全链触发</text>
+  <text x="887" y="800" text-anchor="middle" fill="#f87171" font-size="12" font-weight="bold">挂不了</text>
+  <line x1="885" y1="494" x2="885" y2="530" stroke="#f87171" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- 06 -->
+  <circle cx="1070" cy="470" r="24" fill="#7f1d1d" stroke="#f87171" stroke-width="2"/>
+  <text x="1070" y="477" text-anchor="middle" fill="#fca5a5" font-size="16" font-weight="bold">06</text>
+  <rect x="980" y="530" width="185" height="300" rx="12" fill="#1e293b" stroke="#f87171"/>
+  <text x="1072" y="560" text-anchor="middle" fill="#fca5a5" font-size="15" font-weight="bold">限流与降级</text>
+  <text x="1072" y="586" text-anchor="middle" fill="#fbbf24" font-size="12">问题：洪峰压垮服务</text>
+  <line x1="1000" y1="600" x2="1145" y2="600" stroke="#334155"/>
+  <text x="1000" y="625" fill="#e2e8f0" font-size="12">· 令牌桶（原子+满桶）</text>
+  <text x="1000" y="648" fill="#e2e8f0" font-size="12">· 优先级队列插队</text>
+  <text x="1000" y="671" fill="#e2e8f0" font-size="12">· Worker 池削峰填谷</text>
+  <text x="1000" y="694" fill="#e2e8f0" font-size="12">· 429/503/504 语义分层</text>
+  <text x="1000" y="725" fill="#94a3b8" font-size="11">实测：突发 [200×5,429×5]</text>
+  <text x="1000" y="742" fill="#94a3b8" font-size="11">高优先级真实插队</text>
+  <text x="1072" y="800" text-anchor="middle" fill="#f87171" font-size="12" font-weight="bold">压不垮</text>
+  <line x1="1070" y1="494" x2="1070" y2="530" stroke="#f87171" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- 07 -->
+  <circle cx="1255" cy="470" r="24" fill="#4c1d95" stroke="#a78bfa" stroke-width="2"/>
+  <text x="1255" y="477" text-anchor="middle" fill="#c4b5fd" font-size="16" font-weight="bold">07</text>
+  <rect x="1165" y="110" width="185" height="300" rx="12" fill="#1e293b" stroke="#a78bfa"/>
+  <text x="1257" y="140" text-anchor="middle" fill="#c4b5fd" font-size="15" font-weight="bold">MCP 服务与 Coze</text>
+  <text x="1257" y="166" text-anchor="middle" fill="#fbbf24" font-size="12">问题：工具连接私有化</text>
+  <line x1="1185" y1="180" x2="1330" y2="180" stroke="#334155"/>
+  <text x="1185" y="205" fill="#e2e8f0" font-size="12">· JSON-RPC 2.0 信封</text>
+  <text x="1185" y="228" fill="#e2e8f0" font-size="12">· initialize 生命周期</text>
+  <text x="1185" y="251" fill="#e2e8f0" font-size="12">· tools/resources 原语</text>
+  <text x="1185" y="274" fill="#e2e8f0" font-size="12">· 标准错误码 -32601 等</text>
+  <text x="1185" y="305" fill="#94a3b8" font-size="11">实测：握手/工具/资源/</text>
+  <text x="1185" y="322" fill="#94a3b8" font-size="11">错误码 6 项全过</text>
+  <text x="1257" y="380" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="bold">连得上</text>
+  <line x1="1255" y1="410" x2="1255" y2="446" stroke="#a78bfa" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- 底部阶段标注 -->
+  <rect x="55" y="860" width="555" height="40" rx="8" fill="#134e4a"/>
+  <text x="332" y="886" text-anchor="middle" fill="#5eead4" font-size="14" font-weight="bold">阶段一：把服务摆上线（01-04 基础设施）</text>
+  <rect x="795" y="860" width="370" height="40" rx="8" fill="#7f1d1d"/>
+  <text x="980" y="886" text-anchor="middle" fill="#fecaca" font-size="14" font-weight="bold">阶段二：让服务打不死（05-06 稳定性）</text>
+  <rect x="1165" y="860" width="185" height="40" rx="8" fill="#4c1d95"/>
+  <text x="1257" y="886" text-anchor="middle" fill="#ddd6fe" font-size="14" font-weight="bold">阶段三：开放互联</text>
+</svg>

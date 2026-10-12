@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>char12 汇总说明：上线部署篇 —— 从单脚本 Agent 到生产化 Web 服务</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:1020px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:44px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:26px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.svg-card{background:#0f172a;border-radius:10px;padding:18px 22px;margin:20px 0}
+.svg-card h3{color:#22d3ee;margin:0 0 12px;font-size:16px}
+.svg-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.svg-grid a{display:block;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 14px;color:#e2e8f0;text-decoration:none;font-size:14px;transition:all .2s}
+.svg-grid a:hover{border-color:#22d3ee;color:#67e8f9}
+.svg-grid .t{color:#22d3ee;font-weight:bold;font-size:14px;display:block;margin-bottom:4px}
+.svg-grid .d{color:#94a3b8;font-size:12px}
+.stage{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:bold;margin-right:6px}
+.s1{background:#134e4a;color:#5eead4}.s2{background:#7f1d1d;color:#fecaca}.s3{background:#4c1d95;color:#ddd6fe}
+</style>
+</head>
+<body>
+
+<h1>char12 汇总说明：上线部署篇 —— 从单脚本 Agent 到生产化 Web 服务</h1>
+
+<div class="highlight">
+  <strong>本章回答一个问题：Agent 怎么上线？</strong>char01-11 解决"Agent 怎么建"（编排、工具、记忆、多 Agent、协议），char12 把这些能力组装进可公网暴露的 Web 服务，补齐生产化五块拼图：<strong>可观测（01）→ 安全（02）→ 吞吐（03）→ 状态（04）→ 稳定性（05/06）→ 开放互联（07）</strong>。每篇示例都带 self-test 实测，防御机制全部真实触发过。
+</div>
+
+<!-- ========== SVG 速查卡片 ========== -->
+<div class="svg-card">
+  <h3>SVG 独立架构图速查（点击直接打开，暗色主题）</h3>
+  <div class="svg-grid">
+    <a href="svg/01_分层架构总图.svg"><span class="t">01 · 分层架构总图</span><span class="d">七层组件栈：客户端 → 接入防御 → Web → 编排 → 容错 → 记忆 → 模型/协议 + 横切关注</span></a>
+    <a href="svg/02_七篇演进线全景图.svg"><span class="t">02 · 七篇演进线全景图</span><span class="d">七步进阶路线：看得见 → 安全吗 → 扛得住 → 记得住 → 挂不了 → 压不垮 → 连得上</span></a>
+    <a href="svg/03_请求生命线时序图.svg"><span class="t">03 · 请求生命线时序图</span><span class="d">一个请求穿过七道工序的全旅程，标注 429/503/504 提前返回点</span></a>
+    <a href="svg/04_不变式规律与教材学费图.svg"><span class="t">04 · 不变式规律与教材学费图</span><span class="d">穿透七篇的五条铁律 + 教材五笔学费谱系（虚构类/废弃 API/竞态/伪协议/零验证）</span></a>
+  </div>
+</div>
+
+<!-- ========== 章节概述 ========== -->
+<h2>一、三阶段学习路线</h2>
+
+<table>
+  <tr><th>阶段</th><th>篇目</th><th>目标</th><th>新人掌握要点</th></tr>
+  <tr><td><span class="stage s1">阶段一</span>摆上线</td><td>01-04</td><td>基础设施</td><td>服务立起来（并发）、守得住（安全）、扩得开（负载均衡/异步）、记得住（缓存记忆）</td></tr>
+  <tr><td><span class="stage s2">阶段二</span>打不死</td><td>05-06</td><td>稳定性</td><td>容错五件套护住"调用"，令牌桶+优先级队列护住"入口"，故障注入验证一切</td></tr>
+  <tr><td><span class="stage s3">阶段三</span>开放互联</td><td>07</td><td>协议生态</td><td>真实 MCP 规范（JSON-RPC 2.0 + 生命周期 + tools/resources），扣子 Bot 集成模式</td></tr>
+</table>
+
+<!-- ========== 七篇逐讲 ========== -->
+<h2>二、七篇示例一览</h2>
+
+<table>
+  <tr><th>篇</th><th>示例与讲解</th><th>核心改写</th><th>实测验证</th></tr>
+  <tr>
+    <td>01</td>
+    <td><a href="01_web服务记录日志并发.html">01_web服务记录日志并发</a></td>
+    <td>dashscope API + request_id 链路追踪 + 双通道日志 + 并发计数器</td>
+    <td>max_active ≥ 3 证明真并发；4 项 self-test</td>
+  </tr>
+  <tr>
+    <td>02</td>
+    <td><a href="02_web服务部署环境安全架构手段.html">02_web服务部署环境安全架构手段</a></td>
+    <td>四层防御：HTTPS adhoc / API Key 恒时比较 / flask-limiter 429 / 安全响应头</td>
+    <td>401 拒无钥、429 拒超频、响应头逐项可验</td>
+  </tr>
+  <tr>
+    <td>03</td>
+    <td><a href="03_API负载均衡与异步任务调度.html">03_API负载均衡与异步任务调度</a></td>
+    <td>ThreadPoolExecutor + RoundRobinRouter + cache.json 任务状态机 PENDING→COMPLETED</td>
+    <td>轮询 3:2 分配比；异步任务状态机全链验证</td>
+  </tr>
+  <tr>
+    <td>04</td>
+    <td><a href="04_多层级缓存与记忆系统.html">04_多层级缓存与记忆系统</a></td>
+    <td>JSONCache 会话历史 + dashscope 向量缓存 + 余弦 top-k 检索（替代 Chroma + 90MB 本地模型）</td>
+    <td>对话 2 的"它"正确指代对话 1 实体（跨轮记忆）</td>
+  </tr>
+  <tr>
+    <td>05</td>
+    <td><a href="05_智能体容错机制实现.html">05_智能体容错机制实现</a></td>
+    <td>容错五件套（超时/退避/切换/熔断/降级）+ FaultyBackend 故障注入器</td>
+    <td>注入故障 → 重试 → 熔断打开 → 切换 → 降级全链实测</td>
+  </tr>
+  <tr>
+    <td>06</td>
+    <td><a href="06_高并发的限流与降级策略.html">06_高并发的限流与降级策略</a></td>
+    <td>令牌桶（Lock 原子+初始满桶+cache.json 落盘）+ 优先级队列 + Worker 池 + 三态拒绝（429/503/504）</td>
+    <td>突发 [200×5, 429×5]；高优先级真实插队 ['低-1','高-0','低-2']</td>
+  </tr>
+  <tr>
+    <td>07</td>
+    <td><a href="07_模拟mcp服务与coze调用.html">07_模拟mcp服务与coze调用</a></td>
+    <td>真实 MCP 2025-06-18 规范：JSON-RPC 2.0 + initialize 生命周期 + tools/resources 原语 + Coze Bot 编排</td>
+    <td>握手/工具清单/工具调用/两轮对话/资源读取/错误码 6 项全过</td>
+  </tr>
+</table>
+
+<!-- ========== 核心架构模式 ========== -->
+<h2>三、本章核心架构模式（最小生产骨架）</h2>
+
+<pre>
+POST /chat 请求全旅程（融合七篇防御）：
+
+  客户端 ──HTTPS──▶ 接入层：API Key 恒时比较（401）
+                        │
+                        ▼
+                    令牌桶 acquire（桶空 → 429，状态落盘 cache.json）
+                        │
+                        ▼
+                    优先级队列 put_nowait (priority, seq)（队满 → 503）
+                        │
+                        ▼
+                    Worker 池取任务（高优先级先出，同级 FIFO）
+                        │
+                        ├─▶ 记忆层：读会话历史 + MCP tools/call 知识检索
+                        │        （isError → 知识置空，不炸主流程）
+                        ▼
+                    降级链：qwen-plus → qwen-turbo → 兜底文案
+                        │     （超时 8s · 指数退避 · 熔断打开直接跳过）
+                        ▼
+                    finally: event.set() 回填结果（异常也回填，永不挂死）
+                        │
+                        ▼
+                    200 响应 + request_id 日志 + /health 指标
+</pre>
+
+<div class="ok">
+  <strong>为什么这个骨架值得背下来？</strong>它是所有 LLM API 服务的通用形态（OpenAI/Anthropic 官网同款）：闸门在前快速失败（不消耗下游资源），队列居中削峰（把洪峰摊平），降级链收尾（永不给用户报错堆栈）。换任何语言框架，这七道工序的顺序与语义都不变。
+</div>
+
+<h2>四、五条不变式（跨篇反复执行的铁律）</h2>
+
+<table>
+  <tr><th>#</th><th>铁律</th><th>在各篇的体现</th></tr>
+  <tr><td>一</td><td><strong>外部接口必有兜底</strong></td><td>LLM → 兜底文案（05/06）；embedding → 检索置空（04/07）；MCP 工具 → isError（07）</td></tr>
+  <tr><td>二</td><td><strong>状态必须落盘</strong></td><td>会话历史（04/07）· 任务状态（03）· 令牌余量（06）· 语义向量（04/07）—— cache.json 替代 Redis</td></tr>
+  <tr><td>三</td><td><strong>可观测三件套</strong></td><td>request_id 日志（01）+ 分维度统计（05/06）+ /health 指标端点（01/06）</td></tr>
+  <tr><td>四</td><td><strong>故障必须实测触发</strong></td><td>故障注入器（05）· 并发突发（06）· 错峰时序构造插队场景（06）—— happy path 等于没验证</td></tr>
+  <tr><td>五</td><td><strong>协议与传输解耦</strong></td><td>真实 MCP 标准实现（07）：教学进程内传递，生产换 stdio/HTTP 协议层零改动</td></tr>
+</table>
+
+<h2>五、协议定位（与跨章节衔接）</h2>
+
+<pre>
+Agent 互操作协议栈（2025 年格局）：
+
+  Function Calling（模型 ↔ 运行时，厂商私有约定）
+        │ 模型决定"调哪个函数"
+        ▼
+  MCP（agent ↔ 工具/数据，Anthropic 开放标准，2025-06-18 版）
+        │ 工具发布、发现与调用；OpenAI/Google 2025 年相继支持
+        ▼
+  A2A（agent ↔ agent，Google 开放标准，char10-05 已实现）
+        │ 跨进程 Agent 协作与任务委派
+</pre>
+
+<table>
+  <tr><th>关联章节</th><th>衔接点</th></tr>
+  <tr><td>char03（服务化门面）</td><td>03 章建立"校验 → 记忆 → 工具 → 生成"服务骨架，char12 逐层加固为生产级</td></tr>
+  <tr><td>char07（虚构 MCP 段）</td><td>07 篇给出真实答案：MCP 是 JSON-RPC 2.0 应用协议，上下文经 resources 按 URI 读取</td></tr>
+  <tr><td>char08（状态感知）</td><td>04 篇 JSONCache 是 char08 Memory 讨论的服务端持久化形态</td></tr>
+  <tr><td>char10-05（A2A）</td><td>A2A 管 agent↔agent 协作；MCP 管 agent↔工具/数据——互补而非竞争</td></tr>
+</table>
+
+<h2>六、教材五笔学费</h2>
+
+<table>
+  <tr><th>学费</th><th>教材表现</th><th>改写偿还方式</th></tr>
+  <tr><td>虚构类</td><td>Qwen2Chat / DeepSeekChat（LangChain 不存在）</td><td>qwen-plus / qwen-turbo 真实双后端（dashscope 原生 + OpenAI 兼容双协议）</td></tr>
+  <tr><td>废弃 API</td><td>ConversationChain / <code>@app.on_event</code> / 废弃 Memory</td><td>直接消息组装 + Flask 统一（本系列约定）</td></tr>
+  <tr><td>非原子竞态</td><td>Redis get/set/decr 三步分离，桶扣成负数</td><td>threading.Lock 原子化（Redis 场景应写 Lua 脚本）</td></tr>
+  <tr><td>伪协议</td><td>mcp: 键前缀冒充 MCP 协议层</td><td>真实 JSON-RPC 2.0 + initialize 生命周期 + 三大原语 + 标准错误码</td></tr>
+  <tr><td>零验证</td><td>限流/削峰/优先级/降级从未触发</td><td>每篇 4-6 项 self-test，机制全部实测（含故障注入）</td></tr>
+</table>
+
+<!-- ========== 配套资源 ========== -->
+<h2>七、配套资源</h2>
+
+<table>
+  <tr><th>资源</th><th>说明</th></tr>
+  <tr><td><a href="arch_汇总说明.md">arch_汇总说明.md</a></td><td>架构视角汇总（含 Mermaid 分层图 / 生命线时序 / 演进线关联图），适合在支持 Mermaid 的查看器阅读</td></tr>
+  <tr><td><a href="svg/01_分层架构总图.svg">svg/01_分层架构总图.svg</a></td><td>七层组件栈总图（暗色主题，浏览器直开）</td></tr>
+  <tr><td><a href="svg/02_七篇演进线全景图.svg">svg/02_七篇演进线全景图.svg</a></td><td>七步进阶路线图（问题 → 方案 → 实测）</td></tr>
+  <tr><td><a href="svg/03_请求生命线时序图.svg">svg/03_请求生命线时序图.svg</a></td><td>请求全旅程时序图（七道工序 + 三态拒绝点）</td></tr>
+  <tr><td><a href="svg/04_不变式规律与教材学费图.svg">svg/04_不变式规律与教材学费图.svg</a></td><td>五条铁律 + 教材学费谱系（新人重点）</td></tr>
+  <tr><td>cache.json / *.log</td><td>运行产物：状态持久化文件与各篇日志（验证后可清理）</td></tr>
+</table>
+
+<h2>八、动手路径建议</h2>
+
+<ol>
+  <li><strong>先跑 01 + 06</strong>：把最小生产骨架立起来，观察 /health 指标与日志双通道。</li>
+  <li><strong>压测 06</strong>：用 10 线程突发打 /chat，对照 429 出现时机与令牌恢复速率（2 个/s）。</li>
+  <li><strong>在 05 上做故障演习</strong>：修改 FaultyBackend 参数，观察熔断打开 → 半开 → 闭合的完整流转。</li>
+  <li><strong>给 07 加 prompts 原语</strong>：实现 prompts/list + prompts/get，体会 MCP 三大原语同构性。</li>
+  <li><strong>串起全章</strong>：把 02 的 API Key 校验、06 的令牌桶、05 的降级链合并成一个服务——就是第四节那张骨架图的完整实现。</li>
+</ol>
+
+</body>
+</html>

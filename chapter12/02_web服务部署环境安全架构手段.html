@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 12-2 讲解：Web 服务部署环境安全架构手段</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}pre .cm{color:#67e8f9}pre .k{color:#f472b6}pre .s{color:#86efac}pre .r{color:#fbbf24}pre .e{color:#fca5a5}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.layer{border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin:12px 0;background:#fff;border-left:5px solid #22d3ee}
+.layer .ln{font-weight:bold;color:#0e7490}
+.defense{display:flex;gap:10px;margin:16px 0;flex-wrap:wrap}
+.dcard{flex:1;min-width:200px;border-radius:8px;padding:14px;color:#fff}
+.d1{background:#0f172a}.d2{background:#7f1d1d}.d3{background:#78350f}.d4{background:#1e3a5f}
+.dcard b{display:block;font-size:15px;margin-bottom:6px}
+.dcard span{font-size:12px;opacity:0.85}
+</style>
+</head>
+<body>
+
+<h1>例 12-2 讲解：Web 服务部署环境安全架构手段</h1>
+
+<div class="highlight">
+  <strong>本节核心变化：</strong>例 12-1 的服务是"裸奔"状态——任何人拿到地址就能白嫖你的 LLM 额度。本篇给服务穿上四层铠甲：<strong>HTTPS 加密 → API Key 认证 → IP 限流 → 安全响应头</strong>，从外到内构成纵深防御。同时修复教材的证书缺失、ProxyFix 失效和 torch.time bug。
+</div>
+
+<!-- ========== Section 1 ========== -->
+<h2>一、为什么需要安全加固？</h2>
+
+<p>教材开篇说了三个理由：<strong>防数据泄露、防模型滥用、防服务攻击</strong>。落到一个 LLM API 服务上，具体风险是：</p>
+<ul>
+  <li><strong>传输被窃听</strong>——HTTP 明文传输，同一 WiFi 下抓包就能看到对话内容</li>
+  <li><strong>额度被白嫖</strong>——没有认证，爬虫扫到你的端口就能无限调用，DashScope 账单替别人买单</li>
+  <li><strong>服务被打挂</strong>——没有限流，一个脚本循环发请求就能耗尽配额、拖垮服务</li>
+  <li><strong>响应被利用</strong>——缺少安全头，API 响应可能被浏览器误解析（MIME 嗅探）、被恶意页面 iframe 套用</li>
+</ul>
+
+<h3>教材原版的 6 个问题</h3>
+<table>
+  <tr><th>#</th><th>问题</th><th>后果</th></tr>
+  <tr><td>1</td><td><code>torch.time.time()</code> bug</td><td>与例 12-1 同款，运行必报错</td></tr>
+  <tr><td>2</td><td>本地 GPU 推理 Qwen3-7B</td><td>普通开发机跑不了，与全书 dashscope 模式脱节</td></tr>
+  <tr><td>3</td><td><code>load_cert_chain('cert.pem','key.pem')</code></td><td>证书文件凭空出现，教材没给生成方式，直接运行 <strong>必报 FileNotFoundError</strong></td></tr>
+  <tr><td>4</td><td><code>ProxyFix(app.wsgi_app)</code> 无参数</td><td>默认全 0 不修正任何头——<strong>写了等于没写</strong>，限流的 IP 识别在反代后全变成代理 IP</td></tr>
+  <tr><td>5</td><td><strong>没有任何认证机制</strong></td><td>API 裸奔：限流挡得住单 IP，挡不住换 IP 的滥用；认证才是第一道防线</td></tr>
+  <tr><td>6</td><td>无 /health、无 self-test</td><td>安全配置是否真的生效？教材无法验证</td></tr>
+</table>
+
+<!-- ========== Section 2 ========== -->
+<h2>二、纵深防御四层架构</h2>
+
+<p>改写后的服务从外到内叠加四层防御，<strong>任何一层被突破，下一层还能兜底</strong>：</p>
+
+<div class="defense">
+  <div class="dcard d1"><b>第 1 层 · 传输加密</b><span>HTTPS（TLS）<br>防窃听防篡改<br>Flask adhoc 自签名证书</span></div>
+  <div class="dcard d2"><b>第 2 层 · 认证鉴权</b><span>API Key 校验<br>缺失/错误 → 401<br>恒时比较防时序攻击</span></div>
+  <div class="dcard d3"><b>第 3 层 · 速率限制</b><span>flask-limiter 按 IP<br>超限 → 429<br>防滥用防 DDoS</span></div>
+  <div class="dcard d4"><b>第 4 层 · 安全响应头</b><span>nosniff / DENY / CSP<br>防 MIME 嗅探<br>防点击劫持</span></div>
+</div>
+
+<div class="ok">
+  <strong>为什么顺序是"认证在限流之前"？</strong> 本例中限流 decorator 挂在认证外层（先执行），401 请求也会消耗限流额度——这是刻意的：<strong>暴力破解 API Key 的行为本身就应该被限流掐死</strong>。实测里 401 也计数，最终第 6 个请求触发 429。
+</div>
+
+<!-- ========== Section 3 ========== -->
+<h2>三、第 1 层：HTTPS 传输加密（证书问题修复）</h2>
+
+<h3>教材的死路 vs 改写的活路</h3>
+<pre><code><span class="cm"># 教材：证书文件不存在，直接崩溃</span>
+context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+context.load_cert_chain(<span class="e">'cert.pem'</span>, <span class="e">'key.pem'</span>)   <span class="c"># FileNotFoundError!</span>
+app.run(port=443, ssl_context=context)
+
+<span class="cm"># 改写：Flask 内置 adhoc 模式，自动生成临时自签名证书（需 cryptography 库）</span>
+app.run(host=<span class="s">"0.0.0.0"</span>, port=8443, ssl_context=<span class="s">"adhoc"</span>)</code></pre>
+
+<table>
+  <tr><th>方案</th><th>适用场景</th><th>说明</th></tr>
+  <tr><td><code>ssl_context="adhoc"</code></td><td>开发/测试（本例）</td><td>自动生成临时证书，零配置；客户端需 <code>verify=False</code> 或 curl <code>-k</code></td></tr>
+  <tr><td><code>load_cert_chain(正式证书)</code></td><td>生产</td><td>Let's Encrypt 免费签发，或云厂商免费证书</td></tr>
+  <tr><td>反代终结 TLS</td><td>生产（更常见）</td><td>Nginx/云负载均衡处理 HTTPS，Flask 只跑 HTTP 内网</td></tr>
+</table>
+
+<p><strong>端口选择：</strong>教学演示用 8443（教材的 443 保留为生产值）——最小权限原则的含义就是"只开必要端口"。</p>
+
+<!-- ========== Section 4 ========== -->
+<h2>四、第 2 层：API Key 认证（教材完全缺失的防线）</h2>
+
+<pre><code><span class="k">def</span> <span class="k">require_api_key</span>(func):
+    <span class="s">"""API Key 校验装饰器：缺失或错误返回 401"""</span>
+    <span class="k">@functools.wraps</span>(func)
+    <span class="k">def</span> wrapper(*args, **kwargs):
+        key = request.headers.get(<span class="s">"X-API-Key"</span>) <span class="k">or</span> <span class="s">""</span>
+        <span class="k">if not</span> key:                        <span class="c"># 兼容 Bearer 方式（与 A2A 对齐）</span>
+            auth = request.headers.get(<span class="s">"Authorization"</span>) <span class="k">or</span> <span class="s">""</span>
+            <span class="k">if</span> auth.startswith(<span class="s">"Bearer "</span>):
+                key = auth[7:]
+        <span class="k">if not</span> key <span class="k">or not</span> secrets.compare_digest(key, API_KEY):
+            <span class="c"># ↑ 恒时比较，防时序攻击逐位猜 Key</span>
+            <span class="k">return</span> jsonify({<span class="s">"error"</span>: {<span class="s">"code"</span>: 401, ...}}), 401
+        <span class="k">return</span> func(*args, **kwargs)
+    <span class="k">return</span> wrapper</code></pre>
+
+<h3>两个安全细节</h3>
+<table>
+  <tr><th>细节</th><th>原理</th></tr>
+  <tr><td><code>secrets.compare_digest()</code> 恒时比较</td><td>普通 <code>==</code> 比较遇到第一个不同字符就返回，攻击者可通过响应时间差逐位猜出 Key（时序攻击）；恒时比较无论错在第几位耗时都相同</td></tr>
+  <tr><td>兼容 <code>Authorization: Bearer</code></td><td>与 char10 A2A 协议的 bearer 认证方案对齐，未来接 A2A Client 无需改造</td></tr>
+</table>
+
+<p><strong>Key 管理策略：</strong>环境变量 <code>AGENT_API_KEY</code> 优先；未设置则 <code>secrets.token_hex(16)</code> 随机生成并打印（每次运行都变，模拟临时凭据）。生产环境 Key 应存密钥管理服务（KMS/Vault），绝不能硬编码。</p>
+
+<!-- ========== Section 5 ========== -->
+<h2>五、第 3 层：速率限制（flask-limiter）</h2>
+
+<pre><code>limiter = Limiter(
+    get_remote_address,              <span class="c"># 按客户端 IP 限流</span>
+    app=app,
+    default_limits=[<span class="s">"60 per minute"</span>],  <span class="c"># 全局兜底</span>
+    storage_uri=<span class="s">"memory://"</span>,           <span class="c"># 显式声明内存存储</span>
+)
+
+<span class="c"># 端点级：叠加在认证之外，5 次/分钟（教学值设小，方便验证）</span>
+<span class="c">@app.route</span>(<span class="s">"/v1/chat/completions"</span>, methods=[<span class="s">"POST"</span>])
+<span class="c">@limiter.limit</span>(<span class="s">"5 per minute"</span>)
+<span class="c">@require_api_key</span>
+<span class="k">def</span> chat_completions(): ...</code></pre>
+
+<h3>存储方式的选择（重要）</h3>
+<table>
+  <tr><th>存储</th><th>适用</th><th>特点</th></tr>
+  <tr><td><code>memory://</code>（本例）</td><td>单机、教学</td><td>进程内计数，重启清零，零依赖</td></tr>
+  <tr><td><code>redis://...</code></td><td>生产多实例</td><td>多台服务器共享计数；<strong>本环境无 Redis，按项目约定不引入</strong>，代码中已留注释说明</td></tr>
+</table>
+
+<h3>实测限流行为（Test 4 状态码序列）</h3>
+<pre><code>[200, 200, 200, 429, 429]   <span class="c">← 精确在第 6 次触发</span></code></pre>
+<p>为什么是第 6 次？限流窗口 5 次/分钟，<strong>401 被拒的请求也计数</strong>（Test 2 消耗 1 次）+ Test 3 正常 1 次 = 已用 2 次，Test 4 连发 5 次中前 3 次把额度用满，后 2 次触发 429。这验证了两件事：限流精确生效 + 暴力破解行为会被限流掐断。</p>
+
+<!-- ========== Section 6 ========== -->
+<h2>六、第 4 层：安全响应头 + 输入校验</h2>
+
+<pre><code><span class="c">@app.after_request</span>
+<span class="k">def</span> <span class="k">add_security_headers</span>(response):
+    response.headers[<span class="s">"X-Content-Type-Options"</span>] = <span class="s">"nosniff"</span>   <span class="c"># 禁止 MIME 嗅探</span>
+    response.headers[<span class="s">"X-Frame-Options"</span>] = <span class="s">"DENY"</span>              <span class="c"># 禁止被 iframe 嵌套</span>
+    response.headers[<span class="s">"Referrer-Policy"</span>] = <span class="s">"no-referrer"</span>       <span class="c"># 不泄露来源</span>
+    response.headers[<span class="s">"Content-Security-Policy"</span>] = <span class="s">"default-src 'none'"</span>
+    <span class="k">return</span> response
+
+<span class="c"># 输入校验（防资源滥用）</span>
+max_tokens = <span class="k">min</span>(data.get(<span class="s">"max_tokens"</span>, 512), 1024)  <span class="c"># 上限截断</span>
+<span class="k">if not</span> messages <span class="k">or</span> <span class="k">len</span>(messages) > 20:                 <span class="c"># 条数限制</span>
+    <span class="k">return</span> jsonify({...}), 400</code></pre>
+
+<p>API 服务主要是 JSON 响应，安全头的作用在浏览器直连场景（如简单前端页面）才体现——但"默认全部加上"是零成本好习惯。</p>
+
+<!-- ========== Section 7 ========== -->
+<h2>七、实测验证（4 项 self-test 全部通过）</h2>
+
+<div class="ok">
+  <strong>Test 1 - HTTPS 可达：</strong><code>[通过] HTTPS 握手成功，/health 正常</code><br>
+  <strong>Test 2 - 无凭据访问：</strong><code>[通过] 401 Invalid or missing API Key（认证日志同步记录）</code><br>
+  <strong>Test 3 - 正确 Key 调用：</strong><code>[通过] answer=2（真实 DashScope 调用 946ms）</code><br>
+  <strong>Test 4 - 限流触发：</strong><code>状态码序列 [200, 200, 200, 429, 429] → [通过] 限流生效</code>
+</div>
+
+<h3>curl 手动调用（自签名证书需 -k）</h3>
+<pre><code>curl -k https://localhost:8443/health
+
+curl -k -X POST https://localhost:8443/v1/chat/completions \
+     -H <span class="s">'X-API-Key: &lt;your-key&gt;'</span> \
+     -H <span class="s">"Content-Type: application/json"</span> \
+     -d <span class="s">'{"messages":[{"role":"user","content":"你好"}]}'</span></code></pre>
+
+<!-- ========== Section 8 ========== -->
+<h2>八、改写前后对照总表</h2>
+
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td><strong>传输加密</strong></td><td>load_cert_chain 指向不存在的文件</td><td>ssl_context="adhoc" 零配置启动 HTTPS</td></tr>
+  <tr><td><strong>认证</strong></td><td>无（API 裸奔）</td><td>API Key + 恒时比较 + Bearer 兼容，401 拦截</td></tr>
+  <tr><td><strong>限流</strong></td><td>有 limiter 但无法验证</td><td>保留并实测（429 序列验证）</td></tr>
+  <tr><td><strong>ProxyFix</strong></td><td>无参数（等于没生效）</td><td>x_for=1, x_proto=1, x_host=1 正确配置</td></tr>
+  <tr><td><strong>安全响应头</strong></td><td>无</td><td>nosniff / DENY / no-referrer / CSP</td></tr>
+  <tr><td><strong>输入校验</strong></td><td>仅判空</td><td>+ messages 条数上限 + max_tokens 截断</td></tr>
+  <tr><td><strong>LLM 后端</strong></td><td>本地 Qwen3-7B GPU 推理</td><td>dashscope API（前 10 章统一）</td></tr>
+  <tr><td><strong>torch.time bug</strong></td><td>存在</td><td>修复为 time.time()</td></tr>
+  <tr><td><strong>验证</strong></td><td>无</td><td>4 项 self-test 自动验证四层防御</td></tr>
+</table>
+
+<!-- ========== Section 9 ========== -->
+<h2>九、动手练习</h2>
+
+<ol>
+  <li><strong>生成正式自签名证书</strong>：用 <code>openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 365</code> 生成证书文件，替换 adhoc 模式，对比两种方式的差异。</li>
+  <li><strong>多 Key 管理</strong>：把单一 API Key 改成字典 <code>{key_id: key}</code>，支持多个客户端各自凭据，401 日志里记录 key_id 便于审计。</li>
+  <li><strong>IP 白名单</strong>：实现一个 <code>@require_ip_whitelist</code> 装饰器，只允许指定 IP 访问 /health 以外的端点（对应教材"最小权限·限制访问IP"）。</li>
+  <li><strong>限流存储升级实验</strong>：阅读 flask-limiter 文档，理解 <code>storage_uri="redis://"</code> 的多实例共享计数场景——写一段说明文字解释为什么多台服务器必须用集中存储。</li>
+  <li><strong>HTTPS 压测</strong>：用 <code>ab -n 100 -c 10 https://localhost:8443/health</code> 或 Python 脚本压测，观察限流拦截后的可用性表现。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li>flask-limiter 官方文档：<a href="https://flask-limiter.readthedocs.io/">flask-limiter.readthedocs.io</a></li>
+  <li>OWASP API Security Top 10：<a href="https://owasp.org/www-project-api-security/">owasp.org</a></li>
+  <li>secrets 模块（恒时比较与安全随机）：<a href="https://docs.python.org/zh-cn/3/library/secrets.html">docs.python.org</a></li>
+  <li>Let's Encrypt 免费证书：<a href="https://letsencrypt.org/">letsencrypt.org</a></li>
+</ul>
+
+</body>
+</html>

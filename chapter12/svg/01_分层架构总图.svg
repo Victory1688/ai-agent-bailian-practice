@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1000" font-family="Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#22d3ee"/>
+    </marker>
+    <marker id="arwg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="1000" fill="#0f172a"/>
+  <text x="700" y="52" text-anchor="middle" fill="#22d3ee" font-size="30" font-weight="bold">char12 分层架构总图 —— 从单脚本 Agent 到生产化 Web 服务（上线部署篇）</text>
+  <text x="700" y="82" text-anchor="middle" fill="#64748b" font-size="15">七篇示例 = 七个生产化组件：并发日志 → 安全防御 → 负载均衡 → 多层缓存 → 容错 → 限流降级 → MCP 协议</text>
+
+  <!-- 客户端层 -->
+  <rect x="60" y="105" width="1280" height="70" rx="10" fill="#1e293b" stroke="#334155"/>
+  <rect x="60" y="105" width="150" height="70" rx="10" fill="#0c4a6e"/>
+  <text x="135" y="147" text-anchor="middle" fill="#7dd3fc" font-size="17" font-weight="bold">客户端层</text>
+  <rect x="240" y="122" width="250" height="38" rx="8" fill="#334155"/>
+  <text x="365" y="147" text-anchor="middle" fill="#e2e8f0" font-size="14">curl / requests 并发线程</text>
+  <rect x="520" y="122" width="250" height="38" rx="8" fill="#334155"/>
+  <text x="645" y="147" text-anchor="middle" fill="#e2e8f0" font-size="14">压测工具（突发洪峰模拟）</text>
+  <rect x="800" y="122" width="250" height="38" rx="8" fill="#334155"/>
+  <text x="925" y="147" text-anchor="middle" fill="#e2e8f0" font-size="14">Coze / MCP Client（扣子 Bot）</text>
+
+  <line x1="700" y1="175" x2="700" y2="205" stroke="#22d3ee" stroke-width="2" marker-end="url(#arw)"/>
+  <text x="720" y="196" fill="#22d3ee" font-size="12">HTTPS 请求</text>
+
+  <!-- 接入与防御层（02）-->
+  <rect x="60" y="210" width="1280" height="88" rx="10" fill="#1e293b" stroke="#f59e0b"/>
+  <rect x="60" y="210" width="150" height="88" rx="10" fill="#78350f"/>
+  <text x="135" y="248" text-anchor="middle" fill="#fbbf24" font-size="17" font-weight="bold">接入防御层</text>
+  <text x="135" y="272" text-anchor="middle" fill="#fde68a" font-size="12">02 安全架构</text>
+  <rect x="240" y="232" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="362" y="250" text-anchor="middle" fill="#e2e8f0" font-size="13">HTTPS（adhoc 证书）</text>
+  <text x="362" y="268" text-anchor="middle" fill="#94a3b8" font-size="11">传输加密</text>
+  <rect x="505" y="232" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="627" y="250" text-anchor="middle" fill="#e2e8f0" font-size="13">API Key 鉴权</text>
+  <text x="627" y="268" text-anchor="middle" fill="#94a3b8" font-size="11">hmac.compare_digest 恒时比较</text>
+  <rect x="770" y="232" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="892" y="250" text-anchor="middle" fill="#e2e8f0" font-size="13">flask-limiter 框架限流</text>
+  <text x="892" y="268" text-anchor="middle" fill="#94a3b8" font-size="11">固定窗口 → 429</text>
+  <rect x="1035" y="232" width="285" height="44" rx="8" fill="#334155"/>
+  <text x="1177" y="250" text-anchor="middle" fill="#e2e8f0" font-size="13">安全响应头</text>
+  <text x="1177" y="268" text-anchor="middle" fill="#94a3b8" font-size="11">X-Content-Type-Options / HSTS 等</text>
+
+  <line x1="700" y1="298" x2="700" y2="328" stroke="#22d3ee" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- Web 服务层（01/06）-->
+  <rect x="60" y="333" width="1280" height="88" rx="10" fill="#1e293b" stroke="#22d3ee"/>
+  <rect x="60" y="333" width="150" height="88" rx="10" fill="#164e63"/>
+  <text x="135" y="371" text-anchor="middle" fill="#67e8f9" font-size="17" font-weight="bold">Web 服务层</text>
+  <text x="135" y="395" text-anchor="middle" fill="#a5f3fc" font-size="12">01 日志并发 / 06</text>
+  <rect x="240" y="355" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="362" y="373" text-anchor="middle" fill="#e2e8f0" font-size="13">Flask（threaded 模式）</text>
+  <text x="362" y="391" text-anchor="middle" fill="#94a3b8" font-size="11">每请求一线程，真并发验证</text>
+  <rect x="505" y="355" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="627" y="373" text-anchor="middle" fill="#e2e8f0" font-size="13">request_id 链路追踪</text>
+  <text x="627" y="391" text-anchor="middle" fill="#94a3b8" font-size="11">控制台 + 文件双通道日志</text>
+  <rect x="770" y="355" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="892" y="373" text-anchor="middle" fill="#e2e8f0" font-size="13">令牌桶 TokenBucket</text>
+  <text x="892" y="391" text-anchor="middle" fill="#94a3b8" font-size="11">Lock 原子 + 初始满桶 + 惰性补充</text>
+  <rect x="1035" y="355" width="285" height="44" rx="8" fill="#334155"/>
+  <text x="1177" y="373" text-anchor="middle" fill="#e2e8f0" font-size="13">三态拒绝语义</text>
+  <text x="1177" y="391" text-anchor="middle" fill="#94a3b8" font-size="11">429 限流 / 503 背压 / 504 超时</text>
+
+  <line x1="700" y1="421" x2="700" y2="451" stroke="#22d3ee" stroke-width="2" marker-end="url(#arw)"/>
+  <text x="720" y="442" fill="#22d3ee" font-size="12">拿令牌后入队</text>
+
+  <!-- 编排层（03/06）-->
+  <rect x="60" y="456" width="1280" height="88" rx="10" fill="#1e293b" stroke="#22d3ee"/>
+  <rect x="60" y="456" width="150" height="88" rx="10" fill="#164e63"/>
+  <text x="135" y="494" text-anchor="middle" fill="#67e8f9" font-size="17" font-weight="bold">编排层</text>
+  <text x="135" y="518" text-anchor="middle" fill="#a5f3fc" font-size="12">03 异步调度 / 06</text>
+  <rect x="240" y="478" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="362" y="496" text-anchor="middle" fill="#e2e8f0" font-size="13">RoundRobin 负载均衡</text>
+  <text x="362" y="514" text-anchor="middle" fill="#94a3b8" font-size="11">多实例轮询分发 + 健康统计</text>
+  <rect x="505" y="478" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="627" y="496" text-anchor="middle" fill="#e2e8f0" font-size="13">PriorityQueue 优先级队列</text>
+  <text x="627" y="514" text-anchor="middle" fill="#94a3b8" font-size="11">(priority, seq) 排序 · 同级 FIFO</text>
+  <rect x="770" y="478" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="892" y="496" text-anchor="middle" fill="#e2e8f0" font-size="13">Worker 池（×2）</text>
+  <text x="892" y="514" text-anchor="middle" fill="#94a3b8" font-size="11">削峰填谷 · finally 必回填</text>
+  <rect x="1035" y="478" width="285" height="44" rx="8" fill="#334155"/>
+  <text x="1177" y="496" text-anchor="middle" fill="#e2e8f0" font-size="13">threading.Event 结果桥</text>
+  <text x="1177" y="514" text-anchor="middle" fill="#94a3b8" font-size="11">异步处理 / 同步等待响应</text>
+
+  <line x1="700" y1="544" x2="700" y2="574" stroke="#22d3ee" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- 容错层（05/06）-->
+  <rect x="60" y="579" width="1280" height="88" rx="10" fill="#1e293b" stroke="#f87171"/>
+  <rect x="60" y="579" width="150" height="88" rx="10" fill="#7f1d1d"/>
+  <text x="135" y="617" text-anchor="middle" fill="#fca5a5" font-size="17" font-weight="bold">容错层</text>
+  <text x="135" y="641" text-anchor="middle" fill="#fecaca" font-size="12">05 容错五件套 / 06</text>
+  <rect x="240" y="601" width="200" height="44" rx="8" fill="#334155"/>
+  <text x="340" y="619" text-anchor="middle" fill="#e2e8f0" font-size="13">超时控制 8s</text>
+  <text x="340" y="637" text-anchor="middle" fill="#94a3b8" font-size="11">future.result(timeout)</text>
+  <rect x="460" y="601" width="200" height="44" rx="8" fill="#334155"/>
+  <text x="560" y="619" text-anchor="middle" fill="#e2e8f0" font-size="13">指数退避重试</text>
+  <text x="560" y="637" text-anchor="middle" fill="#94a3b8" font-size="11">0.5s × 2^attempt</text>
+  <rect x="680" y="601" width="200" height="44" rx="8" fill="#334155"/>
+  <text x="780" y="619" text-anchor="middle" fill="#e2e8f0" font-size="13">熔断器</text>
+  <text x="780" y="637" text-anchor="middle" fill="#94a3b8" font-size="11">2 次连败打开 · 30s 冷却半开</text>
+  <rect x="900" y="601" width="200" height="44" rx="8" fill="#334155"/>
+  <text x="1000" y="619" text-anchor="middle" fill="#e2e8f0" font-size="13">故障注入器</text>
+  <text x="1000" y="637" text-anchor="middle" fill="#94a3b8" font-size="11">容错机制实测触发</text>
+  <rect x="1120" y="601" width="200" height="44" rx="8" fill="#334155"/>
+  <text x="1220" y="619" text-anchor="middle" fill="#e2e8f0" font-size="13">优雅降级</text>
+  <text x="1220" y="637" text-anchor="middle" fill="#94a3b8" font-size="11">全部失败 → 兜底文案</text>
+
+  <line x1="700" y1="667" x2="700" y2="697" stroke="#22d3ee" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- 记忆/知识层（04/07）-->
+  <rect x="60" y="702" width="1280" height="88" rx="10" fill="#1e293b" stroke="#22d3ee"/>
+  <rect x="60" y="702" width="150" height="88" rx="10" fill="#164e63"/>
+  <text x="135" y="740" text-anchor="middle" fill="#67e8f9" font-size="17" font-weight="bold">记忆/知识层</text>
+  <text x="135" y="764" text-anchor="middle" fill="#a5f3fc" font-size="12">04 多层缓存 / 07</text>
+  <rect x="240" y="724" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="362" y="742" text-anchor="middle" fill="#e2e8f0" font-size="13">JSONCache 会话历史</text>
+  <text x="362" y="760" text-anchor="middle" fill="#94a3b8" font-size="11">按 session 隔离 · 跨轮记忆</text>
+  <rect x="505" y="724" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="627" y="742" text-anchor="middle" fill="#e2e8f0" font-size="13">语义向量缓存</text>
+  <text x="627" y="760" text-anchor="middle" fill="#94a3b8" font-size="11">text-embedding-v3 · 防重复计费</text>
+  <rect x="770" y="724" width="245" height="44" rx="8" fill="#334155"/>
+  <text x="892" y="742" text-anchor="middle" fill="#e2e8f0" font-size="13">余弦相似度 top-k 检索</text>
+  <text x="892" y="760" text-anchor="middle" fill="#94a3b8" font-size="11">替代 Chroma + 本地模型</text>
+  <rect x="1035" y="724" width="285" height="44" rx="8" fill="#334155"/>
+  <text x="1177" y="742" text-anchor="middle" fill="#e2e8f0" font-size="13">MCP resources 原语</text>
+  <text x="1177" y="760" text-anchor="middle" fill="#94a3b8" font-size="11">session://{sid}/history 按_URI_读取</text>
+
+  <line x1="700" y1="790" x2="700" y2="820" stroke="#22d3ee" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- 模型与协议层 -->
+  <rect x="60" y="825" width="1280" height="88" rx="10" fill="#1e293b" stroke="#a78bfa"/>
+  <rect x="60" y="825" width="150" height="88" rx="10" fill="#4c1d95"/>
+  <text x="135" y="863" text-anchor="middle" fill="#c4b5fd" font-size="17" font-weight="bold">模型/协议层</text>
+  <text x="135" y="887" text-anchor="middle" fill="#ddd6fe" font-size="12">05/06 模型 · 07 MCP</text>
+  <rect x="240" y="847" width="290" height="44" rx="8" fill="#334155"/>
+  <text x="385" y="865" text-anchor="middle" fill="#e2e8f0" font-size="13">dashscope qwen-plus / qwen-turbo</text>
+  <text x="385" y="883" text-anchor="middle" fill="#94a3b8" font-size="11">原生协议 + OpenAI 兼容协议双后端</text>
+  <rect x="550" y="847" width="290" height="44" rx="8" fill="#334155"/>
+  <text x="695" y="865" text-anchor="middle" fill="#e2e8f0" font-size="13">降级链</text>
+  <text x="695" y="883" text-anchor="middle" fill="#94a3b8" font-size="11">qwen-plus → qwen-turbo → 兜底文案</text>
+  <rect x="860" y="847" width="460" height="44" rx="8" fill="#334155"/>
+  <text x="1090" y="865" text-anchor="middle" fill="#e2e8f0" font-size="13">MCP Server（2025-06-18 规范）</text>
+  <text x="1090" y="883" text-anchor="middle" fill="#94a3b8" font-size="11">JSON-RPC 2.0 · initialize 握手 · tools/list · tools/call</text>
+
+  <!-- 横切关注面板 -->
+  <rect x="60" y="930" width="1280" height="54" rx="10" fill="#134e4a" stroke="#2dd4bf"/>
+  <text x="160" y="963" text-anchor="middle" fill="#5eead4" font-size="15" font-weight="bold">横切关注</text>
+  <text x="380" y="963" text-anchor="middle" fill="#e2e8f0" font-size="13">cache.json 状态持久化（替代 Redis）</text>
+  <text x="640" y="963" text-anchor="middle" fill="#e2e8f0" font-size="13">日志文件双通道</text>
+  <text x="850" y="963" text-anchor="middle" fill="#e2e8f0" font-size="13">/health 运行指标</text>
+  <text x="1060" y="963" text-anchor="middle" fill="#e2e8f0" font-size="13">self-test 自动验证</text>
+  <text x="1250" y="963" text-anchor="middle" fill="#e2e8f0" font-size="13">外部接口必兜底</text>
+</svg>

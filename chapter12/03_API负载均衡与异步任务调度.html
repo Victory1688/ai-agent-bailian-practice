@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 12-3 讲解：API 负载均衡与异步任务调度</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}pre .cm{color:#67e8f9}pre .k{color:#f472b6}pre .s{color:#86efac}pre .r{color:#fbbf24}pre .e{color:#fca5a5}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.flow{background:#fff;border:1px solid #22d3ee;border-radius:8px;padding:16px;margin:16px 0;font-family:Consolas,monospace;font-size:13px;color:#0e7490;line-height:2}
+.state{display:inline-block;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:bold;margin-right:6px}
+.s-p{background:#fef3c7;color:#92400e}.s-r{background:#dbeafe;color:#1e40af}
+.s-c{background:#dcfce7;color:#166534}.s-f{background:#fee2e2;color:#991b1b}
+</style>
+</head>
+<body>
+
+<h1>例 12-3 讲解：API 负载均衡与异步任务调度</h1>
+
+<div class="highlight">
+  <strong>本节核心变化：</strong>例 12-1/02 的服务都是<strong>同步阻塞</strong>——客户端发请求后一直挂着等 LLM 生成完（1-2 秒甚至更久）。本篇改成<strong>异步任务模式</strong>：提交立即返回 task_id，结果稍后轮询获取。同时补上教材标题承诺却完全没实现的<strong>负载均衡</strong>，并用 <code>cache.json</code> 替代 Celery 对 Redis 的依赖。
+</div>
+
+<!-- ========== Section 1 ========== -->
+<h2>一、为什么需要异步任务调度？</h2>
+
+<p>同步模式的天花板：一个 LLM 请求耗时 1-10 秒，Flask 默认线程数有限。100 个用户同时提问 = 请求排队 = 接口超时 = 用户体验崩塌。<strong>异步化</strong>把交互拆成两步：</p>
+<ul>
+  <li><strong>POST /generate</strong> —— 入队即返回（毫秒级），客户端拿到 task_id</li>
+  <li><strong>GET /result/{task_id}</strong> —— 客户端随时来查，好了再取</li>
+</ul>
+<p>这解耦了"接收请求"和"执行任务"：接收层轻快响应，执行层慢慢消化，互不拖累。</p>
+
+<h3>教材原版的 6 个问题</h3>
+<table>
+  <tr><th>#</th><th>问题</th><th>说明</th></tr>
+  <tr><td>1</td><td><strong>Celery 依赖 Redis</strong></td><td>broker/backend 都写死 <code>redis://localhost:6379</code>，本环境无 Redis —— 按约定改用 cache.json</td></tr>
+  <tr><td>2</td><td>Celery worker 跑不起来</td><td>需要独立进程 <code>celery -A tasks worker</code>，且 Windows 上 Celery 4+ 官方不再支持</td></tr>
+  <tr><td>3</td><td>双文件结构</td><td>main.py + tasks.py 分离，无法单文件运行验证</td></tr>
+  <tr><td>4</td><td><strong>标题承诺"负载均衡"，代码零实现</strong></td><td>没有多实例、没有分发逻辑，只有一个 celery task</td></tr>
+  <tr><td>5</td><td>本地 GPU 推理</td><td>tasks.py 里 transformers 加载 Qwen3-7B</td></tr>
+  <tr><td>6</td><td>无验证</td><td>无认证、无错误处理、无 self-test</td></tr>
+</table>
+
+<!-- ========== Section 2 ========== -->
+<h2>二、改写后的整体架构</h2>
+
+<div class="flow">
+  客户端 ──POST /generate──▶ Flask 接收层
+                                │
+                        RoundRobinRouter（负载均衡）
+                                │ 轮询交替分发
+                ┌───────────────┴───────────────┐
+                ▼                               ▼
+          instance-0                      instance-1
+          worker 线程                     worker 线程
+                │                               │
+                └──────▶ dashscope API ◀────────┘
+                             │
+                    状态机更新 + cache.json 落盘
+                             │
+  客户端 ◀──GET /result──  状态查询（PENDING/COMPLETED）
+</div>
+
+<h3>两个核心组件</h3>
+<table>
+  <tr><th>组件</th><th>替代教材的什么</th><th>职责</th></tr>
+  <tr><td><code>RoundRobinRouter</code></td><td>（教材没有）</td><td>把任务交替分给 instance-0/1，维护分发统计</td></tr>
+  <tr><td><code>TaskManager</code>（ThreadPoolExecutor）</td><td>Celery + Redis</td><td>任务状态机管理 + cache.json 持久化 + 线程池执行</td></tr>
+</table>
+
+<!-- ========== Section 3 ========== -->
+<h2>三、核心概念 1：任务状态机</h2>
+
+<p style="text-align:center">
+  <span class="state s-p">PENDING 已入队</span> →
+  <span class="state s-r">PROCESSING 执行中</span> →
+  <span class="state s-c">COMPLETED 完成</span>
+  &nbsp;或&nbsp;
+  <span class="state s-f">FAILED 失败</span>
+</p>
+
+<pre><code><span class="cm"># 提交：状态 PENDING，立即返回 task_id（202 Accepted）</span>
+task_id = uuid.uuid4().hex[:8]
+instance = self._router.next()                <span class="c"># 负载均衡决定归属</span>
+self._tasks[task_id] = {<span class="s">"status"</span>: <span class="s">"PENDING"</span>, <span class="s">"instance"</span>: instance, ...}
+self._pool.submit(self._execute, task_id, prompt, instance)
+<span class="k">return</span> task_id
+
+<span class="cm"># 工作线程体：PROCESSING → COMPLETED / FAILED（异常也要落盘）</span>
+<span class="k">def</span> _execute(self, task_id, prompt, instance):
+    self._tasks[task_id][<span class="s">"status"</span>] = <span class="s">"PROCESSING"</span>
+    <span class="k">try</span>:
+        content = dashscope.Generation.call(...)...
+        self._tasks[task_id].update(status=<span class="s">"COMPLETED"</span>, result=content)
+    <span class="k">except</span> Exception <span class="k">as</span> e:
+        self._tasks[task_id].update(status=<span class="s">"FAILED"</span>, result=str(e))</code></pre>
+
+<div class="ok">
+  <strong>对照 A2A 协议：</strong>这个状态机和 char10 A2A 的 Task 七态（submitted → working → completed/failed）思想完全一致——任务有生命周期，客户端靠状态轮询驱动交互。学会本篇就理解了 A2A Task 状态机的一半。
+</div>
+
+<!-- ========== Section 4 ========== -->
+<h2>四、核心概念 2：Round-Robin 负载均衡</h2>
+
+<pre><code><span class="k">class</span> <span class="k">RoundRobinRouter</span>:
+    <span class="s">"""轮询分发器：把任务交替分配给多个后端实例"""</span>
+    <span class="k">def</span> next(self) -> str:
+        <span class="k">with</span> self._lock:                      <span class="c"># 多线程安全</span>
+            name = self.instances[self._index % len(self.instances)]
+            self._index += 1
+            self._counters[name] += 1
+            <span class="k">return</span> name</code></pre>
+
+<h3>实测分发序列（self-test 日志）</h3>
+<pre><code>18:41:42 [e91803a0] 任务提交 → 分发给 <span class="s">instance-0</span>（轮询）
+18:41:46 [68cec09c] 任务提交 → 分发给 <span class="s">instance-1</span>（轮询）
+18:41:48 [5f57311b] 任务提交 → 分发给 <span class="s">instance-0</span>（轮询）
+18:41:50 [18795809] 任务提交 → 分发给 <span class="s">instance-1</span>（轮询）
+18:41:52 [517fa99d] 任务提交 → 分发给 <span class="s">instance-0</span>（轮询）
+
+分发统计: {'instance-0': 3, 'instance-1': 2}   <span class="c">← 完美交替</span></code></pre>
+
+<h3>真实生产的负载均衡在哪一层？</h3>
+<table>
+  <tr><th>层次</th><th>实现</th><th>说明</th></tr>
+  <tr><td>进程内（本例）</td><td>RoundRobinRouter 类</td><td>教学演示：让新人直接观测分发过程</td></tr>
+  <tr><td>机器间（生产）</td><td>Nginx upstream / 云 SLB</td><td>多台服务器跑同一服务，SLB 按 round-robin/加权/IP 哈希分发</td></tr>
+  <tr><td>任务队列（生产）</td><td>Celery + Redis / 云 MQ</td><td>多 worker 从同一队列抢任务，天然负载均衡</td></tr>
+</table>
+
+<!-- ========== Section 5 ========== -->
+<h2>五、核心概念 3：cache.json 持久化（替代 Redis）</h2>
+
+<p>Redis 在教材里承担<strong>任务状态存储</strong>（backend）。按项目约定改用运行目录 <code>cache.json</code>：</p>
+
+<pre><code>{
+  <span class="s">"e91803a0"</span>: {
+    <span class="s">"status"</span>: <span class="s">"COMPLETED"</span>,
+    <span class="s">"instance"</span>: <span class="s">"instance-0"</span>,
+    <span class="s">"prompt"</span>: <span class="s">"用一句话介绍负载均衡"</span>,
+    <span class="s">"result"</span>: <span class="s">"负载均衡是一种将网络流量或计算任务智能分发到多个服务器..."</span>,
+    <span class="s">"created_at"</span>: <span class="s">"18:41:42"</span>
+  },
+  ...
+}</code></pre>
+
+<h3>持久化的两个时机</h3>
+<ul>
+  <li><strong>提交时落盘</strong>——任务刚创建就写入，服务重启后 task_id 仍可查询（不丢任务）</li>
+  <li><strong>终态时落盘</strong>——COMPLETED/FAILED 时更新写入，结果持久保留</li>
+</ul>
+
+<div class="warn">
+  <strong>内存与文件的一致性：</strong>所有读写都在 <code>_lock</code> 保护内进行——先改内存字典，再整体写 JSON 文件。单进程内这是正确做法；<strong>多进程部署时文件锁会失效</strong>，那才是必须上 Redis 的时机（生产演进路径已在代码注释标明）。
+</div>
+
+<!-- ========== Section 6 ========== -->
+<h2>六、实测验证（4 项 self-test 全部通过）</h2>
+
+<div class="ok">
+  <strong>Test 1 - 提交任务：</strong><code>[通过] task_id=e91803a0（202 立即返回，未阻塞）</code><br>
+  <strong>Test 2 - 轮询至完成：</strong><code>[通过] result=负载均衡是一种将网络流量或计算任务智能分发到多个服务器或资源节点的技术...</code><br>
+  <strong>Test 3 - 轮询分发：</strong><code>分发统计 {'instance-0': 3, 'instance-1': 2} → [通过] 两个实例都被使用</code><br>
+  <strong>Test 4 - 持久化：</strong><code>[通过] cache.json 已持久化 5 个任务（含历史）</code>
+</div>
+
+<h3>curl 手动调用</h3>
+<pre><code><span class="cm"># 第 1 步：提交任务（立即返回）</span>
+curl -X POST http://localhost:8900/generate \
+     -H "Content-Type: application/json" \
+     -d '{"prompt":"你好，介绍一下你自己。"}'
+<span class="c"># → {"task_id":"e91803a0","status":"PENDING"}</span>
+
+<span class="cm"># 第 2 步：拿 task_id 轮询结果</span>
+curl http://localhost:8900/result/e91803a0
+<span class="c"># → {"status":"processing","instance":"instance-0"}          （未完成）</span>
+<span class="c"># → {"status":"completed","instance":"instance-0","result":"..."}  （完成）</span></code></pre>
+
+<!-- ========== Section 7 ========== -->
+<h2>七、改写前后对照总表</h2>
+
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td><strong>任务队列</strong></td><td>Celery（Windows 支持差）</td><td>ThreadPoolExecutor（标准库，零依赖）</td></tr>
+  <tr><td><strong>状态存储</strong></td><td>redis://localhost:6379</td><td>cache.json（运行目录，重启可恢复）</td></tr>
+  <tr><td><strong>负载均衡</strong></td><td>标题有，实现无</td><td>RoundRobinRouter + 分发统计可观测</td></tr>
+  <tr><td><strong>文件结构</strong></td><td>main.py + tasks.py 双文件</td><td>单文件可直接运行</td></tr>
+  <tr><td><strong>LLM 后端</strong></td><td>本地 Qwen3-7B GPU 推理</td><td>dashscope API（前 10 章统一）</td></tr>
+  <tr><td><strong>框架</strong></td><td>FastAPI + uvicorn</td><td>Flask（与 char11-12 统一；异步模式与框架无关）</td></tr>
+  <tr><td><strong>状态机</strong></td><td>processing/completed 二态</td><td>PENDING/PROCESSING/COMPLETED/FAILED 四态</td></tr>
+  <tr><td><strong>验证</strong></td><td>无</td><td>4 项 self-test（含分发均匀性断言）</td></tr>
+</table>
+
+<!-- ========== Section 8 ========== -->
+<h2>八、与前后章节的衔接</h2>
+
+<table>
+  <tr><th>章节</th><th>运维能力</th><th>本篇的演进</th></tr>
+  <tr><td>char12-01</td><td>日志 + 并发观测</td><td>并发计数器演进为任务状态机</td></tr>
+  <tr><td>char12-02</td><td>HTTPS + 认证 + 限流</td><td>安全层保留思路，本篇聚焦可用性</td></tr>
+  <tr><td>char10 (A2A)</td><td>Task 七态生命周期</td><td>本篇状态机就是 A2A Task 的单机简化版</td></tr>
+</table>
+
+<div class="flow">
+  同步阻塞（char11）→ 异步任务 + 负载均衡（本篇）→ 后续小节：监控告警 / 容器编排 / 弹性扩缩容
+</div>
+
+<!-- ========== Section 9 ========== -->
+<h2>九、动手练习</h2>
+
+<ol>
+  <li><strong>任务超时清理</strong>：给任务加 <code>expires_at</code> 字段，实现一个后台线程定期清理 1 小时前的 COMPLETED 任务，防止 cache.json 无限增长。</li>
+  <li><strong>加权轮询</strong>：把 RoundRobinRouter 改成加权轮询（weight=[3,1]），instance-0 处理 3/4 流量——模拟"强弱不一的机器"。</li>
+  <li><strong>任务优先级</strong>：提交时带 <code>priority</code> 字段，执行线程总是优先取高优先级任务（提示：用 <code>queue.PriorityQueue</code> 替代 ThreadPoolExecutor 的隐式队列）。</li>
+  <li><strong>SSE 推送替代轮询</strong>：参考 char10-05 的 TaskStatusUpdateEvent，用 Flask 的 <code>Response(stream_with_context(...), mimetype='text/event-stream')</code> 把 /result 改成服务器主动推送状态变化。</li>
+  <li><strong>故障转移</strong>：模拟 instance-1 挂掉（如任务执行时抛特定异常），路由器自动把后续任务全部导向 instance-0——体验"负载均衡的容错职责"。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li>concurrent.futures 官方文档：<a href="https://docs.python.org/zh-cn/3/library/concurrent.futures.html">docs.python.org</a></li>
+  <li>Celery 生产部署（何时才真正需要它）：<a href="https://docs.celeryq.dev/">docs.celeryq.dev</a></li>
+  <li>Nginx 负载均衡 upstream 指南：<a href="https://docs.nginx.com/nginx/admin-guide/load-balancer/http-load-balancer/">docs.nginx.com</a></li>
+</ul>
+
+</body>
+</html>

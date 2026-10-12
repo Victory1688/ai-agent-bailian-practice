@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 12-6 讲解：高并发的限流与降级策略</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}pre .cm{color:#67e8f9}pre .k{color:#f472b6}pre .s{color:#86efac}pre .r{color:#fbbf24}pre .e{color:#fca5a5}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.flow{background:#fff;border:1px solid #22d3ee;border-radius:8px;padding:16px;margin:16px 0;font-family:Consolas,monospace;font-size:13px;color:#0e7490;line-height:2}
+.cb{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:bold}
+.cb-c{background:#dcfce7;color:#166534}.cb-o{background:#fee2e2;color:#991b1b}.cb-h{background:#fef3c7;color:#92400e}
+</style>
+</head>
+<body>
+
+<h1>例 12-6 讲解：高并发的限流与降级策略</h1>
+
+<div class="highlight">
+  <strong>本节核心目标：给智能体服务装上"三道防线"。</strong>当 1000 个请求同时涌进来而 LLM 每秒只能处理 2 个时，系统必须有序地"拒绝一部分、排队一部分、兜底一部分"。本篇实现：<strong>限流（令牌桶快速失败）→ 削峰（优先级队列 + Worker 池缓冲）→ 降级（后端故障链式切换）</strong>。教材三大机制全部零验证（第七节只有一行启动注释），改写后 6 项 self-test 把每一种机制都真实触发了一遍。
+</div>
+
+<!-- ========== Section 1 ========== -->
+<h2>一、教材原版问题</h2>
+
+<table>
+  <tr><th>#</th><th>问题</th><th>说明</th></tr>
+  <tr><td>1</td><td><strong>令牌桶初始为空桶</strong></td><td><code>int(redis_client.get(BUCKET_KEY) or 0)</code> —— 启动后桶里 0 个令牌，第一批请求全部被误拒（正确做法是初始满桶）</td></tr>
+  <tr><td>2</td><td><strong>get/set/decr 三步非原子</strong></td><td>并发请求同时读到同一个令牌数再各自扣减，桶会被扣成负数；Redis 正确姿势是 Lua 脚本原子执行</td></tr>
+  <tr><td>3</td><td><code>Qwen2Chat</code> / <code>DeepSeekChat</code> / <code>ConversationChain</code></td><td>虚构类 + 废弃 API（同例 12-4 / 12-5）</td></tr>
+  <tr><td>4</td><td><code>@app.on_event("startup")</code></td><td>FastAPI 已废弃的启动钩子（新版改用 lifespan）</td></tr>
+  <tr><td>5</td><td>单消费者 worker</td><td>LLM 处理约 2s/条，单 worker 吞吐 0.5 req/s，队列必然无限积压</td></tr>
+  <tr><td>6</td><td><strong>四大机制零验证</strong></td><td>限流 / 削峰 / 优先级 / 降级 从未被触发过，灵不灵全靠信仰</td></tr>
+  <tr><td>7</td><td>请求挂死风险</td><td>worker 异常退出后，等待中的 future 永远 pending，HTTP 请求永不返回</td></tr>
+</table>
+
+<!-- ========== Section 2 ========== -->
+<h2>二、三大机制总览：一个请求的生命周期</h2>
+
+<div class="flow">
+  POST /chat（{"message": "...", "priority": 0 或 1}）
+      │
+      ▼
+  ① 令牌桶 acquire() ──桶空──▶ <span style="color:#991b1b">429 Too Many Requests（快速失败，保护下游）</span>
+      │ 拿到令牌
+      ▼
+  ② 优先级队列 put_nowait ──队列满──▶ <span style="color:#92400e">503 背压（系统容量已满）</span>
+      │ 入队 (priority, seq)
+      ▼
+  ③ Worker 池（2 线程）按优先级取出任务
+      │
+      ▼
+  ④ 降级链 generate()：qwen-plus ──失败──▶ qwen-turbo ──失败──▶ 兜底文案
+      │
+      ▼
+  ⑤ Event 唤醒请求线程回填结果 ──超 60s──▶ <span style="color:#991b1b">504 处理超时</span>
+</div>
+
+<h3>三道防线各管一种问题</h3>
+<table>
+  <tr><th>防线</th><th>防御的问题</th><th>失败响应</th><th>关键参数</th></tr>
+  <tr><td>限流（令牌桶）</td><td>流量洪峰超过系统容量</td><td>429</td><td>容量 5，速率 2 个/s</td></tr>
+  <tr><td>削峰（优先级队列）</td><td>瞬时突发压垮 LLM 调用</td><td>503（队满）</td><td>队列上限 20，worker × 2</td></tr>
+  <tr><td>降级（后端链）</td><td>下游 LLM 故障不可用</td><td>兜底文案（200）</td><td>qwen-plus → qwen-turbo → 兜底</td></tr>
+</table>
+
+<div class="ok">
+  <strong>限流 vs 削峰的区别（面试高频）：</strong>限流是<strong>拒之门外</strong>——超出容量的请求直接拒绝，不消耗任何资源；削峰是<strong>排队缓冲</strong>——请求都收下，但用队列把"瞬时洪峰"摊平成"匀速处理"。两者是互补关系：先限流挡掉超额部分，剩下 valid 流量进队列削峰。
+</div>
+
+<!-- ========== Section 3 ========== -->
+<h2>三、核心组件 1：令牌桶 TokenBucket（修复教材两处 bug）</h2>
+
+<pre><code><span class="k">class</span> <span class="k">TokenBucket</span>:
+    <span class="s">"""令牌桶限流：容量 capacity，每秒补充 refill_rate 个，桶空则拒绝"""</span>
+
+    <span class="k">def</span> __init__(self, capacity, refill_rate, cache_file):
+        state = self._load_state()
+        <span class="cm"># 优先从 cache.json 恢复（重启不回满）；首次运行才初始化满桶</span>
+        self._tokens = state[<span class="s">"tokens"</span>] <span class="k">if</span> state <span class="k">else</span> <span class="r">float(capacity)</span>  <span class="c"># ← bug 修复：初始满桶</span>
+        self._last_refill = state[<span class="s">"last_refill"</span>] <span class="k">if</span> state <span class="k">else</span> time.time()
+        self._lock = threading.Lock()
+
+    <span class="k">def</span> acquire(self) -&gt; bool:
+        <span class="k">with</span> self._lock:                     <span class="c"># ← bug 修复：读-扣-写全程原子</span>
+            self._refill_locked()            <span class="c">#    教材 get/decr 分离有并发竞态</span>
+            <span class="k">if</span> self._tokens &gt;= <span class="r">1</span>:
+                self._tokens -= <span class="r">1</span>
+                self._save_state()           <span class="c"># 落盘 cache.json（替代 Redis 持久化）</span>
+                <span class="k">return</span> <span class="k">True</span>
+            <span class="k">return</span> <span class="k">False</span>                     <span class="c"># 桶空 → 调用方返回 429</span></code></pre>
+
+<h3>教材两处 bug 的危害推演</h3>
+<table>
+  <tr><th>bug</th><th>教材代码</th><th>实际后果</th><th>修复</th></tr>
+  <tr><td>初始空桶</td><td><code>int(get(BUCKET_KEY) or 0)</code></td><td>服务启动后到令牌攒够之前，<strong>所有请求都被误判限流</strong>，用户体验为"新服务上线即罢工"</td><td>首次运行初始化 <code>float(capacity)</code> 满桶</td></tr>
+  <tr><td>非原子扣减</td><td><code>tokens = get()</code> 判断后 <code>decr()</code></td><td>两个并发请求同时读到 1 个令牌、都判断通过、都扣减 → 桶变 -1，<strong>限流形同虚设</strong></td><td><code>threading.Lock</code> 包住判断+扣减（单进程）；Redis 场景应写 Lua 脚本</td></tr>
+  <tr><td>重启回满</td><td>（教材未考虑持久化）</td><td>服务重启后桶凭空回满，<strong>攻击者可诱发重启绕过限流</strong></td><td>每次扣减落盘 cache.json，重启恢复余量</td></tr>
+</table>
+
+<div class="ok">
+  <strong>惰性补充（lazy refill）的设计：</strong>教材用后台定时任务周期性补充令牌，改写版改为<strong>每次 acquire 时按流逝时间一次性补足</strong>（<code>tokens = min(capacity, tokens + elapsed × rate)</code>）。好处：无需定时线程、无锁竞争点、补充精度与请求精度对齐——这是工业界令牌桶的主流实现（Guava RateLimiter 同款思路）。
+</div>
+
+<!-- ========== Section 4 ========== -->
+<h2>四、核心组件 2：优先级队列 + Worker 池（削峰填谷）</h2>
+
+<pre><code><span class="k">class</span> <span class="k">PriorityEntry</span>:
+    <span class="s">"""队列条目：(priority, seq) 排序 —— 高优先级先处理，同级先进先出"""</span>
+
+    _seq = itertools.count()                 <span class="c"># 全局单调递增序号</span>
+
+    <span class="k">def</span> __init__(self, priority, payload):
+        self.priority = priority             <span class="c"># 0 = 高优先级 / 1 = 默认</span>
+        self.seq = next(PriorityEntry._seq)
+        self.event = threading.Event()       <span class="c"># 请求线程等待 worker 的桥</span>
+
+    <span class="k">def</span> __lt__(self, other):
+        <span class="k">return</span> (self.priority, self.seq) &lt; (other.priority, other.seq)</code></pre>
+
+<h3>为什么必须加 seq？</h3>
+<p>教材用 <code>(priority, time.time())</code> 元组排序——同一秒内到达的两个同级请求 <code>time</code> 相同，堆排序结果<strong>不稳定</strong>（谁先出队看运气）。<code>seq</code> 单调递增保证：高优先级必先出队，同级严格按入队顺序（FIFO），且永远不会抛元组比较异常。这是 <code>heapq</code> 官方文档推荐的标准写法。</p>
+
+<h3>Worker 池：修复"请求挂死"</h3>
+<pre><code><span class="k">def</span> <span class="k">queue_worker</span>():
+    <span class="k">while</span> <span class="k">True</span>:
+        entry = task_queue.get()             <span class="c"># 阻塞取最高优先级任务</span>
+        <span class="k">try</span>:
+            result = service.generate(entry.payload[<span class="s">"message"</span>])
+            entry.result = {...}
+            queue_stats[<span class="s">"processed"</span>] += <span class="r">1</span>
+        <span class="k">except</span> Exception <span class="k">as</span> e:
+            entry.result = {...FALLBACK_MSG}  <span class="c"># 异常也回填兜底文案</span>
+            queue_stats[<span class="s">"failed"</span>] += <span class="r">1</span>
+        <span class="k">finally</span>:
+            <span class="cm">entry.event.set()   ← 无论成败都唤醒等待的请求线程（修复挂死）</span></code></pre>
+
+<div class="warn">
+  <strong>教材第 7 个问题就在这里：</strong>worker 处理时一旦抛异常，教材代码不会 set future——对应 HTTP 请求会一直挂到客户端超时。<code>finally: entry.event.set()</code> 把"回填"变成无条件动作：成功回结果、失败回兜底文案，<strong>请求线程永远不会被遗忘</strong>。
+</div>
+
+<!-- ========== Section 5 ========== -->
+<h2>五、核心组件 3：降级链与 /chat 端点</h2>
+
+<pre><code><span class="k">def</span> <span class="k">generate</span>(self, message) -&gt; str:
+    <span class="s">"""带降级的 LLM 调用：主后端失败 → 备用 → 兜底文案"""</span>
+    <span class="k">for</span> backend <span class="k">in</span> self.backends:
+        <span class="k">try</span>:
+            answer = self._call(backend, message)
+            logger.info(f<span class="s">"[LLM] 由 {backend['name']} 处理成功"</span>)
+            <span class="k">return</span> answer
+        <span class="k">except</span> Exception <span class="k">as</span> e:
+            logger.warning(f<span class="s">"[降级] {backend['name']} 失败 → 尝试下一后端"</span>)
+    logger.error(<span class="s">"[降级] 全部后端不可用"</span>)
+    <span class="k">return</span> FALLBACK_MSG</code></pre>
+
+<p>降级链直接复用例 12-5 的"自动切换 + 优雅降级"思想，从 Agent 内部机制移植到服务层。</p>
+
+<h3>/chat 端点的四态响应（每个状态码都有明确语义）</h3>
+<table>
+  <tr><th>状态码</th><th>触发条件</th><th>语义</th><th>客户端该怎么做</th></tr>
+  <tr><td><span class="cb cb-c">200</span></td><td>全链路成功</td><td>正常结果</td><td>—</td></tr>
+  <tr><td><span class="cb cb-o">429</span></td><td>令牌桶为空</td><td>速率超限（客户端的错）</td><td>退避后重试（参考 Retry-After）</td></tr>
+  <tr><td><span class="cb cb-h">503</span></td><td>队列已满（背压）</td><td>系统容量不足（服务端的错）</td><td>换低峰期或走备用通道</td></tr>
+  <tr><td><span class="cb cb-o">504</span></td><td>等待结果超 60s</td><td>处理超时</td><td>重试需带幂等键</td></tr>
+</table>
+
+<div class="ok">
+  <strong>429 与 503 的区别：</strong>429 说"你请求太快了"，责任在客户端，应该指数退避；503 说"我自己满了"，责任在服务端，客户端重试也没用应该换通道。混用两者会让监控告警无法归因——生产 API 网关都会严格区分。
+</div>
+
+<!-- ========== Section 6 ========== -->
+<h2>六、实测验证（6 项 self-test 全部通过）</h2>
+
+<div class="ok">
+  <strong>Test 1 - 正常请求：</strong><code>qwen-plus 回答 "2"，队列处理链路通</code><br>
+  <strong>Test 2 - 并发限流：</strong><code>10 线程突发 → [200×5, 429×5] —— 桶容量 5 被精确耗尽</code><br>
+  <strong>Test 3 - 令牌恢复：</strong><code>等待 2.5s（×2 个/s）后请求成功 —— 速率补充生效</code><br>
+  <strong>Test 4 - 优先级插队：</strong><code>处理顺序 ['低-1', '高-0', '低-2'] —— 高-0 晚到却先于低-2 完成</code><br>
+  <strong>Test 5 - 故障降级：</strong><code>主后端 404 → qwen-turbo 接管回答 "1 + 2 等于 3"</code><br>
+  <strong>Test 6 - 运行指标：</strong><code>bucket_tokens=5 queue_size=0 processed=11 —— /health 可观测</code>
+</div>
+
+<h3>Test 4 优先级插队的时序设计（本篇最难验证的一项）</h3>
+<pre><code><span class="c"># 三线程错峰发出，构造"worker 全忙 + 高优先级排队"场景：</span>
+t0        低-1 到达 → worker-0 取走（假 LLM 延迟 0.5s）
+t0+0.05   低-2 到达 → worker-1 取走（假 LLM 延迟 0.9s，占住 worker）
+t0+0.20   高-0 到达 → 两 worker 全忙 → 高-0 在队列中等待
+t0+0.50   worker-0 空闲 → 队列头是高-0（priority=0 优先于低-2 的 1）→ 插队取走
+t0+0.60   高-0 完成（延迟仅 0.1s）；t0+0.95 低-2 才完成
+
+实际处理顺序（日志）: ['低-1', '高-0', '低-2']
+                       ↑ 高-0 晚到 0.15s 却排在低-2 前面 —— 插队生效</code></pre>
+
+<div class="highlight">
+  <strong>为什么 Test 4 必须精心设计时序？</strong>三个坑：① 顺序发请求时队列里永远只有 0-1 个任务在等，高优先级根本没有插队对象；② 真实 LLM 每次调用 3s+，令牌边用边补充会稀释限流效果——所以注入本地假 LLM（差异化延迟 0.5s / 0.9s / 0.1s）保证时序确定且零 API 成本；③ 断言只能读"本次运行"的日志尾部，跨次运行累积的历史记录会污染 <code>index()</code> 首次命中位置（这是调试中真实踩到的第三个坑）。
+</div>
+
+<h3>Test 5 降级的真实日志</h3>
+<pre><code>20:19:56 [WARN]  [降级] broken 失败: Error code: 404 -
+                 The model `not-exist-model` does not exist... → 尝试下一后端
+20:19:57 [INFO]  [LLM] 由 qwen-turbo 处理成功        <span class="cm">← 备用后端接管</span>
+  [通过] 主后端失败 → qwen-turbo 接管: 1 + 2 等于 **3**。</code></pre>
+
+<!-- ========== Section 7 ========== -->
+<h2>七、改写前后对照总表</h2>
+
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td><strong>限流器</strong></td><td>Redis 令牌桶（初始空桶 + get/decr 非原子）</td><td>进程内 TokenBucket（Lock 原子 + 初始满桶 + 惰性补充）</td></tr>
+  <tr><td><strong>持久化</strong></td><td>依赖 Redis（本环境不可用）</td><td>cache.json 落盘（重启不回满，防绕过）</td></tr>
+  <tr><td><strong>队列排序</strong></td><td><code>(priority, time.time())</code> 同秒不稳定</td><td><code>(priority, seq)</code> seq 单调递增，同级严格 FIFO</td></tr>
+  <tr><td><strong>Worker</strong></td><td>单消费者（0.5 req/s 瓶颈）</td><td>2 线程 worker 池</td></tr>
+  <tr><td><strong>异常处理</strong></td><td>worker 挂 → 请求永久 pending</td><td><code>finally: event.set()</code> 无条件回填，异常也回兜底文案</td></tr>
+  <tr><td><strong>Web 框架</strong></td><td>FastAPI + <code>@app.on_event</code>（已废弃）</td><td>Flask 统一（本系列约定）</td></tr>
+  <tr><td><strong>模型调用</strong></td><td>虚构 Qwen2Chat/DeepSeekChat + ConversationChain</td><td>qwen-plus → qwen-turbo → 兜底 三级降级链</td></tr>
+  <tr><td><strong>验证</strong></td><td>四大机制零验证</td><td>6 项 self-test：限流 / 恢复 / 插队 / 降级 / 指标全实测</td></tr>
+</table>
+
+<!-- ========== Section 8 ========== -->
+<h2>八、与前后章节的衔接</h2>
+
+<table>
+  <tr><th>章节</th><th>内容</th><th>衔接</th></tr>
+  <tr><td>char12-02</td><td>flask-limiter 限流</td><td>12-02 用的是"框架级"固定窗口限流；本篇自研令牌桶，支持突发容忍与持久化——两种方案适用场景不同</td></tr>
+  <tr><td>char12-03</td><td>异步任务调度</td><td>队列 + worker 思想同源，本篇增加<strong>优先级</strong>维度和<strong>同步等待结果</strong>语义</td></tr>
+  <tr><td>char12-05</td><td>容错五件套</td><td>本篇降级链 = 12-05 的"自动切换 + 优雅降级"移植到服务层</td></tr>
+  <tr><td>char12-01</td><td>日志与并发</td><td>/health 指标端点 + request_id 式可观测性沿用 12-01 模式</td></tr>
+</table>
+
+<div class="flow">
+  限流演进方向：单机令牌桶（本篇）→ 分布式限流（Redis + Lua 原子脚本）→ 网关统一限流（Nginx limit_req / 云 API 网关）→ 自适应限流（根据负载动态调速率，如 BBR）
+</div>
+
+<!-- ========== Section 9 ========== -->
+<h2>九、动手练习</h2>
+
+<ol>
+  <li><strong>滑动窗口限流</strong>：用时间戳双端队列实现滑动窗口计数器，与令牌桶对比——同样容量 5，突发 10 个请求时两者各放行几个？（体会令牌桶"突发容忍"、滑窗"严格均摊"的差异）</li>
+  <li><strong>分布式限流</strong>：把 TokenBucket 状态搬回 Redis，用一段 Lua 脚本原子执行"补充 + 判断 + 扣减"三步，亲身体会教材非原子 bug 为什么必须用 Lua 解决。</li>
+  <li><strong>背压实测</strong>：把 <code>QUEUE_MAXSIZE</code> 调成 2，用 20 线程并发发请求，观察 503 出现的时机——并思考为什么队满比桶空更晚发生。</li>
+  <li><strong>同级 FIFO 验证</strong>：并发发 5 个 <code>priority=1</code> 请求，断言处理顺序与发送顺序一致——这依赖 seq 而非线程调度顺序（把 seq 去掉再试，观察顺序混乱）。</li>
+  <li><strong>降级预算</strong>：给 AgentService 加"每分钟最多降级 N 次"保护——qwen-plus 长时间故障时防止全部流量压垮 qwen-turbo（熔断思想与 12-05 呼应）。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li>Guava RateLimiter（令牌桶工业级实现）：<a href="https://github.com/google/guava">github.com/google/guava</a></li>
+  <li>Redis 官方分布式限流 Pattern（Lua 保证原子性）：<a href="https://redis.io/docs/latest/develop/use-patterns/rate-limiter/">redis.io</a></li>
+  <li>Microsoft 云设计模式：Throttling 与 Queue-Based Load Leveling：<a href="https://learn.microsoft.com/azure/architecture/patterns/throttling">learn.microsoft.com</a></li>
+</ul>
+
+</body>
+</html>

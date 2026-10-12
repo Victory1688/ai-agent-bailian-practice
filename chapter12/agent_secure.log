@@ -1,0 +1,50 @@
+18:36:17 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on https://127.0.0.1:8443
+ * Running on https://192.168.3.22:8443
+18:36:17 [INFO] [33mPress CTRL+C to quit[0m
+18:36:19 [INFO] 127.0.0.1 - - [12/Oct/2026 18:36:19] "GET /health HTTP/1.1" 200 -
+18:36:21 [INFO] 127.0.0.1 - - [12/Oct/2026 18:36:21] "GET /health HTTP/1.1" 200 -
+18:36:23 [WARNING] 认证失败 ip=127.0.0.1
+18:36:23 [INFO] 127.0.0.1 - - [12/Oct/2026 18:36:23] "[31m[1mPOST /v1/chat/completions HTTP/1.1[0m" 401 -
+18:36:25 [INFO] [4f8b4c1b] 认证+限流通过，开始处理
+18:36:26 [INFO] [4f8b4c1b] 完成 耗时=946ms
+18:36:26 [INFO] 127.0.0.1 - - [12/Oct/2026 18:36:26] "POST /v1/chat/completions HTTP/1.1" 200 -
+18:36:28 [INFO] [d7d859ab] 认证+限流通过，开始处理
+18:36:29 [INFO] [d7d859ab] 完成 耗时=801ms
+18:36:29 [INFO] 127.0.0.1 - - [12/Oct/2026 18:36:29] "POST /v1/chat/completions HTTP/1.1" 200 -
+18:36:31 [INFO] [d1a2f9be] 认证+限流通过，开始处理
+18:36:32 [INFO] [d1a2f9be] 完成 耗时=639ms
+18:36:32 [INFO] 127.0.0.1 - - [12/Oct/2026 18:36:32] "POST /v1/chat/completions HTTP/1.1" 200 -
+18:36:34 [INFO] [53bfa0ad] 认证+限流通过，开始处理
+18:36:35 [INFO] [53bfa0ad] 完成 耗时=653ms
+18:36:35 [INFO] 127.0.0.1 - - [12/Oct/2026 18:36:35] "POST /v1/chat/completions HTTP/1.1" 200 -
+18:36:37 [INFO] ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: chat_completions
+18:36:37 [INFO] 127.0.0.1 - - [12/Oct/2026 18:36:37] "[31m[1mPOST /v1/chat/completions HTTP/1.1[0m" 429 -
+18:36:39 [INFO] ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: chat_completions
+18:36:39 [INFO] 127.0.0.1 - - [12/Oct/2026 18:36:39] "[31m[1mPOST /v1/chat/completions HTTP/1.1[0m" 429 -
+18:39:06 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on https://127.0.0.1:8443
+ * Running on https://192.168.3.22:8443
+18:39:06 [INFO] [33mPress CTRL+C to quit[0m
+18:39:08 [INFO] 127.0.0.1 - - [12/Oct/2026 18:39:08] "GET /health HTTP/1.1" 200 -
+18:39:10 [INFO] 127.0.0.1 - - [12/Oct/2026 18:39:10] "GET /health HTTP/1.1" 200 -
+18:39:12 [WARNING] 认证失败 ip=127.0.0.1
+18:39:12 [INFO] 127.0.0.1 - - [12/Oct/2026 18:39:12] "[31m[1mPOST /v1/chat/completions HTTP/1.1[0m" 401 -
+18:39:15 [INFO] [07a18b28] 认证+限流通过，开始处理
+18:39:15 [INFO] [07a18b28] 完成 耗时=743ms
+18:39:15 [INFO] 127.0.0.1 - - [12/Oct/2026 18:39:15] "POST /v1/chat/completions HTTP/1.1" 200 -
+18:39:17 [INFO] [4e8b6436] 认证+限流通过，开始处理
+18:39:18 [INFO] [4e8b6436] 完成 耗时=766ms
+18:39:18 [INFO] 127.0.0.1 - - [12/Oct/2026 18:39:18] "POST /v1/chat/completions HTTP/1.1" 200 -
+18:39:20 [INFO] [9544f053] 认证+限流通过，开始处理
+18:39:21 [INFO] [9544f053] 完成 耗时=799ms
+18:39:21 [INFO] 127.0.0.1 - - [12/Oct/2026 18:39:21] "POST /v1/chat/completions HTTP/1.1" 200 -
+18:39:23 [INFO] [f496d483] 认证+限流通过，开始处理
+18:39:24 [INFO] [f496d483] 完成 耗时=681ms
+18:39:24 [INFO] 127.0.0.1 - - [12/Oct/2026 18:39:24] "POST /v1/chat/completions HTTP/1.1" 200 -
+18:39:26 [INFO] ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: chat_completions
+18:39:26 [INFO] 127.0.0.1 - - [12/Oct/2026 18:39:26] "[31m[1mPOST /v1/chat/completions HTTP/1.1[0m" 429 -
+18:39:28 [INFO] ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: chat_completions
+18:39:28 [INFO] 127.0.0.1 - - [12/Oct/2026 18:39:28] "[31m[1mPOST /v1/chat/completions HTTP/1.1[0m" 429 -

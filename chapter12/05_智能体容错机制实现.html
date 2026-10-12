@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 12-5 讲解：智能体容错机制实现</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}pre .cm{color:#67e8f9}pre .k{color:#f472b6}pre .s{color:#86efac}pre .r{color:#fbbf24}pre .e{color:#fca5a5}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.flow{background:#fff;border:1px solid #22d3ee;border-radius:8px;padding:16px;margin:16px 0;font-family:Consolas,monospace;font-size:13px;color:#0e7490;line-height:2}
+.cb{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:bold}
+.cb-c{background:#dcfce7;color:#166534}.cb-o{background:#fee2e2;color:#991b1b}.cb-h{background:#fef3c7;color:#92400e}
+</style>
+</head>
+<body>
+
+<h1>例 12-5 讲解：智能体容错机制实现</h1>
+
+<div class="highlight">
+  <strong>本节核心目标：构建"打不死"的智能体。</strong>LLM API 会限流、超时、抖动宕机——生产环境故障是常态而非例外。本篇实现容错五件套：<strong>超时控制 → 重试退避 → 自动切换 → 熔断 → 优雅降级</strong>，并用故障注入器让每一种机制都被实测触发和验证（教材只演示了 happy path，容错代码写了却从未验证过）。
+</div>
+
+<!-- ========== Section 1 ========== -->
+<h2>一、教材原版问题</h2>
+
+<table>
+  <tr><th>#</th><th>问题</th><th>说明</th></tr>
+  <tr><td>1</td><td><code>Qwen2Chat</code> / <code>DeepSeekChat</code> / <code>ConversationChain</code></td><td>虚构类 + 废弃 API（同例 12-4）</td></tr>
+  <tr><td>2</td><td><strong><code>load_model</code> 在重试循环内</strong></td><td>每次重试都重新加载大模型（几十秒）——"重试"本身变成灾难，模型应初始化加载一次</td></tr>
+  <tr><td>3</td><td>重试无退避（backoff）</td><td>立即连发重试只会把故障服务打死得更快</td></tr>
+  <tr><td>4</td><td>无熔断机制</td><td>后端挂了，每个新请求都要白经历 max_retries × timeout 的等待</td></tr>
+  <tr><td>5</td><td><strong>故障从未被触发</strong></td><td>run_demo 只走 happy path——重试/切换/降级代码是否存在 bug 无从得知</td></tr>
+  <tr><td>6</td><td>无 self-test</td><td>无法自动验证</td></tr>
+</table>
+
+<!-- ========== Section 2 ========== -->
+<h2>二、容错五件套总览</h2>
+
+<div class="flow">
+  用户请求 ask()
+      │
+      ▼
+  ① 熔断检查 ──打开且未冷却──▶ 跳过该后端（不再白等）→ 试下一后端
+      │ 允许
+      ▼
+  ② 超时控制调用 ──超过 8s──▶ 按失败处理（线程池 future.result(timeout)）
+      │
+      ▼
+  ③ 失败重试 + 指数退避（0.5s → 1s → 2s，给故障服务喘息窗口）
+      │ 重试耗尽
+      ▼
+  ④ 自动切换下一后端（qwen-plus → qwen-turbo → ...）
+      │ 全部后端耗尽
+      ▼
+  ⑤ 优雅降级：返回友好兜底文案（不报错不崩溃）
+</div>
+
+<h3>五个机制各管一种故障</h3>
+<table>
+  <tr><th>机制</th><th>防御的故障</th><th>关键参数</th></tr>
+  <tr><td>超时控制</td><td>服务卡死不响应</td><td><code>timeout=8s</code></td></tr>
+  <tr><td>重试+退避</td><td>瞬时抖动（限流/网络闪断）</td><td><code>max_retries=2</code>, <code>backoff=0.5s×2^n</code></td></tr>
+  <tr><td>自动切换</td><td>单后端持续故障</td><td>后端列表顺序（主 → 备）</td></tr>
+  <tr><td>熔断器</td><td>故障后端拖慢所有新请求</td><td>连续 2 次失败打开，30s 冷却半开</td></tr>
+  <tr><td>优雅降级</td><td>全部后端不可用</td><td>兜底文案</td></tr>
+</table>
+
+<!-- ========== Section 3 ========== -->
+<h2>三、核心组件 1：故障注入器（让容错可验证）</h2>
+
+<pre><code><span class="k">class</span> <span class="k">FaultyBackend</span>:
+    <span class="s">"""故障注入后端：可控模拟故障，用于验证容错机制"""</span>
+
+    <span class="k">def</span> __init__(self, name, fail_times=0, forever=<span class="k">False</span>):
+        <span class="c"># fail_times=1 → 第 1 次失败第 2 次成功（验证重试）</span>
+        <span class="c"># forever=True → 永远失败（验证切换/降级/熔断）</span>
+        self.fail_times = fail_times
+        self.forever = forever
+        self.calls = 0
+
+    <span class="k">def</span> call(self, messages):
+        self.calls += 1
+        <span class="k">if</span> self.forever <span class="k">or</span> self.calls <= self.fail_times:
+            <span class="k">raise</span> RuntimeError(f<span class="s">"[故障注入] {self.name} 第 {self.calls} 次调用失败"</span>)
+        <span class="k">return</span> <span class="s">"（故障后端的正常回复）"</span></code></pre>
+
+<div class="ok">
+  <strong>为什么这是本篇最重要的增强？</strong> 教材的 run_demo 只演示"一切正常时 Agent 能回复"——但容错代码的意义恰恰在"一切不正常"时。故障注入让 self-test 能精确构造每一种故障场景：第 1 次失败（验证重试）、永远失败（验证切换）、全部失败（验证降级）、连续失败（验证熔断）。<strong>没有故障注入的容错测试 = 没测。</strong>
+</div>
+
+<!-- ========== Section 4 ========== -->
+<h2>四、核心组件 2：熔断器（CircuitBreaker）</h2>
+
+<pre><code><span class="k">class</span> <span class="k">CircuitBreaker</span>:
+    <span class="s">"""按后端熔断：连续 2 次失败打开，冷却 30s 后半开重试"""</span>
+
+    <span class="k">def</span> allow(self, name) -> bool:
+        st = self._state.get(name)
+        <span class="k">if not</span> st <span class="k">or not</span> st[<span class="s">"opened_at"</span>]:
+            <span class="k">return</span> <span class="k">True</span>                          <span class="c"># 闭合 → 放行</span>
+        <span class="k">if</span> time.time() - st[<span class="s">"opened_at"</span>] >= self.cooldown:
+            st.update(opened_at=<span class="k">None</span>, fails=0)   <span class="c"># 冷却完毕 → 半开放行试探</span>
+            <span class="k">return</span> <span class="k">True</span>
+        <span class="k">return</span> <span class="k">False</span>                             <span class="c"># 打开 → 拒绝（上层跳过）</span>
+
+    <span class="k">def</span> record_failure(self, name):
+        st[<span class="s">"fails"</span>] += 1
+        <span class="k">if</span> st[<span class="s">"fails"</span>] >= self.threshold:
+            st[<span class="s">"opened_at"</span>] = time.time()        <span class="c"># 达到阈值 → 打开熔断</span></code></pre>
+
+<h3>熔断器三态</h3>
+<p style="text-align:center">
+  <span class="cb cb-c">CLOSED 闭合（正常放行）</span> →
+  连续 2 次失败 →
+  <span class="cb cb-o">OPEN 打开（直接跳过）</span> →
+  冷却 30s →
+  <span class="cb cb-h">HALF-OPEN 半开（放行试探）</span> →
+  成功则闭合 / 失败则再打开
+</p>
+
+<h3>熔断的价值（对比无熔断）</h3>
+<table>
+  <tr><th>场景</th><th>无熔断（教材）</th><th>有熔断（改写后）</th></tr>
+  <tr><td>后端已挂，第 100 个请求到来</td><td>白等 2 次重试 × 8s 超时 ≈ 16s+ 才切到备用</td><td>熔断已打开，<strong>0ms 跳过</strong>直接用备用</td></tr>
+  <tr><td>对故障服务的压力</td><td>每个请求都打 2-3 次，雪崩放大</td><td>熔断期间零流量，服务获得恢复窗口</td></tr>
+</table>
+
+<!-- ========== Section 5 ========== -->
+<h2>五、核心组件 3：ResilientAgent 主流程</h2>
+
+<pre><code><span class="k">def</span> ask(self, user_input) -> str:
+    messages = [{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: user_input}]
+    <span class="k">for</span> backend <span class="k">in</span> self.backends:                     <span class="c"># ④ 逐个后端尝试</span>
+        <span class="k">if not</span> self.breaker.allow(backend.name):      <span class="c"># ① 熔断跳过</span>
+            self.stats[backend.name][<span class="s">"skip"</span>] += 1
+            <span class="k">continue</span>
+        <span class="k">for</span> attempt <span class="k">in</span> range(self.max_retries + 1):   <span class="c"># ③ 重试</span>
+            <span class="k">try</span>:
+                answer = self._call_with_timeout(backend, messages)  <span class="c"># ② 超时控制</span>
+                self.breaker.record_success(backend.name)
+                <span class="k">return</span> answer
+            <span class="k">except</span> (Exception, FutureTimeout) <span class="k">as</span> e:
+                self.breaker.record_failure(backend.name)
+                <span class="k">if</span> attempt < self.max_retries:
+                    time.sleep(self.backoff_base * (2 ** attempt))   <span class="c"># 指数退避</span>
+    <span class="k">return</span> self.FALLBACK_MSG                          <span class="c"># ⑤ 优雅降级</span></code></pre>
+
+<div class="warn">
+  <strong>注意 try/except 捕获了 FutureTimeout：</strong>超时和普通失败走同一条处理链（记录熔断 → 退避 → 重试/切换）——统一故障处理路径，代码才不会分叉成两套逻辑。教材在 <code>_call_with_timeout</code> 内 import TimeoutError 却没在调用处区分处理，超时和异常行为不一致。
+</div>
+
+<!-- ========== Section 6 ========== -->
+<h2>六、实测验证（5 项 self-test 全部通过）</h2>
+
+<div class="ok">
+  <strong>Test 1 - 正常路径：</strong><code>[通过] qwen-plus 直连成功</code><br>
+  <strong>Test 2 - 自动切换：</strong><code>broken-primary 失败 2 次（熔断同步打开）→ 切换 qwen-turbo 成功</code><br>
+  <strong>Test 3 - 重试机制：</strong><code>flaky 第 1 次失败 → 退避重试第 2 次成功（未切换后端）</code><br>
+  <strong>Test 4 - 优雅降级：</strong><code>双后端全故障 → 各自重试耗尽 → 兜底文案"很抱歉，我暂时无法回答您的问题..."</code><br>
+  <strong>Test 5 - 熔断器：</strong><code>fails=2 opened_at 已记录 → 第三问 skip=1（直接跳过）</code>
+</div>
+
+<h3>Test 2 的真实日志（故障 → 熔断 → 切换全过程）</h3>
+<pre><code>19:56:18 [INFO]  [尝试] broken-primary 第 1 次
+19:56:18 [WARN]  [失败] broken-primary 第 1 次: [故障注入] 调用失败
+19:56:18 [INFO]  [退避] 0.1s 后重试
+19:56:18 [INFO]  [尝试] broken-primary 第 2 次
+19:56:18 [WARN]  <span class="e">[熔断] broken-primary 连续失败 2 次，熔断打开 30.0s</span>
+19:56:18 [WARN]  [失败] broken-primary 第 2 次
+19:56:18 [INFO]  [尝试] qwen-turbo 第 1 次          <span class="cm">← 自动切换到备用后端</span>
+  [通过] broken 失败 2 次 → 切换 qwen-turbo 成功</code></pre>
+
+<p>注意一个真实系统才会出现的细节：<strong>重试第 2 次的同时熔断器已打开</strong>（阈值 2 次连败）——本次请求仍会完成切换流程，但下一个请求开始就直接跳过该后端。新旧机制平滑衔接，无竞态死角。</p>
+
+<!-- ========== Section 7 ========== -->
+<h2>七、改写前后对照总表</h2>
+
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td><strong>模型调用</strong></td><td>虚构 Qwen2Chat/DeepSeekChat 本地 GPU</td><td>qwen-plus / qwen-turbo 双真实后端</td></tr>
+  <tr><td><strong>模型加载</strong></td><td>每次重试循环内重新加载</td><td>后端对象初始化一次，调用零加载成本</td></tr>
+  <tr><td><strong>重试策略</strong></td><td>立即连发，无退避</td><td>指数退避 0.5s × 2^n</td></tr>
+  <tr><td><strong>熔断</strong></td><td>无</td><td>CircuitBreaker（阈值 2 / 冷却 30s / 半开恢复）</td></tr>
+  <tr><td><strong>故障验证</strong></td><td>从未触发</td><td>FaultyBackend 注入，5 项实测全过</td></tr>
+  <tr><td><strong>可观测性</strong></td><td>print + ERROR 级日志</td><td>全级别双通道日志 + 每后端 ok/fail/skip 统计</td></tr>
+  <tr><td><strong>超时处理</strong></td><td>TimeoutError 捕获不完整</td><td>与普通异常统一走同一容错链</td></tr>
+</table>
+
+<!-- ========== Section 8 ========== -->
+<h2>八、与前后章节的衔接</h2>
+
+<table>
+  <tr><th>章节</th><th>内容</th><th>衔接</th></tr>
+  <tr><td>char12-03</td><td>异步任务 + 负载均衡</td><td>负载均衡分发"可用"的实例，本篇保证"分发到的调用"能成功</td></tr>
+  <tr><td>char12-04</td><td>多层缓存与记忆</td><td>记忆层可组合进 ResilientAgent（故障时历史仍在）</td></tr>
+  <tr><td>char10-05</td><td>A2A Task 状态机</td><td>failed/canceled 状态 + 错误重试语义与此同源</td></tr>
+</table>
+
+<div class="flow">
+  容错演进方向：本篇单进程五件套 → 多实例健康检查 + 服务发现 → 云原生（K8s 探针 + HPA）→ 混沌工程（主动注入故障验证）
+</div>
+
+<!-- ========== Section 9 ========== -->
+<h2>九、动手练习</h2>
+
+<ol>
+  <li><strong>超时故障注入</strong>：给 FaultyBackend 加 <code>sleep_before=20</code> 参数（先卡 20s 再返回），配合 timeout=2 的 Agent，验证超时路径被触发且 Agent 不被卡死。</li>
+  <li><strong>熔断半开恢复</strong>：把 cooldown 设为 1s，验证"打开 → 冷却 → 半开放行 → 恢复闭合"的完整三态流转（在 Test 5 基础上补断言）。</li>
+  <li><strong>重试策略可配</strong>：支持 <code>retry_on=[TimeoutError]</code> 白名单——超时才重试，4xx 参数错误直接切后端不浪费（幂等性思考）。</li>
+  <li><strong>与 12-04 记忆组合</strong>：把 ResilientAgent 和例 12-4 的 JSONCache 结合——降级兜底时用户输入仍写历史，恢复后 Agent 能接上上下文。</li>
+  <li><strong>健康统计端点</strong>：把 stats 暴露为 <code>GET /health</code>（参考 12-01），观察压测下各后端的失败率变化。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li>Microsoft 云设计模式：Retry / Circuit Breaker：<a href="https://learn.microsoft.com/azure/architecture/patterns/circuit-breaker">learn.microsoft.com</a></li>
+  <li>指数退避与抖动（Exponential Backoff And Jitter）：<a href="https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/">aws.amazon.com</a></li>
+  <li>tenacity 库（生产级重试装饰器）：<a href="https://tenacity.readthedocs.io/">tenacity.readthedocs.io</a></li>
+</ul>
+
+</body>
+</html>

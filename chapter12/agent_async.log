@@ -1,0 +1,57 @@
+18:41:38 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8900
+ * Running on http://192.168.3.22:8900
+18:41:38 [INFO] [33mPress CTRL+C to quit[0m
+18:41:40 [INFO] 127.0.0.1 - - [12/Oct/2026 18:41:40] "GET /health HTTP/1.1" 200 -
+18:41:42 [INFO] [e91803a0] 任务提交 → 分发给 instance-0（轮询）
+18:41:42 [INFO] [e91803a0] instance-0 开始处理
+18:41:42 [INFO] 127.0.0.1 - - [12/Oct/2026 18:41:42] "[35m[1mPOST /generate HTTP/1.1[0m" 202 -
+18:41:44 [INFO] [e91803a0] 处理完成
+18:41:44 [INFO] 127.0.0.1 - - [12/Oct/2026 18:41:44] "GET /result/e91803a0 HTTP/1.1" 200 -
+18:41:46 [INFO] [68cec09c] 任务提交 → 分发给 instance-1（轮询）
+18:41:46 [INFO] 127.0.0.1 - - [12/Oct/2026 18:41:46] "[35m[1mPOST /generate HTTP/1.1[0m" 202 -
+18:41:46 [INFO] [68cec09c] instance-1 开始处理
+18:41:47 [INFO] [68cec09c] 处理完成
+18:41:48 [INFO] [5f57311b] 任务提交 → 分发给 instance-0（轮询）
+18:41:48 [INFO] 127.0.0.1 - - [12/Oct/2026 18:41:48] "[35m[1mPOST /generate HTTP/1.1[0m" 202 -
+18:41:48 [INFO] [5f57311b] instance-0 开始处理
+18:41:49 [INFO] [5f57311b] 处理完成
+18:41:50 [INFO] [18795809] 任务提交 → 分发给 instance-1（轮询）
+18:41:50 [INFO] 127.0.0.1 - - [12/Oct/2026 18:41:50] "[35m[1mPOST /generate HTTP/1.1[0m" 202 -
+18:41:50 [INFO] [18795809] instance-1 开始处理
+18:41:51 [INFO] [18795809] 处理完成
+18:41:52 [INFO] [517fa99d] 任务提交 → 分发给 instance-0（轮询）
+18:41:52 [INFO] 127.0.0.1 - - [12/Oct/2026 18:41:52] "[35m[1mPOST /generate HTTP/1.1[0m" 202 -
+18:41:52 [INFO] [517fa99d] instance-0 开始处理
+18:41:53 [INFO] [517fa99d] 处理完成
+18:42:00 [INFO] 127.0.0.1 - - [12/Oct/2026 18:42:00] "GET /health HTTP/1.1" 200 -
+19:35:40 [INFO] 从 cache.json 恢复 5 个历史任务
+19:35:40 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8900
+ * Running on http://192.168.3.22:8900
+19:35:40 [INFO] [33mPress CTRL+C to quit[0m
+19:35:42 [INFO] 127.0.0.1 - - [12/Oct/2026 19:35:42] "GET /health HTTP/1.1" 200 -
+19:35:44 [INFO] [fd948ae3] 任务提交 → 分发给 instance-0（轮询）
+19:35:44 [INFO] [fd948ae3] instance-0 开始处理
+19:35:44 [INFO] 127.0.0.1 - - [12/Oct/2026 19:35:44] "[35m[1mPOST /generate HTTP/1.1[0m" 202 -
+19:35:46 [INFO] [fd948ae3] 处理完成
+19:35:46 [INFO] 127.0.0.1 - - [12/Oct/2026 19:35:46] "GET /result/fd948ae3 HTTP/1.1" 200 -
+19:35:49 [INFO] [97e5d492] 任务提交 → 分发给 instance-1（轮询）
+19:35:49 [INFO] 127.0.0.1 - - [12/Oct/2026 19:35:49] "[35m[1mPOST /generate HTTP/1.1[0m" 202 -
+19:35:49 [INFO] [97e5d492] instance-1 开始处理
+19:35:49 [INFO] [97e5d492] 处理完成
+19:35:51 [INFO] [2f582dd3] 任务提交 → 分发给 instance-0（轮询）
+19:35:51 [INFO] 127.0.0.1 - - [12/Oct/2026 19:35:51] "[35m[1mPOST /generate HTTP/1.1[0m" 202 -
+19:35:51 [INFO] [2f582dd3] instance-0 开始处理
+19:35:51 [INFO] [2f582dd3] 处理完成
+19:35:53 [INFO] [d488f6d1] 任务提交 → 分发给 instance-1（轮询）
+19:35:53 [INFO] 127.0.0.1 - - [12/Oct/2026 19:35:53] "[35m[1mPOST /generate HTTP/1.1[0m" 202 -
+19:35:53 [INFO] [d488f6d1] instance-1 开始处理
+19:35:53 [INFO] [d488f6d1] 处理完成
+19:35:55 [INFO] [d29a5641] 任务提交 → 分发给 instance-0（轮询）
+19:35:55 [INFO] 127.0.0.1 - - [12/Oct/2026 19:35:55] "[35m[1mPOST /generate HTTP/1.1[0m" 202 -
+19:35:55 [INFO] [d29a5641] instance-0 开始处理
+19:35:55 [INFO] [d29a5641] 处理完成
+19:36:03 [INFO] 127.0.0.1 - - [12/Oct/2026 19:36:03] "GET /health HTTP/1.1" 200 -
