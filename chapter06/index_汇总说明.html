@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char06 架构汇总说明 - RAG 检索增强生成技能总览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 2rem; color: #22d3ee; border-bottom: 3px solid #164e63; padding-bottom: 0.8rem; margin-bottom: 0.3rem; }
+  .sub { color: #94a3b8; font-size: 1rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.4rem; color: #34d399; margin: 2.5rem 0 1rem; padding-left: 0.7rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.1rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  .hl { color: #fbbf24; font-weight: bold; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+  .mermaid-note { background: #1e293b; border: 1px dashed #475569; border-radius: 6px; padding: 0.5rem 1rem; margin: 0.5rem 0 1rem; font-size: 0.85rem; color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>char06 架构汇总说明 - RAG 检索增强生成技能总览</h1>
+<div class="sub">配套文档：<a href="arch_汇总说明.md">arch_汇总说明.md</a>（Mermaid 版，可在 Typora/VSCode 渲染） | 生成日期：2026-10-12 | 范围：char06 全部 9 个 py 文件（01-09，全部改写验证）</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、char06 在课程体系中的定位</h2>
+<p>**核心命题：把 char01-05 的零件拼成 RAG——让大模型能"检索到什么就答什么"，而不是"只凭训练记忆瞎编"。**</p>
+<div class="mermaid-note">💡 下方 Mermaid 图在 arch_汇总说明.md 中可直接渲染；HTML 版用 ASCII 示意，建议对照 md 文件查看完整图形。</div>
+<pre>
+char01 提示词 ──┐
+char02 Agent ──┤──→ char06 本篇（RAG）──→ 闭环：检索+生成
+char03 模型服务─┘   RAG = Retrieval + Generation
+                    "给 LLM 开一扇查知识库的门"
+</pre>
+<p>RAG 是 char01-05 知识的汇合点：char01 的 prompt 三要素 → build_prompt；char02 的 agent_chat 循环 → 05/06 篇 function calling；char03 的嵌入模型 → DashScopeEmbeddings；char04 的链/Agent → 01 篇 FAISS.from_documents；char05 的图编排 → RAG 流水线可声明为图。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、九篇速查表（含验证状态）</h2>
+<table>
+  <tr><th>#</th><th>篇</th><th>核心技能</th><th>验证</th><th>特殊标注</th></tr>
+  <tr><td>01</td><td>中文向量化存入FAISS</td><td>DashScopeEmbeddings + FAISS.from_documents</td><td>✅</td><td>LangChain 封装黑盒</td></tr>
+  <tr><td>02</td><td>文档切片实现</td><td>RecursiveCharacterTextSplitter</td><td>✅</td><td>默认分隔符对中文不友好</td></tr>
+  <tr><td>03</td><td>带语义找回的Agent</td><td>similarity_search k=2</td><td>✅</td><td>标题叫"Agent"但无 Agent</td></tr>
+  <tr><td>04</td><td>文本清洗与句元切分</td><td>白名单正则 + 零宽断言断句</td><td>✅</td><td>Colab ace_tools 本地无；re.split 末尾空串</td></tr>
+  <tr><td>05</td><td>Qwen-Embedding 语义编码</td><td>原生 FAISS + 手动 build_prompt + Agent</td><td>✅</td><td>requests API 2025 格式已变→DashScopeEmbeddings</td></tr>
+  <tr><td>06</td><td>三种向量数据库</td><td>FAISS(内存) / Chroma(嵌入式) / Weaviate(服务端)</td><td>✅ 前两者</td><td>Weaviate 需 Docker 注释保留</td></tr>
+  <tr><td>07</td><td>RetrievalQA 问答系统</td><td>显式两步：检索→拼 prompt→生成</td><td>✅</td><td>显式 vs 隐式 RAG 对照教材</td></tr>
+  <tr><td>08</td><td>多段检索与Top-K融合</td><td>top_k=5 融合拼接</td><td>✅</td><td>硬切 vs 贪婪拼接对照</td></tr>
+  <tr><td>09</td><td>文本与结构化混合检索</td><td>双通道（FAISS + pandas）+ 融合</td><td>✅</td><td>标题"DeepSeek"是假的，硬编码 if/elif</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>三、分层架构总图</h2>
+<pre>
+  L5 异构融合层 ──→ 09 双通道混合检索（文本向量 + 结构化数据）
+  L4 显式 RAG 层 ──→ 07 显式两步 / 08 Top-K 融合（开发者写死流程）
+  L3 闭环 RAG 层 ──→ 05 Agent function calling / 06 三种向量库
+  L2 预处理流水线 ──→ 04 清洗+切片
+  L1 检索零件层 ──→ 01 向量化 / 02 切片器 / 03 语义找回
+  ──────────────────────────────────────
+  基础底座：DashScopeEmbeddings + qwen-plus
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、三条不变式（新人最先要认出的模式）</h2>
+<div class="card">
+  <div class="card-title">不变式 1：统一改写范式</div>
+  <table>
+    <tr><th>问题类型</th><th>教材写法</th><th>改写为</th></tr>
+    <tr><td>虚构框架 import</td><td><code class="inline">from qwen_agent.agent import Agent</code></td><td><code class="inline">dashscope.Generation.call</code> + agent_chat 循环</td></tr>
+    <tr><td>原生 requests 嵌 API</td><td><code class="inline">requests.post(EMBEDDING_API, json=...)</code></td><td><code class="inline">DashScopeEmbeddings</code>（LangChain 封装）</td></tr>
+    <tr><td>Tool 继承</td><td><code class="inline">class XxxTool(Tool): super().__init__(...)</code></td><td><code class="inline">class XxxTool:</code> 纯类 + 核心逻辑原样保留</td></tr>
+    <tr><td>Colab 专属</td><td><code class="true">import ace_tools</code></td><td>原生 print</td></tr>
+  </table>
+  <p>嵌入模型签名固定为 <code class="inline">List[np.ndarray]</code>——<span class="hl">换模型只改 get_qwen_embedding 内部，FAISS 构建和检索零改动</span>（05/06 篇共同实证）。</p>
+</div>
+<div class="card">
+  <div class="card-title">不变式 2：显式 vs 隐式 RAG</div>
+  <pre>
+显式 RAG（07/08/09）：                隐式 RAG（05/06）：
+  开发者写死"先检索、再拼 prompt、再调 LLM"  Agent function calling
+  流程固定，必然走检索路径                  模型自主决策是否调工具
+  新人一眼看懂 RAG 底层                    更优雅但藏了底层逻辑
+  </pre>
+  <p><strong>关键认识</strong>：隐式 RAG 只是把显式 RAG 的三个步骤，交给模型在 Agent 循环里自主决策是否执行——<span class="hl">底层逻辑完全同构</span>。</p>
+</div>
+<div class="card">
+  <div class="card-title">不变式 3：RAG 的核心公式</div>
+  <pre>
+RAG = 检索（Retrieval） + 生成（Generation）
+检索 = 向量化 → 索引构建 → 相似度搜索   ← char06 01-03
+生成 = prompt 里放检索结果 → LLM 基于上下文回答   ← char06 07-09
+  </pre>
+</div>
+
+<!-- ========== 五 ========== -->
+<h2>五、四笔学费（教材代码问题谱系）</h2>
+<div class="warn">
+  <div class="warn-title">学费 1：requests 嵌入 API 端点 2025 年格式已变（05 篇实测）</div>
+  <p>教材用的 <code class="true">text-embedding-v1</code> 端点，2025 年实测返回 <code class="true">{"code": "BadRequest.IllegalInput"}</code>，响应结构也不是教材预期的 <code class="true">data["output"]["embeddings"]</code>——API 格式已变。解法：用 LangChain 封装的 DashScopeEmbeddings（01/03 篇已验证稳定）。</p>
+</div>
+<div class="warn">
+  <div class="warn-title">学费 2：LangChain 封装 = 原生 FAISS 的黑盒（01 vs 05）</div>
+  <p>01 篇一行 <code class="true">FAISS.from_documents(docs, emb_model)</code> 底下干的就是 05 篇手写的 20 行：<code class="true">faiss.IndexFlatL2(dim) → vstack → add</code>。理解了 05 篇的原生操作，01 篇就不再是黑盒。</p>
+</div>
+<div class="warn">
+  <div class="warn-title">学费 3：教材假标题/假功能</div>
+  <ul>
+    <li>03 篇标题叫"带语义找回功能 Agent"——实际无 Agent，只有 similarity_search</li>
+    <li>08/09 篇标题提"DeepSeek"——实际是硬编码 if/elif，根本没调任何 LLM</li>
+  </ul>
+</div>
+<div class="warn">
+  <div class="warn-title">学费 4：re.split 末尾空串陷阱（04 篇）</div>
+  <p><code class="true">re.split(r"(?<=[。！？])", "方案。")</code> → <code class="true">['方案。', '']</code>——文本末尾是句号时 split 多产生一个空串，被后续代码静默合并进最后一块。生产必须加 <code class="true">[s for s in sentences if s]</code> 过滤。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、RAG 三种形态对照表</h2>
+<table>
+  <tr><th>形态</th><th>代表篇</th><th>检索</th><th>融合</th><th>生成</th><th>优点</th><th>缺点</th></tr>
+  <tr><td>隐式 RAG</td><td>05/06</td><td>Agent 自主调工具</td><td>模型看到 tool 结果自动整合</td><td>function calling</td><td>灵活、自主决策</td><td>藏底层、可能跳过检索</td></tr>
+  <tr><td>显式 RAG</td><td>07</td><td>手动 call k=5</td><td>join top-5</td><td>手动拼 prompt</td><td>流程固定、必然走检索</td><td>不灵活</td></tr>
+  <tr><td>Top-K 融合</td><td>08</td><td>手动 call top_k=5</td><td>join 多段成一个 context</td><td>手动拼 prompt</td><td>放宽召回、降低漏检</td><td>长 context 稀释注意力</td></tr>
+  <tr><td>双通道混合</td><td>09</td><td>两路并行（向量+结构化）</td><td>两个 context 分别标注</td><td>手动拼 prompt</td><td>兼顾文本和数据</td><td>硬编码 NL→SQL</td></tr>
+</table>
+
+<!-- ========== 七 ========== -->
+<h2>七、向量库选型速查</h2>
+<table>
+  <tr><th>需求</th><th>推荐</th><th>理由</th><th>本次验证</th></tr>
+  <tr><td>原型/实验/小知识库</td><td>FAISS</td><td>最轻量、纯内存、无服务依赖</td><td>✅ 全部 6 篇用 FAISS</td></tr>
+  <tr><td>轻量 RAG/个人项目</td><td>Chroma</td><td>嵌入式、自带持久化+元数据</td><td>✅ 06 篇 Chroma 1.5.9 跑通</td></tr>
+  <tr><td>生产分布式多租户</td><td>Milvus / Qdrant / Weaviate</td><td>REST API、水平扩展、内置 rerank</td><td>❌ 本机无 Docker，注释保留</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、生产视角：RAG 优化四道门槛</h2>
+<ol>
+  <li><strong>rerank 重排序</strong>：FAISS top-20 → CrossEncoder 精排选 top-3（生产标准做法，bge-reranker-v2-m3）</li>
+  <li><strong>混合检索</strong>：向量检索（语义）+ BM25（关键词）→ 融合（09 篇双通道的思路升级）</li>
+  <li><strong>索引持久化</strong>：FAISS <code class="true">faiss.write_index/read_index</code>；Chroma 默认持久化到本地文件夹</li>
+  <li><strong>长上下文管理</strong>：超出窗口时递归摘要 / MapReduce 压缩（先每段总结→总结再合并）</li>
+</ol>
+
+<!-- ========== 九 ========== -->
+<h2>九、6 步学习路径（附自测标准）</h2>
+<table>
+  <tr><th>Step</th><th>学什么</th><th>自测标准</th></tr>
+  <tr><td>1</td><td>RAG 的本质</td><td>能用自己的话解释"检索增强生成"</td></tr>
+  <tr><td>2</td><td>向量化 + FAISS 检索（01 篇）</td><td>能独立写出向量化+索引+检索三步</td></tr>
+  <tr><td>3</td><td>清洗+切片（04 篇）</td><td>能说出白名单正则/零宽断言/贪婪拼接各自的作用</td></tr>
+  <tr><td>4</td><td>显式 RAG 两步（07/08 篇）</td><td>能对比显式 vs 隐式 RAG 的三种差异</td></tr>
+  <tr><td>5</td><td>隐式 RAG（05/06 篇）</td><td>能把显式三步改写成 Agent function calling</td></tr>
+  <tr><td>6</td><td>双通道异构融合（09 篇）</td><td>能说出为什么需要两个通道</td></tr>
+</table>
+
+<!-- ========== 十 ========== -->
+<h2>十、跨章知识衔接</h2>
+<pre>
+char01 任务建模（03 生成SQL） ──→ char06 09 篇 NL→SQL 硬编码的生产解法
+char02 Agent function calling ──→ char06 05/06 篇隐式 RAG 的核心机制
+char03 嵌入模型 API 封装      ──→ char06 全部 9 篇 DashScopeEmbeddings 的稳定接口
+char04 LangChain 组件         ──→ char06 01/02 篇 FAISS.from_documents / TextSplitter
+char05 LangGraph 图编排       ──→ RAG 流水线可以声明为图（节点=检索/生成，边=条件判断）
+</pre>
+
+<!-- ========== 十一 ========== -->
+<h2>十一、九篇讲解 HTML 索引</h2>
+<table>
+  <tr><th>#</th><th>HTML 文件</th></tr>
+  <tr><td>01</td><td><a href="01_将中文文本转换为向量存入faiss.html">01_将中文文本转换为向量存入faiss.html</a></td></tr>
+  <tr><td>02</td><td><a href="02_基于LangChain的文档切片实现.html">02_基于LangChain的文档切片实现.html</a></td></tr>
+  <tr><td>03</td><td><a href="03_使用LangChain开发带语义找回功能Agent.html">03_使用LangChain开发带语义找回功能Agent.html</a></td></tr>
+  <tr><td>04</td><td><a href="04_文本清洗与句元切分.html">04_文本清洗与句元切分.html</a></td></tr>
+  <tr><td>05</td><td><a href="05_选择Qwen-Embedding模型做语义编码.html">05_选择Qwen-Embedding模型做语义编码.html</a></td></tr>
+  <tr><td>06</td><td><a href="06_用三种向量数据库做语义检索.html">06_用三种向量数据库做语义检索.html</a></td></tr>
+  <tr><td>07</td><td><a href="07_实现一个RetrievalQA问答系统.html">07_实现一个RetrievalQA问答系统.html</a></td></tr>
+  <tr><td>08</td><td><a href="08_多段检索与Top-K融合的Agent.html">08_多段检索与Top-K融合的Agent.html</a></td></tr>
+  <tr><td>09</td><td><a href="09_文本与结构化数据混合检索.html">09_文本与结构化数据混合检索.html</a></td></tr>
+</table>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02_基于LangChain的文档切片实现 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>02_基于LangChain的文档切片实现 - 代码解析</h1>
+<div class="meta">对应文件：char06/02_基于LangChain的文档切片实现.py | 教材出处：第6章 RAG机制 例6-2 | 环境实测：langchain_text_splitters | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇演示 <strong>RAG 入库前的关键预处理：文档切片（chunking）</strong>——把一篇长文档按"最大 100 字符、相邻块重叠 20 字符"的规则切成小块。为什么必须切？因为 01 篇建好的检索机制是"以块为单位"的：<strong>切片的粒度 = 未来检索的粒度 = 大模型能看到的知识粒度</strong>。切太碎，一条 chunk 只剩半句话，检索到了也缺上下文；切太大，一条 chunk 混多个话题，语义向量被"稀释"，检索就不准。切片是 RAG 质量的第一道闸门。<br>
+本篇无大模型调用，唯一改写点是 import 路径（同 01 篇：0.x 的 <code class="inline">langchain.text_splitter</code> → 1.x 的 <code class="inline">langchain_text_splitters</code> 独立包），其余原样保留。</p>
+
+<!-- ========== 二 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的取值与作用</th></tr>
+  <tr><td>chunk</td><td>切片后的文本块（未来入库/检索单位）</td><td>6 个自然段合并成 3 块（实测）</td></tr>
+  <tr><td>chunk_size</td><td>单块最大字符数</td><td>100——块的"天花板"</td></tr>
+  <tr><td>chunk_overlap</td><td>相邻块的重叠字符数</td><td>20——边界上下文延续的预留</td></tr>
+  <tr><td>递归分隔符</td><td>按优先级降级的切分边界列表</td><td>默认 ["\n\n", "\n", " ", ""]（段落→行→空格→字符）</td></tr>
+  <tr><td>贪婪合并</td><td>切出的碎片段尽量拼回接近上限的块</td><td>相邻两段拼成一块（2+2+2）</td></tr>
+  <tr><td>RecursiveCharacterTextSplitter</td><td>LangChain 通用文本切分器</td><td>本篇主角，对中文需注意分隔符适配（见下）</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>整体执行流程图（含实测结果）</h2>
+<pre>
+  document_text（6 个自然段，段间以 \n 分隔）
+        │
+        ▼
+  RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=20)
+        │  第一轮：按 "\n\n" 切 → 无双换行，失败
+        │  第二轮：按 "\n" 切 → 6 个自然段（每段 24~57 字，都 < 100）
+        ▼
+  贪婪合并：相邻段拼到接近 100 字符上限
+        │
+        ├── Chunk 1：段1(48字) + 段2(38字)   ≈ 87 字符
+        ├── Chunk 2：段3(49字) + 段4(24字)   ≈ 74 字符
+        └── Chunk 3：段5(57字) + 段6(29字)   ≈ 87 字符
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>4.1 切片器的两个参数（原样保留）</h3>
+<pre>
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=100,      # 单块上限
+    chunk_overlap=20     # 相邻块重叠——防止关键信息恰好被切在边界上而两边都"断头"
+)
+</pre>
+<h3>4.2 一行完成切片（原样保留）</h3>
+<pre>
+chunks = splitter.split_text(document_text)   # 返回纯文本列表（入库时再包 Document）
+</pre>
+
+<!-- ========== 五 ========== -->
+<h2>本篇最重要的知识点：默认分隔符对中文不友好</h2>
+<div class="warn">
+  <div class="warn-title">为什么本篇切得体面，真实中文文档可能切得很惨</div>
+  <p>默认分隔符 <code class="inline">["\n\n", "\n", " ", ""]</code> 里<strong>没有任何中文标点</strong>。本篇侥幸切得好，只是因为文本恰好有换行、且每段都短于 100 字符——真正的切分发生在 <code class="inline">\n</code>（自然段落边界）。</p>
+  <p><strong>反例推演</strong>：把六段文字合并成一个不含换行的长段落（真实 PDF/网页抓取常如此），递归降级会一路失败到 <code class="inline">""</code>（字符级硬切）——在第 100 个字符处把句子<strong>拦腰斩断</strong>，chunk 边界全是残句，检索质量大幅下降。</p>
+  <p><strong>中文改进姿势</strong>（本篇正文不改，练习 2 动手验证）：</p>
+  <pre>
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=100, chunk_overlap=20,
+    separators=["\n\n", "\n", "。", "！", "？", "；", "，", " ", ""]  # 加入中文句读
+)
+  </pre>
+  <p>原理不变：优先按段落/整句切，实在不行才退到逗号、空格、单字——让每一刀都尽量落在语义边界上。</p>
+</div>
+<div class="card">
+  <div class="card-title">另一个细节：本例为什么看不到 overlap 的字面重叠？</div>
+  <p>chunk_overlap 的字面重叠发生在<strong>同一层级硬切</strong>时（如字符级把长文切成块，后块开头会带上前块结尾的 20 字符）。本例所有块都在段落边界干净切开、无跨块句子，所以三块之间没有重复文字——overlap 只是"预留"，没被用上。别因此以为参数无效，换成字符级场景它就现身了。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（纯本地计算，无 API 调用）</div>
+  <pre>
+Chunk 1:
+人工智能是计算机科学的一个分支，旨在研究和开发模拟、延伸和扩展人类智能的理论、方法、技术及应用系统。
+它是一门综合性很强的学科，涉及哲学、数学、经济学、神经科学、计算机科学等多个领域。
+
+Chunk 2:
+随着计算能力和数据规模的迅猛增长，人工智能技术在自然语言处理、计算机视觉、智能控制等方面取得了显著进展。
+其中，大语言模型的兴起极大提升了机器处理自然语言的能力。
+
+Chunk 3:
+然而，为了使这些模型在问答、对话等场景下具备更强的事实性与可控性，往往需要引入检索增强机制（RAG）以结合外部知识源。
+在此过程中，文档切片（chunking）策略成为RAG系统性能优化的重要一环。
+  </pre>
+  <p>与推演一致：6 段 → 3 块，相邻小段贪婪合并，每块 2 个完整段落——<strong>块边界全部落在语义边界上</strong>，这是理想切片的样子。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>与 01 篇的衔接：切片是入库流水线的第一站</h2>
+<pre>
+  01 篇的世界（5 条独立短句）          02 篇补上的前置环节
+  ┌────────────────────┐            ┌──────────┐    ┌────────────────────┐
+  │ sample_texts = [...]│   ←──────── │ 长文档     │ → │ 切片 chunks（本篇）  │
+  │ （本来就是"块"）      │            └──────────┘    └─────────┬──────────┘
+  └─────────┬──────────┘                                       │
+            │                                                  ▼
+            ▼                                        chunks → Document → 向量化 → FAISS
+  向量化 → FAISS → 检索                               （= 01 篇流程，喂进真实文档）
+</pre>
+<p>01 篇的 <code class="inline">sample_texts</code> 五条短句，本质上就是"已经切好块的文档"。本篇回答的问题是：<strong>真实世界的长文档从哪里获得这些"块"</strong>。两篇合起来 = RAG 入库流水线的完整前半段。</p>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角：切片参数怎么定</h2>
+<ul>
+  <li><strong>chunk_size 与检索粒度的权衡</strong>：常见取值 300-1000 字符（中文）——太小检索碎、太大单向量承载多主题语义被稀释</li>
+  <li><strong>按文档结构切</strong>：Markdown/代码用结构感知切分器（按标题/函数切）；PDF 先抽结构再切；通用兜底才是 Recursive + 中文分隔符</li>
+  <li><strong>overlap 常取 size 的 10%-20%</strong>：本例 20/100 正好 20%，教材取值合理</li>
+  <li><strong>chunk 附带元数据</strong>：入库时 Document 加 metadata（来源/页码/标题），检索命中后能回溯出处</li>
+  <li><strong>评估闭环</strong>：切片策略好不好，最终由"检索命中率 + 答案质量"说了算——参数是调出来的，不是背出来的</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>改参数观察</strong>：chunk_size 改成 50 再跑——6 段中超过 50 字的段会被进一步切分，观察哪些段被拆、拆在哪。</li>
+  <li><strong>中文分隔符验证（本篇核心）</strong>：把六段拼成一个无换行长段（<code class="inline">"".join(原六段)</code>）跑默认参数——看句子被拦腰斩断；再传入 <code class="inline">separators=["\n\n","\n","。","！","？","，"," ",""]</code> 跑——对比块边界的完整度。</li>
+  <li><strong>验证 overlap</strong>：构造一段 200+ 字的无标点中文长串，用字符级硬切 + overlap=20——亲眼看到后块开头重复前块结尾的 20 字。</li>
+  <li><strong>串起 01+02</strong>：把本篇的 chunks 用 <code class="inline">Document(page_content=c)</code> 包装后喂给 01 篇的 FAISS 流程，查询"RAG是什么"——亲手打通"切片→向量→检索"完整链路，这就是后续篇 RAG 的地基。</li>
+</ol>
+
+</div>
+</body>
+</html>

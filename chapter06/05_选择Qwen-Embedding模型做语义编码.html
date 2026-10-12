@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05_选择Qwen-Embedding模型做语义编码 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>05_选择Qwen-Embedding模型做语义编码 - 代码解析</h1>
+<div class="meta">对应文件：char06/05_选择Qwen-Embedding模型做语义编码.py | 教材出处：第6章 RAG机制 例6-5 | 环境实测：DashScopeEmbeddings(text-embedding-v3) + FAISS + qwen-plus Agent | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char06 第一篇<strong>完整 RAG 闭环</strong>：抓取金融新闻 → 向量化 → FAISS 索引 → Agent 语义检索工具 → qwen-plus 根据检索结果生成自然语言回答。前 01-04 篇分别教了切片、清洗、向量化、检索——本篇把它们<strong>串成一个可问答的系统</strong>。</p>
+<p>三条路线混在一起（改写前）：<strong>①虚构 qwen_agent 框架</strong>（Agent/Tool/Message 已在 char02 多次实战确认不存在）→ 改写为 dashscope function calling；<strong>②原生 requests 调百炼嵌入 API</strong>（2025 年端点格式已变，实测报 BadRequest）→ 改写为 DashScopeEmbeddings（LangChain 封装，接口稳定）；<strong>③原生 faiss + numpy</strong>——<strong>原样保留，这是本篇最有价值的教学资产</strong>（01 篇的 FAISS.from_documents 只是把本篇 20 行代码藏进了一个方法里）。</p>
+
+<!-- ========== 二 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>原生 FAISS 操作</td><td>手动调 emb_fn + 手动 build index</td><td>build_faiss_index 露出 LangChain 封装底下的逻辑</td></tr>
+  <tr><td>闭环 RAG</td><td>检索 + 生成一体</td><td>search_finance 工具 → Agent 用它搜 → qwen-plus 生成答案</td></tr>
+  <tr><td>嵌入模型可插拔</td><td>换模型只改 get_embeddings，底层 FAISS 不变</td><td>原 requests API → DashScopeEmbeddings，build_faiss_index 零改动</td></tr>
+  <tr><td>金融新闻库</td><td>模拟 6 条新闻（网络失败兜底）</td><td>search_finance 的知识库</td></tr>
+  <tr><td>Agent function calling</td><td>模型自主决策调工具</td><td>用户问"货币政策"→ Agent 自主调 search_finance → 拿到结果生成答案</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>整体执行流程图</h2>
+<pre>
+  fetch_finance_news() → 6 条模拟金融新闻（网络失败兜底）
+        │
+        ▼
+  get_embeddings() → DashScopeEmbeddings(text-embedding-v3) 逐条约 1024 维
+        │  原写法：requests.post 百炼端点（2025 年格式已变，实测失败）
+        ▼
+  build_faiss_index() → IndexFlatL2(dim=1024).add(矩阵)
+        │  原写法 vs 01 篇：手动 add vs FAISS.from_documents 自动 add
+        ▼
+  agent_chat(qwen-plus, "货币政策")
+        │  模型自主决策 → 调 search_finance(query="货币政策")
+        ▼
+  search_finance() → 查询向量化 → FAISS 搜 top-3 → 返回新闻标题
+        │
+        ▼
+  qwen-plus 根据检索结果生成自然语言回答（Agent 的最终输出）
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>4.1 嵌入编码函数：原生 API 变更 + 封装替换</h3>
+<pre>
+# 原写法（注释保留）：
+# QWEN_EMBEDDING_API = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding"
+# def get_embeddings(texts):
+#     response = requests.post(QWEN_EMBEDDING_API, ...)
+#     return [np.array(item["embedding"]) for item in data["output"]["embeddings"]]
+
+# 改写：签名不变，内部换成 DashScopeEmbeddings
+def get_embeddings(texts: List[str]) -> List[np.ndarray]:
+    raw = _emb_model.embed_documents(texts)
+    return [np.array(v, dtype=np.float32) for v in raw]
+</pre>
+<p><strong>实测验证原写法失败</strong>：2025 年百炼嵌入端点报 <code class="true">BadRequest.IllegalInput: The input parameter requires json format</code>——API 格式已变，不是鉴权问题。DashScopeEmbeddings 是 LangChain 对百炼嵌入的官方封装，内部走同一个 text-embedding-v3 模型，接口稳定。</p>
+<p><strong>关键设计决策</strong>：保留了 <code class="true">List[np.ndarray]</code> 的返回签名——<code class="true">build_faiss_index(embeddings)</code> 零改动可继续用。这就是"嵌入模型可插拔"的架构设计价值：上层（FAISS 索引）不关心下层（用什么嵌入模型）。</p>
+<h3>4.2 原生 FAISS 索引构建（原样保留）</h3>
+<pre>
+def build_faiss_index(embeddings: List[np.ndarray]) -> faiss.IndexFlatL2:
+    dim = embeddings[0].shape[0]
+    index = faiss.IndexFlatL2(dim)    # L2 距离（欧氏距离）索引
+    matrix = np.vstack(embeddings)     # 把列表堆成二维矩阵 [N, dim]
+    index.add(matrix)                  # 一次性灌入
+    return index
+</pre>
+<p><strong>与 01 篇 FAISS.from_documents 的对照</strong>：01 篇的一行代码 <code class="true">FAISS.from_documents(docs, embedding_model)</code> 底下干的就是：调 emb_fn → vstack → add——本篇把底层露出来。<strong>理解了本篇，就不会把 01 篇当黑盒</strong>。</p>
+<h3>4.3 Agent 循环（原 qwen_agent.Agent → dashscope function calling）</h3>
+<p>原写法 <code class="true">agent = Agent(tools=[search_tool]); agent.chat(...) </code>——qwen_agent 框架虚构（ImportError），改用 char02-06 已验证的 dashscope function calling 循环。Agent 的"检索"行为保持不变：模型自主决策调 search_finance → FAISS 搜 top-3 → 拿到结果生成自然语言回答。</p>
+
+<!-- ========== 五 ========== -->
+<h2>实测踩坑：原生 requests 嵌入 API 的格式变更</h2>
+<div class="warn">
+  <div class="warn-title">教材的 requests 端点 2025 年已不可用（实测）</div>
+  <table>
+    <tr><th>教材原代码</th><th>实测结果</th></tr>
+    <tr><td><code class="true">requests.post("https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding", json={"model": "text-embedding-v1", "input": texts})</code></td><td>返回 <code class="true">{"code": "BadRequest.IllegalInput", "message": "The input parameter requires json format"}</code>——API 格式已变</td></tr>
+    <tr><td><code class="true">model: text-embedding-v1</code></td><td>v1 可能已废弃；试 text-embedding-v3 同样报错</td></tr>
+    <tr><td><code class="true">data["output"]["embeddings"]</code></td><td>响应结构不是教材预期的格式</td></tr>
+  </table>
+  <p>API 端点变更在生产中很常见——**不要直接依赖 HTTP 端点，优先用官方 SDK/LangChain 封装**（DashScopeEmbeddings 就是百炼嵌入的 LangChain 封装，接口稳定）。本次改写保留了 get_embeddings 的函数签名，只换了内部实现——这就是封装的价值。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（百炼向量化 + FAISS + qwen-plus Agent，全链路跑通）</div>
+  <pre>
+正在抓取金融新闻数据……
+  [网络兜底] 抓取失败: ... 使用模拟金融新闻数据
+已获取新闻 6 条，正在进行文本嵌入……
+构建向量数据库中……
+Agent正在生成回答……
+
+--- Agent回答 ---
+最近关于货币政策的主要消息包括：
+
+1. **央行宣布下调金融机构存款准备金率0.5个百分点**：此举旨在释放长期流动性...
+2. **人民银行开展3000亿元MLF操作，中标利率维持不变**：显示央行保持流动性合理充裕...
+3. **银保监会加强商业银行流动性管理，防范系统性风险**：与货币政策协同配合...
+
+如需了解某条消息的详细背景或影响分析，可随时告诉我。
+  </pre>
+  <p><strong>解读</strong>：Agent 自主触发 search_finance 工具，查询向量化后 FAISS 搜出 3 条最相关新闻（降准、MLF、流动性——全是货币政策范畴），然后 qwen-plus 把检索结果组织成结构化的三点式回答。**RAG 的价值实证**：答案不是模型凭空编的，而是"检索到什么就答什么"——可追溯、可验证。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>与 char06 前四篇的收拢：从零件到系统</h2>
+<pre>
+  01 篇：向量化 + FAISS.from_documents（封装黑盒）     ← 本篇露出底层
+  02 篇：RecursiveCharacterTextSplitter（现成组件）    ← 04 篇手写版本是它的内部逻辑
+  03 篇：similarity_search(query, k=2)（检索）          ← 本篇 search_finance 是带 Agent 的检索
+  04 篇：clean_text + split_sentences + generate_chunks ← 清洗+切片流水线
+  ────────────────────────────────────────────────
+  05 篇：抓取→嵌入→索引→Agent检索→生成                  ← 五件事串成闭环 RAG
+</pre>
+<p>char06 的十篇结构：01-03 教 RAG 的"R"（检索）三个零件（向量化/索引/召回），04 教预处理流水线，05 教闭环 RAG（检索+生成）。后续篇会在此基础上加持久化、多 Agent 协作等进阶特性。</p>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角</h2>
+<ul>
+  <li><strong>抓取稳定性</strong>：国开证券官网 API 国内网络可能无法直连——本篇已加兜底；生产用自有知识库（本地文件/数据库）</li>
+  <li><strong>索引持久化</strong>：内存 FAISS 进程结束消失 → <code class="true">faiss.write_index / faiss.read_index</code> 落盘</li>
+  <li><strong>Embedding 模型升级</strong>：API 端点会变，模型会升级 → 用 LangChain 封装 + 函数签名固定，换实现一行代码</li>
+  <li><strong>FAISS IndexFlatL2 只适合小库</strong>：生产用 IndexIVFFlat / IndexHNSW（加速大规模检索）</li>
+  <li><strong>RAG 检索质量的关键是知识库设计</strong>：本篇 6 条模拟短句谁都能检索好；真实知识库的文档粒度、关键词覆盖、与查询的语义距离决定了检索效果——再强的模型也救不了糟糕的知识库</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>验证"嵌入模型可插拔"</strong>：把 get_embeddings 内部换成 DashScopeEmbeddings 的另一种模型（如果百炼有），保持函数签名不变——观察 build_faiss_index 和后续流程是否零改动可跑。</li>
+  <li><strong>换查询观察检索</strong>：把 user_msg 改成"最近有哪些关于国债的消息？"——预测哪条模拟新闻会被召回，跑完对照。</li>
+  <li><strong>用 FAISS 原生 API 看分数</strong>：把 search_finance 改成返回 <code class="true">zip(hits, D[0])</code>（D 是 L2 距离分数）——用数字量化"相似度"，加深对向量空间的理解。</li>
+  <li><strong>01+05 对照实验</strong>：把 01 篇的 FAISS.from_documents 产出的索引，和本篇 build_faiss_index 产出的索引，用同一条查询分别搜——验证两种写法的检索结果是否一致（一致 = LangChain 封装确实只是隐藏了底层逻辑）。</li>
+</ol>
+
+</div>
+</body>
+</html>

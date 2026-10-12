@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03_使用LangChain开发带语义找回功能Agent - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>03_使用LangChain开发带语义找回功能Agent - 代码解析</h1>
+<div class="meta">对应文件：char06/03_使用LangChain开发带语义找回功能Agent.py | 教材出处：第6章 RAG机制 例6-3 | 环境实测：DashScopeEmbeddings(text-embedding-v3) + FAISS | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 01 篇"入库→检索"流程的<strong>强化重演</strong>：五条 AI 知识文本向量化存入 FAISS，查询"什么是RAG机制？"，取最相似的 <strong>k=2</strong> 条返回——新增的知识点是 <strong>k 参数（召回条数控制）</strong>和<strong>嵌入模型选型</strong>的思考。<br>
+两个诚实辨析先行：<strong>①标题叫 Agent，但代码里没有 Agent</strong>（无大模型调用、无决策循环）——本质是语义检索，即 RAG 的"R"，等检索结果接入大模型生成答案才是完整 RAG/Agent；<strong>②教材用的 all-MiniLM-L6-v2 是英文向量模型</strong>，检索中文知识库会明显失真——本篇改用百炼中文向量模型（与 01 篇同款），原写法保留为注释。</p>
+
+<!-- ========== 二 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>语义找回（召回）</td><td>按语义相似度取回库内最相关的 k 条</td><td>similarity_search(query, k=2)</td></tr>
+  <tr><td>k 参数</td><td>召回条数——检索质量的"水龙头"</td><td>k=2 只取 Top2（太小漏答案，太大引噪声）</td></tr>
+  <tr><td>嵌入模型语言匹配</td><td>向量模型必须与文本同语言</td><td>英文 MiniLM → 中文百炼 text-embedding-v3（改写核心）</td></tr>
+  <tr><td>知识库（Knowledge Base）</td><td>被检索的文本集合</td><td>5 条 AI 领域短句（模拟企业知识库）</td></tr>
+  <tr><td>HuggingFaceEmbeddings</td><td>本地嵌入模型加载器（教材原方案）</td><td>注释保留——本地路线的完整说明见第七节</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>整体执行流程图</h2>
+<pre>
+  【入库】5 条知识文本 → DashScopeEmbeddings 向量化(1024维) → FAISS 索引
+  【检索】"什么是RAG机制？" → 同一模型向量化 → FAISS 算距离 → 排序 → 取 Top-2
+                                                                │
+              ┌─────────────────────────────────────────────────┘
+              ▼
+  [Top 1] RAG机制结合检索系统与生成模型进行问答   ← 与查询同题，实至名归
+  [Top 2] OpenAI模型支持函数调用与多轮对话        ← 候选中优势细微（见第六节解读）
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>4.1 与 01 篇的差异点：k 参数（原样保留）</h3>
+<pre>
+matched_docs = db.similarity_search(query, k=2)   # 01 篇用默认 k=4，本篇显式 k=2
+</pre>
+<p><strong>k 的权衡</strong>：RAG 后续要把召回文本塞进大模型的上下文窗口——k 太小可能漏掉真正有用的知识（答案不在 Top2 里），k 太大塞进一堆无关文本（浪费 token 且稀释模型注意力）。生产中 k 通常取 3-8，配合相似度分数阈值一起调。</p>
+<h3>4.2 其余三段（原样保留）</h3>
+<pre>
+db = FAISS.from_documents(documents, embedding_model)   # 入库+建索引（同 01 篇）
+matched_docs = db.similarity_search(query, k=2)          # 检索
+for idx, doc in enumerate(matched_docs): ...             # 输出
+</pre>
+
+<!-- ========== 五 ========== -->
+<h2>本篇最重要的知识点：嵌入模型必须匹配语言</h2>
+<div class="warn">
+  <div class="warn-title">教材原方案的三重问题与改写决策</div>
+  <table>
+    <tr><th>教材原写法</th><th>问题</th></tr>
+    <tr><td><code class="inline">from langchain.embeddings import HuggingFaceEmbeddings</code></td><td>0.x 路径断裂（同 01 篇）</td></tr>
+    <tr><td><code class="inline">HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")</code></td><td>①需要 sentence-transformers 包 + 首次运行联网下载模型（国内需配 hf-mirror 镜像）<br>②<strong>all-MiniLM-L6-v2 是英文模型</strong>（384 维，在英文语料上训练）——中文句子进它的向量空间，语义距离基本失真，检索中文知识库的排序不可信</td></tr>
+  </table>
+  <p><strong>改写决策</strong>：换 <code class="inline">DashScopeEmbeddings(text-embedding-v3)</code>——中文原生、1024 维、与对话模型共用一把钥匙（与 01 篇一致，符合全系列"统一 dashscope"约定）。FAISS 和检索代码一行不动——<strong>嵌入模型可插拔</strong>正是 LangChain 抽象的价值。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>真实运行输出与排序解读</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（百炼 text-embedding-v3 真实向量化）</div>
+  <pre>
+[Top 1] RAG机制结合检索系统与生成模型进行问答
+[Top 2] OpenAI模型支持函数调用与多轮对话
+  </pre>
+  <p><strong>解读两个层次</strong>：</p>
+  <ul>
+    <li><strong>Top1 无悬念</strong>：与查询共享"RAG机制"四字且语义同题——语义检索的"保底能力"（连关键词都重合的当然第一）</li>
+    <li><strong>Top2 值得细品</strong>：它在"LangChain是开发框架 / 向量数据库支持语义搜索 / 嵌入模型将文本转向量"四个候选中胜出，但优势细微——这几条同属"AI 技术能力描述"句式，语义距离非常接近，最终排序由向量的细微差异决定。<strong>启示：当知识条目语义相近时，纯向量检索的排序会不稳定</strong>——生产的解法是混合检索（向量 + 关键词 BM25）或重排序（rerank 模型精排）</li>
+  </ul>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>知识补充：本地嵌入模型的完整路线（教材意图的另一种实现）</h2>
+<div class="card">
+  <div class="card-title">如果想走教材的 HuggingFaceEmbeddings 本地路线</div>
+  <p>本地嵌入模型的价值：<strong>零 API 成本、数据不出门、离线可用</strong>。完整步骤：</p>
+  <ol>
+    <li>安装依赖：<code class="inline">pip install sentence-transformers</code>（自动带上 torch/transformers，约 2GB）</li>
+    <li>国内镜像：设置环境变量 <code class="inline">HF_ENDPOINT=https://hf-mirror.com</code>，否则模型下载会卡住</li>
+    <li>选中文模型（关键！）：不要用教材的英文 MiniLM，选 <code class="inline">BAAI/bge-small-zh-v1.5</code>（512 维，中文效果好，约 100MB）或 <code class="inline">BAAI/bge-large-zh-v1.5</code></li>
+    <li>代码只改一行：<code class="inline">HuggingFaceEmbeddings(model_name="BAAI/bge-small-zh-v1.5")</code></li>
+  </ol>
+  <p><strong>选型对照</strong>：API 向量（本篇实际方案）胜在中文质量与零部署，适合快速开发；本地向量胜在数据隐私与零调用成本，适合内网/大规模批量。两者 FAISS 侧完全同构，切换成本一行代码。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角</h2>
+<ul>
+  <li><strong>k 与阈值的组合</strong>：只调 k 不够，用 similarity_search_with_score 看分数——低于阈值的候选宁可不召回（"不知道"好过"乱检索"）</li>
+  <li><strong>语义相近条目的排序不稳定</strong>（本篇 Top2 现象）→ 混合检索（向量+BM25）+ rerank 精排是标配解法</li>
+  <li><strong>知识库质量 &gt; 模型质量</strong>：5 条短句谁都能检索好；真实知识库的条目设计（每条一个主题、避免互相重复）对召回的影响比换模型更大</li>
+  <li><strong>本篇仍是"裸检索"</strong>：离完整 RAG 还差一步——把召回文本作为上下文喂给大模型生成答案（后续篇）</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>k=5 全召回</strong>：改成 k=5，看完整排序——五个候选的相对位置就是语义距离的完整画像（哪两条排最后？符合你的直觉吗）。</li>
+  <li><strong>看分数</strong>：换 similarity_search_with_score，打印 Top2 的 L2 距离——用数字验证"Top2 优势细微"的判断。</li>
+  <li><strong>换查询</strong>：query 改成"怎么让大模型调用外部工具？"——预测 Top2 会怎么变（提示：函数调用那条可能上位），跑完对照。</li>
+  <li><strong>本地模型初体验（进阶）</strong>：按第七节路线装 sentence-transformers + 下载 bge-small-zh-v1.5，把嵌入模型换成它再跑——对比两种方案的 Top2 是否一致，体会"嵌入模型决定排序"。</li>
+</ol>
+
+</div>
+</body>
+</html>

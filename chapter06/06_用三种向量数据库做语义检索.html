@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06_用三种向量数据库做语义检索 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>06_用三种向量数据库做语义检索 - 代码解析</h1>
+<div class="meta">对应文件：char06/06_用三种向量数据库做语义检索.py | 教材出处：第6章 RAG机制 例6-6 | 环境实测：FAISS + Chroma 1.5.9（Weaviate 需 Docker）+ qwen-plus Agent | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 <strong>"同一个嵌入模型、同一份数据，换三种向量数据库做同一件事"</strong> 的对比实验——六步走完"抓数据→向量化→三种索引→Agent 调用→生成回答"的完整闭环，最核心的教学价值在于展示<strong>三种向量数据库的部署形态差异</strong>。改写后 FAISS 和 Chroma 真实跑通，Weaviate 因需 Docker 服务端注释保留（本机无 Docker）。</p>
+
+<!-- ========== 二 ========== -->
+<h2>三种向量数据库部署形态对比表</h2>
+<table>
+  <tr><th>维度</th><th>FAISS</th><th>Chroma</th><th>Weaviate</th></tr>
+  <tr><td>类型</td><td>纯内存索引库</td><td>嵌入式向量数据库</td><td>服务端向量数据库</td></tr>
+  <tr><td>安装</td><td><code class="true">pip install faiss-cpu</code>（已装）</td><td><code class="true">pip install chromadb</code>（刚装）</td><td>需 Docker 启动容器（本机没有）</td></tr>
+  <tr><td>持久化</td><td><code class="true">faiss.write_index</code> 手动落盘</td><td>默认持久化到本地文件夹</td><td>内置持久化</td></tr>
+  <tr><td>API 风格</td><td>numpy 矩阵 + 函数调用</td><td>面向对象 .add/.query</td><td>RESTful API（HTTP 调用）</td></tr>
+  <tr><td>适用场景</td><td>实验/原型/单进程</td><td>轻量 RAG/个人项目</td><td>生产级分布式多租户</td></tr>
+  <tr><td>本次运行</td><td>✅ 跑通</td><td>✅ 跑通（EphemeralClient 内存模式）</td><td>❌ 需 Docker，注释保留</td></tr>
+</table>
+<p>FAISS 是"工具"（只有索引没有元数据管理），Chroma 是"嵌入式数据库"（自带文档管理+持久化），Weaviate 是"服务端数据库"（独立进程+REST API）——三者构成向量库的三代演进形态。<strong>选择哪种取决于部署复杂度 vs 功能需求的权衡</strong>：原型用 FAISS，轻量 RAG 用 Chroma，生产多租户用 Weaviate/Milvus/Qdrant。</p>
+
+<!-- ========== 三 ========== -->
+<h2>改写要点（三条路线的处置）</h2>
+<div class="warn">
+  <div class="warn-title">原代码三处必改（同 05 篇结构）</div>
+  <ol>
+    <li><strong>虚构框架</strong>：qwen_agent.Agent/Tool/Message → dashscope function calling（Agent 循环 + 工具三件套）</li>
+    <li><strong>原生 requests 嵌入 API</strong>：2025 年端点格式已变（05 篇实测 BadRequest）→ DashScopeEmbeddings（签名保留 List[np.ndarray]）</li>
+    <li><strong>Weaviate 服务端</strong>：本机无 Docker → 代码原样注释保留 + 说明启动命令</li>
+  </ol>
+</div>
+<div class="card">
+  <div class="card-title">Chroma 1.x API 适配（顺手修正）</div>
+  <p>教材用的 <code class="inline">chromadb.Client()</code> 在 1.x 里仍可用但有弃用警告。改写用 <code class="inline">chromadb.EphemeralClient()</code>——纯内存模式（与 FAISS 行为一致，进程结束消失），更明确地表达"演示用、不持久化"的意图。</p>
+</div>
+
+<!-- ========== 四 ========== -->
+<h2>整体执行流程图</h2>
+<pre>
+  fetch_energy_policy_titles() → 6 条模拟新能源政策（网络失败兜底）
+        │
+        ▼
+  get_qwen_embedding() → DashScopeEmbeddings(text-embedding-v3) 逐条约 1024 维
+        │
+        ├──→ FAISS（纯内存，IndexFlatL2）
+        │       构建: faiss.IndexFlatL2(dim) + index.add(vstack)
+        │       查询: index.search(qvec, k=3)
+        │
+        ├──→ Chroma（嵌入式，EphemeralClient）
+        │       构建: collection.create + collection.add(documents/ids/embeddings)
+        │       查询: collection.query(query_embeddings=[emb], n_results=3)
+        │
+        └──→ Weaviate（服务端，需 Docker）
+                构建: weaviate.Client("http://localhost:8080") + schema.create_class + data_object.create
+                查询: client.query.get("Policy").with_near_vector({...}).do()
+        │
+        ▼
+  agent_chat(qwen-plus, "新能源政策")
+    → 模型自主决策调 search_faiss 或 search_chroma（两个都可用，可能两个都调）
+    → FAISS/Chroma 各自搜 top-3
+    → qwen-plus 根据检索结果生成自然语言回答
+</pre>
+
+<!-- ========== 五 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>5.1 三种索引构建的 API 对照</h3>
+<pre>
+# FAISS：numpy 矩阵 + 函数（最底层、最轻量）
+index = faiss.IndexFlatL2(dim)        # 指定 L2 距离的索引
+index.add(np.vstack(embeddings))        # 矩阵一次性灌入
+D, I = index.search(qvec, k=3)          # 返回距离 + 索引
+
+# Chroma：面向对象 .add/.query（封装了文档管理）
+collection = chroma.EphemeralClient().create_collection(name="...")
+collection.add(documents=[...], ids=[...], embeddings=[...])
+result = collection.query(query_embeddings=[emb], n_results=3)
+
+# Weaviate：RESTful API（HTTP 调用，最重量级）
+client = weaviate.Client("http://localhost:8080")
+client.schema.create_class({...})       # 先声明 schema
+client.data_object.create({...}, "Policy", vector=vec)  # 数据带 vector 提交
+result = client.query.get(...).with_near_vector(...).with_limit(3).do()
+</pre>
+<h3>5.2 三个 Tool 类 → 纯函数 + Agent 循环</h3>
+<p>原写法：<code class="inline">class FaissSearchTool(Tool):</code>（继承虚构 Tool）→ <code class="inline">class FaissSearchTool:</code>（纯类）+ <code class="inline">search(query)</code> 方法。三个类的核心检索逻辑（向量化→搜 top-k→返回命中）<strong>完全原样保留</strong>，只是去掉了虚构框架的继承和 call() 命名。</p>
+
+<!-- ========== 六 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（FAISS + Chroma 双库 + qwen-plus Agent，全链路跑通）</div>
+  <pre>
+Agent正在回答：近期有哪些新能源相关政策？
+
+--- Agent回答 ---
+近期国家出台的新能源相关政策主要包括以下三项：
+
+1. 新能源汽车购置补贴延续：...补贴政策延续至2025年底...
+2. "十四五"可再生能源发展规划：...光伏装机量目标翻倍...
+3. 新型电力系统支撑政策：...特高压提升新能源消纳能力...
+  </pre>
+  <p>观察：Agent 用 FAISS 和 Chroma 两个工具都可能调了（system_message 说"两个工具共享同一个知识库"），但因为返回的都是同一知识库的 top-3，qwen-plus 选择了去重后组织成三点式回答——工具的"多"被 Agent 层面的智能聚合"收"了，这正是 function calling 的优雅之处。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>与 char05-03 的对照：向量库可插拔的实证</h2>
+<pre>
+  char05-03（LangChain 封装）          本篇（原生 API）
+  ┌─────────────────────────┐       ┌──────────────────────────────────┐
+  │ FAISS.from_documents    │       │ FAISS: IndexFlatL2 + add + search │
+  │   (docs, emb_model)     │       │ Chroma: create_collection + add   │
+  │   → 黑盒完成入库+索引    │       │ Weaviate: schema + data_object    │
+  └─────────────────────────┘       └──────────────────────────────────┘
+  ↑ 两种写法的底层完全同构：调 emb_fn → 堆矩阵 → 灌入索引
+  ↑ 向量库的"换"只影响索引层，嵌入层和检索层接口不变
+</pre>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角</h2>
+<ul>
+  <li><strong>选库决策树</strong>：原型/实验 → FAISS（最轻）；轻量 RAG/个人项目 → Chroma（自带持久化+元数据）；生产分布式 → Milvus/Qdrant/Weaviate（REST API + 水平扩展）</li>
+  <li><strong>嵌入模型可插拔</strong>（05/06 篇共同实证）：换模型只改 get_embeddings 内部，索引构建和检索零改动——这就是"接口签名固定"的架构设计价值</li>
+  <li><strong>多库检索的去重</strong>：同一知识库用不同向量库检索会得到部分重叠结果（如本篇）——Agent 层面需要去重/重排序（rerank）</li>
+  <li><strong>Weaviate 的 Docker 启动</strong>：<code class="true">docker run -p 8080:8080 semitechnologies/weaviate:latest</code>（教材注释里已提）</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>对比 FAISS vs Chroma 检索结果</strong>：把 _faiss_tool.search() 和 _chroma_tool.search() 直接打印出来（不走 Agent）——同一条查询，两个库的 top-3 是否一致？体会"向量库算法差异"（FAISS L2 欧氏距离 vs Chroma 默认余弦相似度）。</li>
+  <li><strong>Chroma 持久化</strong>：把 EphemeralClient 改成 <code class="true">PersistentClient(path="./chroma_data")</code>——进程结束后数据还在，再跑一次看是否需要重建集合。</li>
+  <li><strong>验证"多库去重"问题</strong>：让 Agent 先调 FAISS 再调 Chroma，观察两个结果的重叠度——思考生产中如何解决（rerank 重排序 / 合并去重）。</li>
+  <li><strong>进阶：Milvus/Qdrant 初体验</strong>：了解 Milvus（pip install pymilvus）和 Qdrant（pip install qdrant-client）的客户端 API——对比三种部署形态的调用风格差异。</li>
+</ol>
+
+</div>
+</body>
+</html>

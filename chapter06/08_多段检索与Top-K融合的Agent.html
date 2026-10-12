@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08_多段检索与Top-K融合的Agent - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>08_多段检索与Top-K融合的Agent - 代码解析</h1>
+<div class="meta">对应文件：char06/08_多段检索与Top-K融合的Agent.py | 教材出处：第6章 RAG机制 例6-8 | 环境实测：DashScopeEmbeddings + FAISS(top_k=5) + qwen-plus | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇与 07 篇结构几乎同构——同样的"显式 RAG 两步"（检索→拼 prompt→调 LLM），唯一差异是<strong>显式命名并强化了 Top-K 融合</strong>的检索策略：默认 top_k=5，FAISS 搜出 5 条最相关的政策标题，拼接成融合上下文塞进 prompt。<strong>关键认知</strong>：07 篇 k=5 但没叫"融合"，本篇是"给 k=5 起了个名字叫 Top-K 融合"——这个命名本身就是生产 RAG 的核心优化思路之一。</p>
+
+<!-- ========== 二 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>Top-K 融合</td><td>搜 top_k 而非 top-1，拼接多段形成更丰富上下文</td><td>MultiPassageRetrievalTool 的 call() 方法：join(top_passages)</td></tr>
+  <tr><td>top_k 参数</td><td>检索的召回数量</td><td>默认 5，比 07 篇的 k=5 一样多但显式叫"融合"</td></tr>
+  <tr><td>硬切 vs 贪婪拼接</td><td>本篇 text[i:i+max_len] 均匀硬切 vs 04/07 按句贪婪拼</td><td>硬切会截断句子但长度一致</td></tr>
+  <tr><td>显式 RAG</td><td>开发者写死检索→生成流程</td><td>同 07 篇，与 05/06 的 function calling 隐式版对照</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>整体执行流程图</h2>
+<pre>
+  fetch_policy_data() → 8 条模拟统计政策（网络失败兜底）
+        │
+        ▼
+  split_chunks(max_len=100) → 硬切（均匀分段，不考虑语义边界）
+        │  对比 04/07：split_sentences + generate_chunks（按句贪婪拼接）
+        ▼
+  get_qwen_embedding() → DashScopeEmbeddings(text-embedding-v3) 逐条约 1024 维
+        │
+        ▼
+  MultiPassageRetrievalTool → FAISS.IndexFlatL2(dim=1024).add(矩阵)
+        │
+        ▼
+  ======== Top-K 融合检索 ========
+  tool.call("GDP核算方法")
+    → 查询向量化
+    → FAISS 搜 top_k=5
+    → fused_context = "\n".join(top_passages)  ← 融合发生在这里
+    → 返回：5 条最相关的政策标题拼接成一个长字符串
+        │
+        ▼
+  build_prompt(query, fused_context) → 拼接成"语料片段 + 提问"格式
+        │
+        ▼
+  dashscope.Generation.call(qwen-plus, prompt) → 生成回答
+        │
+        ▼
+  输出：精确引用检索到的政策标题的结构化回答
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>4.1 MultiPassageRetrievalTool.call()：Top-K 融合的核心</h3>
+<pre>
+def call(self, query: str) -> str:
+    qvec = get_qwen_embedding([query])[0].reshape(1, -1)
+    D, I = self.index.search(qvec, self.top_k)   # 搜 top_k 条
+    top_passages = [self.docs[i] for i in I[0]]
+    # Top-K融合策略：拼接多个片段形成更丰富上下文（本篇灵魂）
+    fused_context = "\n".join(top_passages)
+    return fused_context
+</pre>
+<p><strong>关键一行</strong>：<code class="inline">fused_context = "\n".join(top_passages)</code>——把 FAISS 搜出的 top_k 条最相关段落，用换行拼接成一个长字符串，塞进 prompt 里作为"语料片段"。这就是"融合"的本质：<strong>不是让 LLM 逐条看，而是把多条知识打包成一个上下文块</strong>。</p>
+<h3>4.2 split_chunks：硬切 vs 贪婪拼接（与 04/07 篇的对照）</h3>
+<pre>
+# 本篇：硬切（均匀分段，不考虑语义边界）
+def split_chunks(texts, max_len=100):
+    for text in texts:
+        chunks.extend([text[i:i+max_len] for i in range(0, len(text), max_len)])
+
+# 07 篇：贪婪拼接（按句号切 + 贪婪合并）
+def split_text_into_chunks(texts, max_length=150):
+    for text in texts:
+        parts = text.split("。")           # 先按语义边界切
+        # 然后贪婪合并到 max_length
+</pre>
+<p>硬切的优点：每段长度一致，适合无标点/短文本场景。硬切的缺点：<strong>截断句子</strong>（如"GDP核算方法试行统一"→硬切可能变成"GDP核算方法试行"和"统一"两段，语义断裂）。贪婪拼接的优点：保留完整句子。贪婪拼接的缺点：每段长度不均，边界依赖标点。<strong>哪种好取决于文本类型</strong>——有标点的长文本用贪婪拼接更好。</p>
+
+<!-- ========== 五 ========== -->
+<h2>Top-K 融合：为什么搜 top_k 比搜 top_1 好？</h2>
+<div class="card">
+  <div class="card-title">三个实际原因</div>
+  <ol>
+    <li><strong>语义匹配是近似的</strong>：向量空间里"GDP核算方法"和"研发支出核算方法"语义相近，top-1 可能召回后者，top_k=5 才能保证真正相关的"GDP核算方法"在里面——<strong>放宽召回 → 让 LLM 自己筛选</strong>，比硬卡 top-1 更稳妥</li>
+    <li><strong>答案可能跨多条知识</strong>：本篇用户问"GDP核算方法"，模拟库里分散在两条标题里——只搜 top-1 可能只给一条，搜 top-5 两条都在 → LLM 可以综合两条给出更完整的回答</li>
+    <li><strong>降低 FAISS 参数依赖</strong>：FAISS L2 距离的阈值不好调（太小漏掉真相关，太大召回太多噪声）——直接搜 top_k 更简单可控</li>
+  </ol>
+  <p><strong>但也有代价</strong>：融合后 context 变长 → 占用更多 prompt tokens → 可能稀释 LLM 的注意力（长上下文里"注意力分配"是问题）。生产通常在 Top-K 后加 <strong>rerank 重排序</strong>，选 top-2 最相关的，兼顾召回率和上下文简洁性。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（DashScopeEmbeddings + FAISS top_k=5 + qwen-plus）</div>
+  <pre>
+用户提问：国家统计局有哪些针对GDP核算方法的文件或解释？
+
+--- Agent回答 ---
+国家统计局针对GDP核算方法的文件或解释包括：
+1. 《关于改进地区GDP核算方法的通知》（试行统一核算制度）；
+2. 改革研发支出核算方法（更好反映创新活动价值）。
+  </pre>
+  <p><strong>检索质量验证</strong>：模拟库里只有 2 条 GDP 相关标题，FAISS top_k=5 都召回了——验证了"放宽召回 → LLM 综合多条"的有效性。如果 top_k=1，可能只给 GDP 统一核算那一条，回答就不完整。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>本篇在 char06 中的位置 + 与 07 篇的对照</h2>
+<pre>
+  07 篇：法律 RAG，显式两步，k=5，按句贪婪拼接
+  08 篇：统计 RAG，显式两步，k=5（显式叫"Top-K 融合"），硬切
+  ────────────────────────────────────────────
+  两篇结构完全同构，本篇多了一个命名 + 切片策略不同
+  命名的价值：把"搜多条"从"随便这么做"变成"有意识的融合策略"
+  切片策略对照：硬切 vs 贪婪拼接 → 不同文本类型的不同选择
+</pre>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角</h2>
+<ul>
+  <li><strong>Top-K 的 k 值怎么选</strong>：k=3~10 之间，取决于知识库大小和查询模糊度——知识库小 k 可以小（如本篇只有 8 条，k=5 太宽了），知识库大 k 可以大。**生产加 rerank**：先粗召回 top-20，再 rerank 精排选 top-3</li>
+  <li><strong>融合策略不止 join</strong>：简单拼接只是最基础的融合；更高级的有 MapReduce（每段先让 LLM 总结→总结再合并）、递归摘要（递归把小段合成大段直到只剩一个）</li>
+  <li><strong>硬切 vs 贪婪拼接的选型</strong>：有标点的自然语言文本 → 贪婪拼接（04/07 篇）；代码/表格/无标点文本 → 硬切 + overlap（重叠片段保证语义不截断）</li>
+  <li><strong>显式 vs 隐式 RAG</strong>：本篇和 07 篇用显式，生产可能更常用 function calling 隐式——但显式是理解 RAG 底层的必经之路</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>对比 k=1 vs k=5</strong>：把 tool 初始化改成 <code class="true">top_k=1</code> 和 <code class="true">top_k=5</code> 各跑一次——对比两次回答的完整度差异，体会"放宽召回"的价值。</li>
+  <li><strong>看检索到什么</strong>：<code class="true">print(tool.call(query))</code>——亲眼看到 top-5 融合后的 context 长什么样。</li>
+  <li><strong>硬切 vs 贪婪拼接</strong>：把 split_chunks 换成 07 篇的 split_text_into_chunks——对比两种切片的 chunks 数量和长度分布。</li>
+  <li><strong>进阶：rerank 初体验</strong>：了解 bge-reranker-v2-m3 等 cross-encoder 重排序模型——如何在 FAISS top-20 的基础上精排选 top-3，生产 RAG 的标准做法。</li>
+</ol>
+
+</div>
+</body>
+</html>

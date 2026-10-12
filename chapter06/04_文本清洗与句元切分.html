@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04_文本清洗与句元切分 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>04_文本清洗与句元切分 - 代码解析</h1>
+<div class="meta">对应文件：char06/04_文本清洗与句元切分.py | 教材出处：第6章 RAG机制 例6-4 | 环境实测：纯本地 re + Python，无外部依赖 | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 <strong>RAG 入库前的另一条流水线：正则清洗 → 按句切分 → 贪婪拼接</strong>——用三行正则和一段循环，手写了一套"文档预处理"的完整流程。与 02 篇的 RecursiveCharacterTextSplitter（现成组件）本质等价：都是按语义边界切 + 按上限拼接。本篇的价值在于<strong>把黑盒拆开看内部</strong>——理解了这套手写逻辑，再看 02 篇的 splitter 参数就有底了。<br>
+改写只有一处：末尾 Colab 专用的 <code class="inline">ace_tools.display_dataframe_to_user</code> 调用（本地没有 ace_tools 库）→ 换成原生 print 输出。三个正则函数和 generate_chunks <strong>全部原样保留</strong>。</p>
+
+<!-- ========== 二 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>白名单正则</td><td><code class="inline">[^…]</code> 表示"不在列表里的全删掉"</td><td>clean_text 第一行：保留中文+标点+英文+数字</td></tr>
+  <tr><td>\s+ 清空白</td><td>所有空白（空格/换行/Tab）合并清空</td><td>clean_text 第二行：多段文本变成一整行</td></tr>
+  <tr><td>零宽断言</td><td><code class="inline">(?<=...)</code> 表示"在它后面断，但它本身不被吃掉"</td><td>split_sentences：在句号/叹号/问号后断句，标点保留在句尾</td></tr>
+  <tr><td>贪婪拼接</td><td>句子尽量拼到接近上限才成块</td><td>generate_chunks：同 02 篇 splitter 的贪婪思想</td></tr>
+  <tr><td>re.split 末尾空串</td><td>文本末尾是分隔符时 split 会多产生一个空串</td><td>实测 sentences=6 但 chunks=5（空串被合并）</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>整体执行流程图（含实测结果）</h2>
+<pre>
+  raw_text（5 段带换行的原始文本）
+        │
+        ▼
+  clean_text（两行正则）
+    ① [^中文+标点+英文+数字] → 删掉所有白名单外字符
+    ② \s+ → 清所有空白
+        │
+        ▼
+  一整行的干净文本（保留逗号/句号/全角括号等）
+        │
+        ▼
+  split_sentences（断言在。！？后断）
+        │
+        ▼
+  6 个元素的列表（5 个真句子 + 末尾 1 个空串）
+        │
+        ▼
+  generate_chunks（贪婪拼接 max_len=80）
+    每句独立都没到上限 → 一句一块
+    末尾空串 len=0 被合并进最后一块
+        │
+        ▼
+  5 个 chunks
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>4.1 clean_text：两行正则的清洗策略（原样保留）</h3>
+<pre>
+def clean_text(text):
+    text = re.sub(r"[^\u4e00-\u9fa5。！？；，、（）——""《》：A-Za-z0-9]", "", text)
+    text = re.sub(r"\s+", "", text)
+    return text
+</pre>
+<p><strong>第一行解读</strong>：<code class="inline">[^…]</code> 里的 <code class="inline">^</code> 取反——<strong>"不在白名单里的全删掉"</strong>。白名单包含：中文汉字 Unicode 范围、中文常用标点（句号感叹号问号分号顿号逗号全角括号破折号引号书名号冒号）、英文字母、数字。<strong>注意细节</strong>：白名单里有全角括号 <code class="inline">（）</code> 但没有半角 <code class="inline">()</code>——原始文本用全角所以保留了；换成半角括号会被删掉。</p>
+<p><strong>第二行解读</strong>：<code class="inline">\s+</code> 匹配一个或多个空白字符（空格、换行、Tab），替换为空——<strong>多段文本被压成一整行</strong>，句子之间靠保留下来的句号分隔。</p>
+<h3>4.2 split_sentences：零宽断言断句（原样保留）</h3>
+<pre>
+return re.split(r"(?<=[。！？])", text)
+</pre>
+<p><code class="inline">(?<=...)</code> 是<strong>正向后顾断言</strong>——"在句号/叹号/问号后面断开，但把它本身留在分割结果里"。所以每个 chunk 句尾都有标点。没有断言的话 <code class="inline">re.split(r"[。！？]", text)</code> 会把标点也当成分隔符吃掉，句尾标点消失。</p>
+<h3>4.3 generate_chunks：贪婪拼接（原样保留）</h3>
+<pre>
+def generate_chunks(sentences, max_len=60):
+    chunks = []
+    current_chunk = ""
+    for sentence in sentences:
+        if len(current_chunk) + len(sentence) <= max_len:
+            current_chunk += sentence
+        else:
+            if current_chunk:
+                chunks.append(current_chunk)
+            current_chunk = sentence
+    if current_chunk:
+        chunks.append(current_chunk)
+    return chunks
+</pre>
+<p>逻辑和 02 篇 RecursiveCharacterTextSplitter 的贪婪合并<strong>完全同构</strong>——差别只是 02 篇有递归降级机制（一种边界切不动换更粗的边界），本篇没有。<strong>实测中 max_len=80 且每句都没到上限，所以一句一块、共 5 块</strong>。如果 max_len 改小到 50，长句会被迫拆开——这就是 02 篇递归降级存在的意义（字符级硬切在本篇会把句子拦腰斩断）。</p>
+
+<!-- ========== 五 ========== -->
+<h2>隐藏教学点：re.split 的末尾空串陷阱</h2>
+<div class="warn">
+  <div class="warn-title">实测 sentences=6 但 chunks=5——差在哪一个？</div>
+  <p>文本末尾是句号（"方案。"），<code class="inline">re.split(r"(?<=[。！？])", text)</code> 在最后一个句号后也会分割一次，产生一个<strong>空字符串元素</strong>：</p>
+  <pre>
+# 伪代码演示
+>>> re.split(r"(?<=x)", "axbxc")   # 在 x 后断
+['a', 'b', 'c', '']                 # 3 个分隔符 → 4 段，最后一段是空串！
+  </pre>
+  <p>5 个句号 → 6 个元素 = 5 个真句子 + 1 个空串。generate_chunks 遍历空串时 <code class="inline">len("")=0</code>，<code class="inline">0 + len(current_chunk) &lt;= max_len</code> 永远成立——空串被合并进了上一块，所以最终 chunks=5 而非 6。<strong>生产解法</strong>：加一行过滤 <code class="inline">sentences = [s for s in sentences if s]</code>。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（纯本地 re，无 API 调用）</div>
+  <pre>
+清洗后文本：（一整行，保留逗号/句号/全角括号等白名单字符）
+  近年来，人工智能在各个领域取得了飞速发展，尤其是在自然语言处理方面。大语言模型（如GPT、BERT等）的出现，
+  使得计算机在理解和生成自然语言的能力上有了质的飞跃。然而，模型的性能高度依赖于输入数据的质量，如何对
+  原始文本进行高质量的清洗与切分，成为构建高效语义检索系统的基础。以RAG为代表的检索增强生成方法，需要将
+  文档划分为结构合理、语义完整的片段，才能在后续嵌入计算与召回阶段获得最优表现。本文将探讨一种面向中文
+  文本的清洗与句元切分方案。
+
+切分得到 6 个句子  ← 末尾空串，隐藏点！
+
+拼接得到 5 个 chunk（max_len=80，每句独立成块都没到上限）：
+  [1] 近年来，人工智能在各个领域取得了飞速发展，尤其是在自然语言处理方面。
+  [2] 大语言模型（如GPT、BERT等）的出现，使得计算机在理解和生成自然语言的能力上有了质的飞跃。
+  [3] 然而，模型的性能高度依赖于输入数据的质量，如何对原始文本进行高质量的清洗与切分，成为构建高效语义检索系统的基础。
+  [4] 以RAG为代表的检索增强生成方法，需要将文档划分为结构合理、语义完整的片段，才能在后续嵌入计算与召回阶段获得最优表现。
+  [5] 本文将探讨一种面向中文文本的清洗与句元切分方案。
+  </pre>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>与 02 篇的对照：自定义实现 vs 现成组件</h2>
+<pre>
+  本篇手写三步                          02 篇现成组件
+  ┌──────────────┐               ┌────────────────────────┐
+  │ clean_text() │──白名单清洗──→ │ RecursiveCharacter     │
+  │ split_sent() │──零宽断言断句─→ │ TextSplitter           │
+  │ generate_…() │──贪婪拼接────→ │ (默认 separators 列表)  │
+  └──────────────┘               └────────────────────────┘
+  产出：5 chunks                        产出：3 chunks（max_len=100 贪婪合并）
+  差异：本篇 max_len=80 且无递归降级      差异：默认 separators 在换行处切 + 递归降级
+</pre>
+<p>两篇的<strong>核心思想完全一致</strong>（按语义边界切 + 按上限贪婪拼），02 篇只是多了"递归降级"（一种边界切不动换更粗的边界）和"自动选参数"的包装。理解了本篇手写逻辑，02 篇的 splitter 就不再是黑盒。</p>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角</h2>
+<ul>
+  <li><strong>白名单正则的维护成本</strong>：本篇列了一堆标点，真实场景遇到新标点（波浪线 ~、省略号 …、数学符号 ∞ 等）要不停加——更灵活的写法是"只保留中文、英文、数字"加 <code class="inline">[^\u4e00-\u9fa5A-Za-z0-9]</code> 然后 <code class="inline">\.strip()</code>，让中文自然边界成句</li>
+  <li><strong>零宽断言的陷阱</strong>：<code class="inline">split_sentences</code> 只认。！？——省略号 …、问号？ 全半角混用、句号后有引号的情况会漏切</li>
+  <li><strong>re.split 末尾空串必须过滤</strong>（第五节）</li>
+  <li><strong>自定义 vs 现成的选型</strong>：一次性处理/学习用途用自定义；生产用 langchain_text_splitters（支持递归降级、按结构切、带 metadata），但要理解它的内部逻辑（本篇就是那个内部逻辑）</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>复现末尾空串</strong>：<code class="true">print(repr(split_sentences(cleaned_text)))</code>——亲眼看到第 6 个空串；加过滤 <code class="true">split_sentences(...)[:-1]</code> 或加过滤 <code class="true">[s for s in sentences if s]</code>，验证 sentences 从 6 变 5。</li>
+  <li><strong>半角括号实验</strong>：把 raw_text 里的全角括号（如GPT、BERT等）换成半角 (如GPT、BERT等)，再跑——观察 clean_text 后括号是否被删掉，GPT 和 BERT 是否贴成 GPTBERT。</li>
+  <li><strong>改 max_len 观察合并</strong>：generate_chunks 的 max_len 改成 50——观察原来长句被拆成几块、拆在哪（体会 02 篇递归降级存在的意义）。</li>
+  <li><strong>串起 02+04</strong>：把 02 篇的 RecursiveCharacterTextSplitter 用在本篇 raw_text 上，参数调成本篇等价的 separators + chunk_size——对比两篇产出的 chunks 是否一致，亲手验证"现成组件=手写逻辑+包装"。</li>
+</ol>
+
+</div>
+</body>
+</html>

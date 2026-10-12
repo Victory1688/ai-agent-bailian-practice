@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01_将中文文本转换为向量存入faiss - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>01_将中文文本转换为向量存入faiss - 代码解析</h1>
+<div class="meta">对应文件：char06/01_将中文文本转换为向量存入faiss.py | 教材出处：第6章 RAG机制 例6-1 | 环境实测：langchain_community + faiss-cpu + DashScopeEmbeddings(text-embedding-v3) | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、先回答你的问题：这个报错是要装包吗？</h2>
+<div class="warn">
+  <div class="warn-title">不是缺包，是教材的 import 路径过时了（char03/04 同款问题）</div>
+  <table>
+    <tr><th>报错原因</th><th>解释</th></tr>
+    <tr><td>① import 路径断裂</td><td><code class="inline">from langchain.embeddings import OpenAIEmbeddings</code> 是 langchain <strong>0.x 时代的写法</strong>。1.x 之后这些类被拆分到独立的包（langchain_openai / langchain_community），旧路径里根本没有这个名字——报 ImportError。<strong>装多少包都不会好，因为路径本身就错了</strong></td></tr>
+    <tr><td>② 模型选型不通</td><td>就算修好路径，OpenAIEmbeddings 默认<strong>直连 OpenAI 官方接口</strong>，国内环境访问不了——需要换成可用的向量化服务</td></tr>
+  </table>
+  <p><strong>改写方案</strong>：嵌入模型换百炼的 <code class="inline">DashScopeEmbeddings</code>（与 char05-03 同款）——向量化（本篇）和对话生成（后续篇）<strong>共用同一把 DASHSCOPE_API_KEY 钥匙</strong>，不再需要 OpenAI 的 key。依赖方面 faiss-cpu、langchain_community 都已装好（char03/05 时代就绪），<strong>无需新装任何包</strong>。</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>二、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是<strong>第 6 章 RAG（检索增强生成）的第一块积木：把文本变成向量、存进向量数据库、按语义相似度检索</strong>。五条中文知识文本先被百炼向量模型转成 1024 维数字向量存入 FAISS 索引；查询时"什么是向量数据库？"也被转成向量，FAISS 找出语义距离最近的 4 条返回——注意排序依据是<strong>语义相似度</strong>而不是关键词匹配：查询里没有"嵌入""LangChain"这些词，但讲嵌入和向量库的文本照样排到前面。</p>
+
+<!-- ========== 三 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>向量化（Embedding）</td><td>把文本映射成高维数字向量，语义相近的文本向量距离近</td><td>text-embedding-v3 把每条文本变成 1024 维向量</td></tr>
+  <tr><td>FAISS</td><td>Meta 开源的向量相似度检索库（Facebook AI Similarity Search）</td><td>本地向量数据库：存索引、算距离、排 top-k</td></tr>
+  <tr><td>Document</td><td>LangChain 的文本标准载体（page_content + metadata）</td><td>五条文本各包成一个 Document</td></tr>
+  <tr><td>similarity_search</td><td>查询向量化后在索引里找最近邻</td><td>默认 k=4，返回最相似的 4 条</td></tr>
+  <tr><td>DashScopeEmbeddings</td><td>百炼向量模型的 LangChain 封装</td><td>OpenAIEmbeddings 的国内可用替代</td></tr>
+  <tr><td>RAG</td><td>检索增强生成：先检索知识再交给大模型生成答案</td><td>本篇是 RAG 的"R"（检索），后续篇补"A"（生成）</td></tr>
+</table>
+
+<!-- ========== 四 ========== -->
+<h2>整体执行流程图</h2>
+<pre>
+  【入库阶段】（运行一次只做一遍）
+  5 条文本 ──→ Document 对象 ──→ DashScopeEmbeddings 逐条调百炼 API 向量化
+                                        │
+                                        ▼
+                            5 × 1024 维向量 ──→ FAISS.from_documents 建索引（内存中）
+
+  【检索阶段】
+  "什么是向量数据库？" ──→ 同一个嵌入模型向量化 ──→ 查询向量
+                                        │
+                                        ▼
+                       FAISS 计算与 5 条库内向量的距离 → 排序 → 取 top-4
+                                        │
+                                        ▼
+                       [匹配结果1..4] 按相似度从高到低打印
+</pre>
+
+<!-- ========== 五 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>5.1 初始化嵌入模型（唯一的改写点）</h3>
+<pre>
+# 原写法（注释保留）：
+# embedding_model = OpenAIEmbeddings()
+
+# 改写：
+embedding_model = DashScopeEmbeddings(
+    model="text-embedding-v3",        # 百炼向量模型，1024 维，中文效果好
+    dashscope_api_key=api_key         # 与对话模型同一把钥匙
+)
+</pre>
+<p>嵌入模型的选择只影响"向量质量"，FAISS 接口完全不变——<strong>换嵌入模型 = 换一行构造参数</strong>，这就是 LangChain 抽象层的价值。</p>
+<h3>5.2 入库与检索（原样保留）</h3>
+<pre>
+vector_store = FAISS.from_documents(docs, embedding_model)   # 一次性入库+建索引
+results = vector_store.similarity_search(query)               # 默认 k=4
+</pre>
+<p>两行是 FAISS 的标准用法。<code class="inline">from_documents</code> 内部干三件事：逐条调嵌入 API → 存向量 + 原文 → 建检索索引。<strong>注意查询向量必须用同一个嵌入模型</strong>——不同模型的向量空间不通用，混用等于"拿尺子的刻度去量公斤"。</p>
+
+<!-- ========== 六 ========== -->
+<h2>真实运行输出与语义排序解读</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（百炼 text-embedding-v3 真实向量化，FAISS 真实检索）</div>
+  <pre>
+[匹配结果1]：向量数据库实现高效相似性匹配      ← 与查询同话题，第 1 名符合直觉
+[匹配结果2]：嵌入模型用于将文本转化为向量      ← 向量库的"上游"，第 2 名合理
+[匹配结果3]：LangChain用于构建语言模型应用     ← 同属 AI 技术域
+[匹配结果4]：大语言模型具备自然语言生成能力
+  </pre>
+  <p><strong>两个值得品味的细节</strong>：</p>
+  <ul>
+    <li><strong>查询里没有出现任何一条文本的关键词</strong>（"什么是向量数据库？"这七个字与五条文本没有字面重叠），但排序完全符合语义直觉——这就是向量检索 vs 关键词匹配的本质差异</li>
+    <li>"LangChain用于构建语言模型应用"排第 3（而不是直觉上更远）——因为"构建应用"与"数据库""转化"同属 AI 技术语义域，共享大量上下文；而"人工智能是研究人类智能的模拟技术"（学术定义句式）与查询的语义距离最远，未进前四。向量是整句语义的压缩，不是关键词的集合</li>
+  </ul>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>与系列前作的呼应：char06 是 char03 知识的"应用主场"</h2>
+<table>
+  <tr><th>char03 时代（模型服务视角）</th><th>char06 时代（应用视角）</th></tr>
+  <tr><td>09 篇用兼容模式看 logprobs——顺带验证了兼容模式的存在</td><td>本篇用 DashScopeEmbeddings 直取向量——向量服务成为应用的地基</td></tr>
+  <tr><td>课件里学过"向量化是把文本变成数字"</td><td>本篇第一次真正"用"它建库检索</td></tr>
+  <tr><td>FAISS 是"装了向量的数据库"</td><td>本篇之后：检索结果 + 大模型 = RAG（后续篇的完整闭环）</td></tr>
+</table>
+<p>char05-03 其实已经用过一次"检索进图"（RetrievalQA）——本篇把那层封装拆开，看底下的 FAISS 原生操作，理解更深一层。</p>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角</h2>
+<ul>
+  <li><strong>FAISS 是内存库</strong>：进程结束索引消失——生产要 <code class="inline">save_local / load_local</code> 落盘，或换持久向量库（Milvus/Chroma/PGVector）</li>
+  <li><strong>本篇只有 5 条文本</strong>：真实场景是文档切片（chunk）后批量入库，切片策略直接影响检索质量</li>
+  <li><strong>k 值与召回</strong>：默认 k=4 是演示值；生产按任务调 k（太大引入噪声、太小漏答案），可配 similarity_search_with_score 看分数设阈值</li>
+  <li><strong>嵌入模型一致性</strong>：入库与查询必须同模型、同版本——模型升级要全量重建索引</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>调 k 看全量</strong>：改成 <code class="inline">similarity_search(query, k=5)</code>——五条全召回，观察最后一名是哪条（预测：人工智能定义那条），验证语义距离排序。</li>
+  <li><strong>看分数</strong>：换成 <code class="inline">vector_store.similarity_search_with_score(query)</code>，打印每条的 L2 距离分数——把"相似"变成数字。</li>
+  <li><strong>换查询</strong>：把 query 改成"大模型能做什么？"——预测排序会怎么变，跑完对照，体会查询措辞对召回的影响。</li>
+  <li><strong>增量入库</strong>：用 <code class="inline">vector_store.add_texts(["RAG通过检索外部知识增强生成质量"])</code> 加一条新知识，再查——理解向量库是"活的"，可随加随查。</li>
+</ol>
+
+</div>
+</body>
+</html>

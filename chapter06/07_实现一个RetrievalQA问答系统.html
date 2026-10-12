@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07_实现一个RetrievalQA问答系统 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>07_实现一个RetrievalQA问答系统 - 代码解析</h1>
+<div class="meta">对应文件：char06/07_实现一个RetrievalQA问答系统.py | 教材出处：第6章 RAG机制 例6-7 | 环境实测：DashScopeEmbeddings + FAISS + qwen-plus（显式 RAG 两步流程） | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char06 <strong>第一个显式 RAG 闭环</strong>：法律条文 → 切片 → 向量化 → FAISS 索引 → **手动检索** → **手动拼 prompt** → **手动调 LLM 生成**。与 05/06 篇的 function calling 不同，本篇是开发者写死"先检索再生成"的流程——这是 RAG 最原始、最显式的形态，也是理解 function calling 底层逻辑的最佳起点。</p>
+
+<!-- ========== 二 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>RAG 两步</td><td>Retrieval（检索）+ Generation（生成）</td><td>Step1 搜 FAISS → Step2 拼 prompt 调 qwen-plus</td></tr>
+  <tr><td>显式 vs 隐式</td><td>开发者写死流程 vs 模型自主决策</td><td>本篇显式（手动）vs 05/06 隐式（function calling）</td></tr>
+  <tr><td>知识即上下文</td><td>检索到的条文 → 塞进 prompt → LLM 据此回答</td><td>build_prompt_with_context 的核心</td></tr>
+  <tr><td>切片复用</td><td>split_text_into_chunks 按句号贪婪拼接</td><td>与 04 篇 generate_chunks 同构</td></tr>
+  <tr><td>k=5 检索</td><td>FAISS 搜 5 条，比 05/06 的 k=3 多给模型一些参考</td><td>法律条文可能跨条关联</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>整体执行流程图（RAG 两步显式版）</h2>
+<pre>
+  fetch_law_sections() → 6 条模拟法律条文（网络失败兜底）
+        │
+        ▼
+  split_text_into_chunks() → 8 个 chunks（按句号贪婪拼接，max_length=150）
+        │
+        ▼
+  get_qwen_embedding() → DashScopeEmbeddings(text-embedding-v3) 逐条约 1024 维
+        │
+        ▼
+  LawRetrievalTool → FAISS.IndexFlatL2(dim=1024).add(矩阵)
+        │
+        ▼
+  ====================== RAG 两步核心 ======================
+  Step 1 [Retrieval]: retrieval_tool.call("企业排污规定？")
+    → 查询向量化 → FAISS 搜 top-5
+    → 返回：环境保护法45/63条 + 刑法338条 + 劳动法 + 消保法（可能有无关）
+  Step 2 [Generation]: build_prompt_with_context(question, context)
+    → 把检索到的条文塞进 prompt
+    → dashscope.Generation.call(qwen-plus, messages=[{prompt}])
+    → qwen-plus 基于上下文生成自然语言回答
+  =========================================================
+        │
+        ▼
+  输出：精确引用法条的结构化回答
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>4.1 LawRetrievalTool：纯类 + call() 方法（改写：去掉虚构 Tool 继承）</h3>
+<pre>
+class LawRetrievalTool:                    # 原：class LawRetrievalTool(Tool):
+    def __init__(self, chunks, embeddings): # 原：super().__init__(name=..., description=...)
+        self.chunks = chunks
+        dim = embeddings[0].shape[0]
+        self.index = faiss.IndexFlatL2(dim)
+        self.index.add(np.vstack(embeddings))
+
+    def call(self, query: str) -> str:     # 核心检索逻辑完全原样保留
+        q_vec = get_qwen_embedding([query])[0].reshape(1, -1)
+        D, I = self.index.search(q_vec, k=5)   # k=5（比 05/06 的 k=3 多）
+        retrieved = [self.chunks[i] for i in I[0]]
+        return "\n".join(retrieved)
+</pre>
+<p>原写法 <code class="inline">class LawRetrievalTool(Tool):</code> 继承虚构 Tool 类→去掉继承，核心检索逻辑（向量化→搜 top-k→返回命中）<strong>一字未改</strong>。</p>
+<h3>4.2 build_prompt_with_context：知识即上下文（原样保留——本篇灵魂函数）</h3>
+<pre>
+def build_prompt_with_context(query: str, context: str) -> str:
+    prompt = f"""你是一名法律智能助手。请根据以下法律条文内容回答用户问题。
+【法律条文】：
+{context}
+【用户提问】：
+{query}
+请结合条文内容给出明确、简洁、准确的回答。"""
+    return prompt
+</pre>
+<p>这是 RAG 的"G"（Generation）的<strong>核心机制</strong>：把检索到的知识（context）塞进 prompt，引导 LLM 基于上下文回答而非凭空编。prompt 里明确写了"请根据以下法律条文内容回答"——这就是 RAG 防幻觉的关键：<strong>不给知识，LLM 瞎编；给了知识，LLM 只能基于知识说</strong>。</p>
+
+<!-- ========== 五 ========== -->
+<h2>显式 RAG vs 隐式 RAG（function calling）的对照</h2>
+<div class="card">
+  <div class="card-title">三个步骤，两种写法</div>
+  <pre>
+  本篇显式 RAG（开发者写死流程）：         05/06 篇隐式 RAG（function calling）：
+  ┌─────────────────────────┐          ┌─────────────────────────────┐
+  # Step 1: 检索              │          # Agent 循环（模型自主决策）：
+  context = retrieval_tool    │          while True:
+            .call(question)   │            response = model.call(...)
+  # Step 2: 拼 prompt          │            if tool_calls:
+  prompt = build_prompt_     │              → 模型调 search_finance()
+           with_context(...) │              → 拿到 context
+  # Step 3: 调 LLM             │              → context 塞进 messages
+  answer = llm.call(prompt)   │            else:
+                              │              → 模型直接生成回答
+  └─────────────────────────┘          └─────────────────────────────┘
+  ↑ 流程固定，必然走检索路径              ↑ 流程灵活，模型可能跳过检索
+  ↑ 新人一眼看懂 RAG 两步                 ↑ 更优雅但藏了底层逻辑
+  </pre>
+  <p>**关键认识**：function calling 只是把本篇的三个显式步骤，交给模型在 Agent 循环里<strong>自主决策是否执行</strong>。底层逻辑完全同构——理解了本篇，function calling 就不再是黑盒。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（DashScopeEmbeddings + FAISS + qwen-plus，全链路跑通）</div>
+  <pre>
+用户提问：环境保护法中对企业排污行为有什么规定？
+  [Step 1] 语义检索中……
+  [Step 2] 组装 prompt 并生成回答……
+
+--- Agent回答 ---
+《中华人民共和国环境保护法》第四十五条规定：排放污染物的企业事业单位和其他生产经营者，
+必须采取有效措施，防治废气、废水、废渣、粉尘、恶臭气体、放射性物质以及噪声、振动、
+光辐射、电磁辐射等对环境的污染和危害。
+第六十三条规定：对违法排污等行为...处以拘留（5–15日）。
+
+即：企业必须依法防治各类污染物排放；违法排污且情节严重的，将面临行政处罚及责任人
+行政拘留；若造成严重污染环境后果并构成犯罪的，依法追究刑事责任（参见《刑法》第338条）。
+  </pre>
+  <p><strong>RAG 价值实证</strong>：答案精确引用了环境保护法第 45 条、第 63 条，还跨条引用了刑法第 338 条——这些条款全部来自检索到的 6 条模拟条文。**模型没有凭空编，而是"检索到什么就答什么"**。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>本篇在 char06 中的位置：从零件到系统</h2>
+<pre>
+  01 篇：向量化 + FAISS.from_documents（封装黑盒）
+  02 篇：RecursiveCharacterTextSplitter（现成组件）
+  03 篇：similarity_search（检索）
+  04 篇：clean_text + split_sentences + generate_chunks（清洗+切片流水线）
+  05 篇：闭环 RAG，但用 Agent function calling
+  06 篇：三种向量库对比，但检索是 Agent 隐式调用
+  ────────────────────────────────────────────
+  07 篇：显式 RAG 两步流程（检索→拼 prompt→生成），最直观的 RAG 教材
+</pre>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角</h2>
+<ul>
+  <li><strong>显式 vs 隐式的选型</strong>：固定流程/必须检索用显式（本篇），灵活流程/可能跳过检索用 function calling（05/06 篇）。法律问答这种场景，"必须先查法条再回答"——显式更合适</li>
+  <li><strong>prompt 注入的边界</strong>：context 塞进 prompt 后，LLM 可能被长 context 干扰（长上下文下注意力稀释）；生产用 <code class="true">max_tokens</code> 限制 + 上下文窗口管理</li>
+  <li><strong>检索结果的 rerank</strong>：FAISS 返回的 top-5 里可能有无关条文（如本篇模拟条文里混了劳动法）——生产加 rerank 模型二次排序</li>
+  <li><strong>可追溯性</strong>：法律场景要求回答必须能追溯到具体法条——本篇已天然支持（检索→引用→回答），生产需加 source 字段返回</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>对比显式 vs 隐式</strong>：把本篇 Step 1+2+3 改写成 function calling 版本——体会"同一个检索逻辑，两种调用姿势"。</li>
+  <li><strong>换问题观察检索</strong>：把 question 改成"劳动合同法对订立合同有什么规定？"——预测 FAISS 会召回哪条模拟条文，跑完对照。</li>
+  <li><strong>看检索到什么</strong>：<code class="true">print(retrieval_tool.call(question))</code>——亲眼看到 Step 1 到底检索到了什么，理解"模型看到的上下文是什么样的"。</li>
+  <li><strong>加 source 返回</strong>：改写 call() 返回结构化数据 <code class="true">[{"content": ..., "source": ...}, ...]</code>，在 prompt 里引用 source——让回答能追溯到具体文档。</li>
+</ol>
+
+</div>
+</body>
+</html>

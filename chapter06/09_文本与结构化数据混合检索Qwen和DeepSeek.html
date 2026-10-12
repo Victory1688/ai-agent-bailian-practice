@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>09_文本与结构化数据混合检索 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>09_文本与结构化数据混合检索 - 代码解析</h1>
+<div class="meta">对应文件：char06/09_文本与结构化数据混合检索Qwen和DeepSeek.py | 教材出处：第6章 RAG机制 例6-9 | 环境实测：DashScopeEmbeddings + FAISS + pandas + qwen-plus | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char06 <strong>最有架构高度的一篇</strong>——解决了 RAG 的核心痛点：<strong>信息同时存在于非结构化文本和结构化数据中</strong>，单一检索方式兼顾不了两类数据。解决方案是<strong>双通道查询 + 结果融合</strong>：文本通道（FAISS 语义搜索政策新闻）+ 数据通道（pandas 过滤财政年度数据）→ 两个 context 拼进同一个 prompt → qwen-plus 综合生成回答。</p>
+<div class="warn">
+  <div class="warn-title">标题里的 "DeepSeek" 是假的</div>
+  <p>教材标题写"Qwen和DeepSeek"，暗示 FiscalDataQueryTool 里有 DeepSeek-V1 做 NL→SQL，但原代码实际是<strong>硬编码 if/elif 关键词匹配</strong>——根本没调任何 LLM。改写时保持原状，因为真正的 NL→SQL 会让本篇偏离"混合检索架构"的教学重心（NL→SQL 是 char01-03 的任务建模问题）。</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>核心概念速查表</h2>
+<table>
+  <tr><th>概念</th><th>是什么</th><th>在本例中的角色</th></tr>
+  <tr><td>双通道检索</td><td>文本向量检索 + 结构化数据查询并行执行</td><td>FiscalTextSearchTool + FiscalDataQueryTool</td></tr>
+  <tr><td>结果融合</td><td>两通道结果统一拼进 prompt</td><td>build_prompt 的 text_context + data_context</td></tr>
+  <tr><td>非结构化 vs 结构化</td><td>政策新闻（文本）vs 财政年度数据（pandas DataFrame）</td><td>混合检索的两种数据源</td></tr>
+  <tr><td>显式 RAG</td><td>开发者写死检索→融合→生成流程</td><td>同 07/08 篇</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>双通道混合检索架构图</h2>
+<pre>
+                    用户提问
+                       │
+           ┌────────────┴────────────┐
+           ▼                         ▼
+  文本通道（非结构化）         数据通道（结构化）
+  ┌──────────────────┐     ┌──────────────────┐
+  │ FAISS 向量检索    │     │ pandas 过滤/查询  │
+  │ (FiscalText-     │     │ (FiscalData-     │
+  │  SearchTool)     │     │  QueryTool)      │
+  └────────┬─────────┘     └────────┬─────────┘
+           │                         │
+           ▼                         ▼
+  text_context 三条政策         data_context 财政数据点
+           │                         │
+           └────────────┬────────────┘
+                        ▼
+               build_prompt(query, text_context, data_context)
+                        │
+                        ▼
+              dashscope.Generation.call(qwen-plus)
+                        │
+                        ▼
+              综合回答（政策解读 + 数据支撑）
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>4.1 FiscalTextSearchTool：文本通道（与 07/08 篇完全同构）</h3>
+<pre>
+class FiscalTextSearchTool:
+    def __init__(self, docs, embeddings):
+        self.index = faiss.IndexFlatL2(dim)
+        self.index.add(np.vstack(embeddings))
+
+    def call(self, query):
+        D, I = self.index.search(vec, k=3)    # top-3 语义搜索
+        return "\n".join([self.docs[i] for i in I[0]])
+</pre>
+<p>去掉虚构 Tool 继承，核心逻辑与 07/08 篇完全一致——向量化→FAISS 搜 top-k→拼接返回。</p>
+<h3>4.2 FiscalDataQueryTool：数据通道（硬编码 NL→SQL 模拟）</h3>
+<pre>
+class FiscalDataQueryTool:
+    def call(self, query: str) -> str:
+        if "2020" in query and "支出" in query:
+            row = self.df[self.df["Year"] == 2020]
+            return f"2020年中国政府支出占GDP比重为{val}%。"
+        elif "收入" in query:
+            ...
+</pre>
+<p>用 if/elif 关键词匹配代替 NL→SQL——简化版结构化查询。生产中这一步通常是：<strong>LLM 调 NL→SQL 工具生成 SQL → 执行 SQL → 返回结果</strong>（char01-03 教的就是这个建模）。</p>
+<h3>4.3 build_prompt：双通道融合</h3>
+<pre>
+def build_prompt(query, text_context, data_context):
+    return f"""你是财税智能助手，拥有文本政策知识和财政结构化数据。
+【政策解读】：{text_context}          ← 文本通道结果
+【财政数据】：{data_context}          ← 数据通道结果
+请结合以上信息回答用户问题：{query}
+回答应准确、简洁、有数据支撑。"""
+</pre>
+<p>两个 context 拼成一个 prompt，LLM 同时看到政策文本和数据数值——这就是"融合"的本质：<strong>不融合检索逻辑，融合给 LLM 的输入</strong>。</p>
+
+<!-- ========== 五 ========== -->
+<h2>实测回答：LLM 如何综合双通道信息</h2>
+<div class="ok">
+  <div class="ok-title">实测回答（qwen-plus 综合双通道）</div>
+  <pre>
+2020年中国的财政支出是多少？相关政策有没有调整说明？
+
+--- Agent回答 ---
+2020年中国政府支出占GDP比重为25.5%（数据通道），
+  2020年GDP为101.6万亿元（模型内部知识），
+  据此计算：财政支出 ≈ 25.91万亿元（LLM 综合推理）。
+
+相关政策调整（文本通道）：
+✅ 实施积极的财政政策，减税降费超2.5万亿元；
+✅ 聚焦"六稳""六保"，强化逆周期调节；
+❌ 2024年专项债额度3.9万亿元（识别出与2020无关）。
+  </pre>
+  <p><strong>LLM 综合推理的三个层次</strong>：①直接从数据通道拿到 25.5%；②结合内部知识（GDP 数值）算出支出金额；③从文本通道拿到政策后，还能<strong>识别出哪些政策年份不对、排除无关信息</strong>——这就是 LLM 作为"融合器"的价值。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>双通道 vs 单通道：为什么需要两个</h2>
+<div class="card">
+  <div class="card-title">三种典型场景对照</div>
+  <table>
+    <tr><th>用户问题</th><th>单文本通道</th><th>单数据通道</th><th>双通道融合</th></tr>
+    <tr><td>"2020年财政支出多少？"</td><td>只能返回"25.5%"，无政策背景</td><td>只能返回"25.5%"，无政策背景</td><td>数据+政策，完整回答</td></tr>
+    <tr><td>"有什么积极财政政策？"</td><td>能返回政策文本</td><td>只能返回数值</td><td>政策文本+数据支撑</td></tr>
+    <tr><td>"2020年减税降费规模？"</td><td>能返回"2.5万亿"</td><td>查不到</td><td>文本检索拿到+数据通道验证年份</td></tr>
+  </table>
+  <p><strong>关键洞察</strong>：用户问题天然横跨"是什么（数据）"和"为什么（政策）"两个维度——单通道只能答一半。双通道是 RAG 从"知识问答"升级到"业务问答"的必经之路。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>本篇在 char06 中的位置 + 与 07/08 篇的对照</h2>
+<pre>
+  07 篇：单通道（FAISS 文本检索 + 法律），显式 RAG 两步
+  08 篇：单通道（FAISS top_k=5 融合 + 统计），显式 RAG 两步
+  09 篇：双通道（FAISS + pandas 并行 + 财政），显式 RAG 三步（多一步融合）
+  ────────────────────────────────────────────
+  递进线：单通道文本 → 单通道 top-k 融合 → 双通道异构融合
+          通道数量       召回策略        数据类型
+</pre>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角</h2>
+<ul>
+  <li><strong>双通道触发条件</strong>：用户问题含数值/年份/金额 → 自动触发数据通道；含"政策/规定/说明" → 自动触发文本通道；混合问题 → 双通道全跑（本篇简化版直接全跑，生产用意图识别智能触发）</li>
+  <li><strong>数据通道的 NL→SQL</strong>：本篇用硬编码 if/elif，生产用 LLM function calling 生成 SQL → 执行 → 返回结果（char01-03 任务建模就是这个）</li>
+  <li><strong>融合不止拼接</strong>：简单拼接是最基础的融合；更高级的有 Cross-Encoder rerank（给两通道结果重新排序）、MapReduce（每通道先总结→总结再合并）</li>
+  <li><strong>标题里的 "DeepSeek"</strong>：教材虚构，生产可以真调 DeepSeek 做 NL→SQL（deepseek-chat + SQL schema 作为 context），与 qwen-plus 主 LLM 配合</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>对比单通道 vs 双通道</strong>：把 data_context 注释掉（只跑文本通道），把 text_context 注释掉（只跑数据通道）——对比两次回答的完整度差异，体会双通道的必要性。</li>
+  <li><strong>改 FiscalDataQueryTool 加年份</strong>：扩展 if/elif 支持更多年份查询——观察硬编码规则的脆弱性（年份越多越难维护），体会生产为什么需要 NL→SQL。</li>
+  <li><strong>真 NL→SQL 改造</strong>：用 qwen-plus function calling 把 FiscalDataQueryTool 改成"LLM 生成 SQL → pandas 执行 → 返回结果"——连接 char01-03 的任务建模知识。</li>
+  <li><strong>融合策略升级</strong>：在 build_prompt 里给 text_context 和 data_context 各加一个"重要性权重"字段，让 LLM 知道哪个通道结果更可信——体会融合的精细化控制。</li>
+</ol>
+
+</div>
+</body>
+</html>
