@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04_模型分支路由与入口决策逻辑 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>04_模型分支路由与入口决策逻辑 - 代码解析</h1>
+<div class="meta">对应文件：char07/04_模型分支路由与入口决策逻辑.py | 教材出处：第7章 MCP协议 例7-4 | 环境实测：qwen-plus 真实调用 + 三个模拟模型入口 | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char07 第四篇——<strong>路由的第二种形态：模型入口选择</strong>。03 篇解决了"把请求拆给谁处理"（Agent / 工具 / 模型），本篇解决了"同类请求也可以走不同模型入口"——用 <code class="inline">route_decision()</code> 对每条 query 做四级判断，路由到 qwen（政策类）/ deepseek（预测类）/ hybrid（组合分析类）/ default（兜底）四个入口。新增的 hybrid 入口是关键升级：它<strong>不再是一对一分发，而是一对多 fan-out + 结果融合</strong>，这就是"模型集成"思想的最小雏形——与 char05-10 的广播+并行汇聚是同一家族。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、路由规则速查表（route_decision 的四级 any() 判断）</h2>
+<table>
+  <tr><th>判断顺序</th><th>命中关键词（any() 任一即可）</th><th>路由目标</th><th>执行者</th><th>与 03 篇的差异</th></tr>
+  <tr><td>1</td><td>政策 / 法规 / 概述 / 总结</td><td>qwen</td><td>call_qwen3 模拟函数</td><td>关键词组更丰富（4 个 vs 03 篇 2 个）</td></tr>
+  <tr><td>2</td><td>预测 / 趋势 / 估计 / 数据</td><td>deepseek</td><td>call_deepseek 模拟函数</td><td>同左</td></tr>
+  <tr><td>3</td><td>综合分析 / 多维度 / 对比</td><td>hybrid</td><td>HybridAnalysisTool（内部调两个模型再拼接）</td><td><strong>新增分支：一对多融合</strong></td></tr>
+  <tr><td>4</td><td>以上都不命中</td><td>default</td><td>dashscope.Generation.call（qwen-plus 真实调用）</td><td>兜底走真实模型</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">any() vs in：03→04 的写法升级</div>
+  <pre>
+# 03 篇写法（硬编码关键词对，难扩展）
+if "政策" in user_input or "法律" in user_input:
+    return "qwen"
+
+# 04 篇写法（关键词数组，加一行即可扩展）
+if any(k in query for k in ["政策", "法规", "概述", "总结"]):
+    return "qwen"
+</pre>
+  <p><code class="inline">any()</code> 生成器表达式的好处：<strong>新增关键词只需往数组里加一项，不用改 if 条件本身</strong>。路由规则本质是"关键词→目标"的映射表，数组比散落的 or 表达式更接近数据驱动的设计。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程图</h2>
+<pre>
+三条用户 query（每条独立决策，无拆分）
+  │
+  ├─ "请概述近期财政补贴政策的主要方向"
+  │    route_decision(): 含"概述"、"政策" → qwen
+  │    call_qwen3() → [Qwen3.0] 回答...
+  │
+  ├─ "请预测2024年GDP增长趋势"
+  │    route_decision(): 含"预测"、"趋势" → deepseek
+  │    call_deepseek() → [DeepSeek-V1] 分析...增长5.3%
+  │
+  └─ "请对...财政补贴政策与...经济增长趋势进行多维度综合分析"
+       route_decision(): 含"综合分析"、"多维度" → hybrid（但实测见第五节！）
+       HybridAnalysisTool.call({policy, forecast})
+         ├─ call_qwen3("财政补贴政策分析")     ← fan-out 分支1
+         └─ call_deepseek("2024年经济趋势")     ← fan-out 分支2
+       → "[组合分析] 综合政策视角：...\n数据预测视角：..."
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、逐段代码讲解</h2>
+<h3>4.1 route_decision()：any() 生成器表达式（本篇核心教学资产，原样保留）</h3>
+<pre>
+def route_decision(query: str) -> str:
+    if any(k in query for k in ["政策", "法规", "概述", "总结"]):
+        return "qwen"
+    elif any(k in query for k in ["预测", "趋势", "估计", "数据"]):
+        return "deepseek"
+    elif any(k in query for k in ["综合分析", "多维度", "对比"]):
+        return "hybrid"
+    else:
+        return "default"
+</pre>
+<p>相比 03 篇的 <code class="inline">determine_route()</code>，本篇有三个值得学习的改进：<strong>关键词数组化</strong>（加一行扩关键词）、<strong>新增 hybrid 分支</strong>（一对多融合）、<strong>default 走真实模型</strong>（兜底也是真的）。但也引入了新问题——<strong>顺序优先级更隐蔽了</strong>（见第五节）。</p>
+<h3>4.2 HybridAnalysisTool：一对多融合的雏形（新增分支，原样保留）</h3>
+<pre>
+class HybridAnalysisTool:
+    def call(self, inputs: Dict[str, str]) -> str:   # 注意：签名是 Dict，不是 str
+        qwen_result = call_qwen3(inputs["policy"])
+        deepseek_result = call_deepseek(inputs["forecast"])
+        return f"[组合分析] 综合政策视角：{qwen_result}\n数据预测视角：{deepseek_result}"
+</pre>
+<p>这是 char07 四篇里<strong>第一个多模型协作的例子</strong>。call 方法的输入签名从 03 篇的 <code class="inline">call(query: str)</code> 升级为 <code class="inline">call(inputs: Dict[str, str])</code>——因为融合需要两个独立维度的输入（政策视角 + 预测视角），一个字符串装不下。内部执行顺序是串行（先 qwen 后 deepseek），但 <strong>两个分支互不依赖，可以改并行</strong>（见第八节进阶挑战）。</p>
+<h3>4.3 default 分支：唯一需要改写的地方</h3>
+<pre>
+# 原写法：result = agent.chat(messages=[Message(role="user", content=query)]).content
+# 改写：dashscope.Generation.call（qwen-plus）
+response = dashscope.Generation.call(
+    model="qwen-plus",
+    messages=[{"role": "user", "content": query}],
+    temperature=0.3, max_tokens=512,
+    result_format='message'
+)
+result = response.output.choices[0].message.content
+</pre>
+<p>与 01-03 篇一致的改写模式——替换虚构 qwen_agent 框架为 dashscope 真实调用。注意 default 分支在本次三条 query 里也没触发，但它是"兜底"而非"死代码"——任何不命中前三个关键词组的 query 都会走这里。</p>
+
+<!-- ========== 五 ========== -->
+<h2>五、实测发现：hybrid 路由也是死代码（与 03 篇 tool 同一家族）</h2>
+<div class="warn">
+  <div class="warn-title">第三条请求被 qwen 截胡，hybrid 分支永远不触发</div>
+  <p>教材的第三条请求意图命中 hybrid 分支：</p>
+  <pre>
+"请对近期财政补贴政策与经济增长趋势进行多维度综合分析"
+                                                         ↑hybrid 关键词组</pre>
+  <p>但实测运行结果：</p>
+  <pre>
+--- 处理第3条请求 ---
+→ Qwen3.0入口已触发。          ← 实际走了 qwen 分支！
+结果输出：[Qwen3.0] 回答：针对'...政策...多维度综合分析'，已完成语言生成与政策解读。</pre>
+  <p><strong>根因</strong>：route_decision() 是 if/elif 顺序判断，<strong>"政策"关键词在第一级就命中了</strong>，hybrid 分支的第三级永远没机会执行。三条 query 里只有"预测GDP趋势"这种纯预测类能顺利走 deepseek；只要 query 同时含"政策"和"综合分析"，永远被 qwen 截胡。</p>
+</div>
+<div class="warn">
+  <div class="warn-title">char07 路由死代码谱系</div>
+  <table>
+    <tr><th>篇</th><th>死代码分支</th><th>根因</th><th>修复方式</th></tr>
+    <tr><td>03 多路由控制策略</td><td>tool 分支</td><td>子任务拆分后丢失了"调用"+"工具"关键词</td><td>子任务补上完整意图</td></tr>
+    <tr><td>04 模型分支路由</td><td>hybrid 分支</td><td>if/elif 顺序优先级——"综合分析"排在"政策"之后</td><td>hybrid 提升到最高优先级</td></tr>
+    <tr><td>04 模型分支路由</td><td>default 分支（本次）</td><td>三条 query 都命中前三级</td><td>加一条无关键词的长尾 query</td></tr>
+  </table>
+  <p><strong>共性结论</strong>：<strong>if/elif 路由函数的分支顺序就是隐式优先级</strong>——"组合类"分支需要最高优先级，因为它的关键词组常常同时包含其他分支的关键词。这不是路由本身的 bug，是教材写路由时没有意识到"一个 query 可能同时命中多组关键词"。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、03 → 04 架构演进：一对一分发 → 一对多融合</h2>
+<pre>
+03 篇 determine_route()：                04 篇 route_decision()：
+  query → 1 个目标（一对一）               query → 可能 1 个目标（qwen/deepseek/default）
+  ├─ qwen                                 或 → 2 个目标 + 融合（hybrid）
+  ├─ deepseek                                ├─ fan-out: call_qwen3() + call_deepseek()
+  ├─ tool                                    └─ fan-in: 拼接两个结果
+  └─ default
+  
+  路由 ≈ 交换机                          路由 ≈ 带汇聚的扇出拓扑
+  1:N=1:1                               1:N=1:1 或 1:2
+</pre>
+<p>这个一对多融合就是 <strong>char05-10 广播+并行图</strong> 的简化版——05-10 是"多条并行分支 → 屏障汇聚"，本篇是"两个模拟模型 → 字符串拼接"。当 hybrid 里的 call_qwen3 和 call_deepseek 都换成 dashscope 真实调用、再改并行时，就和 char05 的并行图一模一样了。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、char07 章内四层递进</h2>
+<table>
+  <tr><th>篇目</th><th>解决什么问题</th><th>核心资产</th><th>路由形态</th></tr>
+  <tr><td>01 上下文段结构化表示</td><td>上下文怎么<strong>表示</strong></td><td>build_context_segment 五字段</td><td>无路由（基础数据结构）</td></tr>
+  <tr><td>02 多段标注的智能体系统</td><td>上下文怎么<strong>组装</strong></td><td>四类标注 + [TYPE] 前缀拼接</td><td>无路由（多源信息统一存储）</td></tr>
+  <tr><td>03 多路由控制策略</td><td>请求怎么<strong>分发</strong>（一对一）</td><td>determine_route 路由函数 + 拆任务-分发-合并</td><td>1→1 路由</td></tr>
+  <tr><td><strong>04 模型分支路由（本篇）</strong></td><td>请求怎么<strong>分发</strong>（一对多融合）</td><td>route_decision + HybridAnalysisTool</td><td>1→1 或 1→2（fan-out + fan-in）</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学版 vs 生产版差距</h2>
+<table>
+  <tr><th>教学简化</th><th>生产要求</th></tr>
+  <tr><td>call_qwen3 / call_deepseek 返回假数据</td><td>真实模型 API + 超时 + 重试 + 熔断（qwen 挂了降级 deepseek）</td></tr>
+  <tr><td>HybridAnalysisTool 内部串行调两个模型</td><td>asyncio / 线程池并行调用，延迟降为最慢分支</td></tr>
+  <tr><td>关键词精确匹配</td><td>意图分类模型 / 向量相似度 / 小样本微调分类器</td></tr>
+  <tr><td>hybrid 路由结果只是字符串拼接</td><td>汇总 LLM 二次加工（"综合两个视角生成结构化报告"）</td></tr>
+  <tr><td>路由顺序硬编码</td><td>路由策略可配置（配置文件 / 数据库驱动），支持灰度切换</td></tr>
+  <tr><td>无成本感知</td><td>低成本请求走 deepseek、高专业度请求走 qwen，路由决策纳入成本模型</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">进阶挑战：HybridAnalysisTool 并行化改造</div>
+  <pre>
+# 生产版写法：用 concurrent.futures.ThreadPoolExecutor 并行调两个模型
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+def call_real_qwen(prompt):
+    return dashscope.Generation.call(model="qwen-plus", messages=[...])...content
+
+def call_real_deepseek(prompt):
+    return openai.OpenAI(base_url="https://api.deepseek.com").chat.completions.create(...)
+
+class HybridAnalysisTool:
+    def call(self, inputs):
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {
+                executor.submit(call_real_qwen, inputs["policy"]): "qwen",
+                executor.submit(call_real_deepseek, inputs["forecast"]): "deepseek"
+            }
+            results = {}
+            for future in as_completed(futures):
+                results[futures[future]] = future.result()
+        return f"[组合分析] 政策视角：{results['qwen']}\n预测视角：{results['deepseek']}"
+</pre>
+  <p>这个并行化改造正好对应 char05-10 的"并行扇出 → 屏障汇聚"——把 call_qwen3 和 call_deepseek 换成 ThreadPoolExecutor 提交，as_completed 就是"屏障"，全部返回后才进下一行。</p>
+</div>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习（巩固本篇技能）</h2>
+<ol>
+  <li><strong>复现实测陷阱</strong>：加一行 <code class="inline">print(f"决策: {decision}")</code>，验证第三条请求实际命中 qwen 而非 hybrid。</li>
+  <li><strong>激活 hybrid 分支</strong>：新增一条纯 hybrid 请求（不含"政策"/"法规"/"概述"/"总结"），比如"请对比近三年主要政策的综合效应"——这条应该能顺利命中 hybrid。</li>
+  <li><strong>修复路由优先级</strong>：把 hybrid 的 any() 判断移到 qwen 之前，让"综合分析/多维度/对比"优先级最高（因为组合类请求通常同时含单类关键词）。再跑一次三条 query，观察 hybrid 是否被正确触发。</li>
+  <li><strong>激活 default 分支</strong>：新增一条不含任何关键词的长尾 query（比如"帮我写一首诗"），观察 default 分支走 qwen-plus 真实调用。</li>
+  <li><strong>进阶：并行化 hybrid</strong>：参考第八节的 ThreadPoolExecutor 写法，把 HybridAnalysisTool 里的两个串行调用改成并行，打印计时对比（串行 ≈ 两模型耗时之和，并行 ≈ 最慢模型耗时）。</li>
+</ol>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07_动态上下文合并策略能力的agent - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>07_动态上下文合并策略能力的agent - 代码解析</h1>
+<div class="meta">对应文件：char07/07_动态上下文合并策略能力的agent.py | 教材出处：第7章 MCP协议 例7-7 | 环境实测：qwen-plus 真实调用 + 模拟 DeepSeek 工具 | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char07 第七篇——<strong>上下文的"编辑器"：不是所有段都值得塞给 LLM</strong>。06 篇解决"同样的 prompt 别重复算"（缓存），本篇解决"不同的信息怎么挑选组合"（合并策略）。上下文池里堆了 7 段信息（系统提示 + 2 轮历史对话 + 工具输出 + 当前提问），<code class="inline">dynamic_merge_context()</code> 按<strong>三级筛选</strong>挑出 6 段、按<strong>优先级排序</strong>拼成最终 prompt——系统提示全保留（身份不能丢）、工具段留最新 1 条（事实要新鲜）、交互历史留最近 4 条（太久远的对话价值衰减）。这是"Token 预算管理"的最小实现。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、三级筛选策略速查表</h2>
+<table>
+  <tr><th>筛选级</th><th>筛选对象</th><th>保留规则</th><th>本例结果</th><th>设计理由</th></tr>
+  <tr><td>第一级</td><td>type == "system"</td><td><strong>全保留</strong></td><td>1 段</td><td>身份设定丢了，整个回答风格就崩了</td></tr>
+  <tr><td>第二级</td><td>type == "tool"</td><td>按 timestamp 倒序，<strong>只留最新 1 条</strong></td><td>1 段（2024预测5.3%）</td><td>工具数据会过时，旧工具输出不如新的准</td></tr>
+  <tr><td>第三级</td><td>type in ["input", "response"]</td><td>按 timestamp 倒序，<strong>留最近 4 条</strong>（约 2 轮对话）</td><td>4 段（2023问/答 + 2022答 + 当前提问）</td><td>近期对话与当前意图相关性最高</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">筛选后的排序顺序（注意：不是时间序，是策略序）</div>
+  <pre>
+[SYSTEM-system] 你是一位国家政策与宏观经济专家...        ← 第1级：身份
+[TOOL-tool] [DeepSeek-V1] 2024年预计5.3%。               ← 第2级：最新事实
+[USER-input] 请基于历史数据与趋势，判断2024年GDP是否...   ← 第3级：最近交互（倒序取的4条）
+[ASSISTANT-response] 2023年GDP增长约为5.2%。                 按时间新→旧排列：
+[USER-input] 2023年预计呢？                                  当前提问 → 2023问答 → 2022问答
+[ASSISTANT-response] 2022年中国GDP增长为3.0%。
+  </pre>
+  <p>注意历史段的顺序是<strong>新→旧</strong>（倒序截断后直接 extend）——当前提问紧跟在工具事实后面，最久远的 2022 对话垫底。这个顺序对 LLM 注意力分配友好：越重要的信息越靠前。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程图</h2>
+<pre>
+context_pool（7 段，时间序）
+  ├─ system 段（专家身份）
+  ├─ user 段 "2022年GDP增长率是多少？"
+  ├─ assistant 段 "2022年增长3.0%"
+  ├─ user 段 "2023年预计呢？"
+  ├─ assistant 段 "2023年约5.2%"
+  ├─ tool 段（DeepSeek 模拟：2024预计5.3%）
+  └─ user 段 "2024年GDP能否超过5.5%？"      ← 当前提问
+        │
+        ▼
+dynamic_merge_context(context_pool, task_type="forecast")
+  三级筛选：system 全留 + tool 留最新1 + 历史留最近4
+        │
+        ▼
+final_prompt（6 段，带 [ROLE-TYPE] 前缀，策略序排列）
+        │
+        ▼
+dashscope.Generation.call(qwen-plus)
+  → 输出："超过5.5%的可能性不足20%"（基于 5.3% 预测 + 历史增速推演）
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、逐段代码讲解</h2>
+<h3>4.1 build_segment：四字段结构（原样保留）</h3>
+<pre>
+def build_segment(role, content, segment_type, timestamp=None) -> Dict:
+    return {
+        "role": role,
+        "content": content,
+        "type": segment_type,
+        "timestamp": timestamp or time.time()   # 默认当前时间——合并策略按它排序
+    }
+</pre>
+<p>与 01 篇五字段（role/content/type/task_id/meta）相比，本篇砍掉 task_id/meta、<strong>新增 timestamp</strong>——因为合并策略的核心排序依据就是时间。字段设计跟着用途走：<strong>要按时间筛选，就带 timestamp；要跨任务隔离，就带 task_id</strong>。</p>
+<h3>4.2 dynamic_merge_context：三级筛选（本篇核心教学资产，原样保留）</h3>
+<pre>
+# 第一级：系统提示全保留
+system_segments = [s for s in segments if s["type"] == "system"]
+selected.extend(system_segments)
+
+# 第二级：工具段留最新1条（key=lambda x: -x["timestamp"] 倒序）
+tool_segments = sorted([s for s in segments if s["type"] == "tool"],
+                       key=lambda x: -x["timestamp"])
+if tool_segments:
+    selected.append(tool_segments[0])
+
+# 第三级：交互历史留最近4条
+history = sorted([s for s in segments if s["type"] in ["input", "response"]],
+                 key=lambda x: -x["timestamp"])
+selected.extend(history[:4])
+</pre>
+<p>三个值得学的写法细节：<strong>列表推导式做分类</strong>（按 type 一刀切三组）；<strong>sorted + lambda 负号做倒序</strong>（<code class="inline">-x["timestamp"]</code> 等价于 <code class="inline">reverse=True</code>）；<strong>切片 [:4] 做窗口截断</strong>（"最近 N 条"就是倒序后的前 N 个）。</p>
+<h3>4.3 [ROLE-TYPE] 前缀拼接：与 02 篇 [TYPE] 前缀同源</h3>
+<pre>
+prefix = f"[{seg['role'].upper()}-{seg['type']}]"    # 如 [SYSTEM-system]、[TOOL-tool]
+merged += f"{prefix} {seg['content']}\n"
+</pre>
+<p>02 篇用的是 <code class="inline">[{type.upper()}]</code>（如 [SYSTEM]），本篇升级为 <code class="inline">[{ROLE}-{TYPE}]</code> 双信息标注——LLM 不仅知道"这是什么性质的信息"（system/tool），还知道"谁在说话"（USER/ASSISTANT）。信息密度更高的标注，换来更精准的注意力分配。</p>
+<h3>4.4 task_type 参数：定义了但没用上</h3>
+<p><code class="inline">dynamic_merge_context(segments, task_type="forecast")</code> 的 task_type 在函数体内<strong>从未被引用</strong>——教材预留了"按任务类型切换合并策略"的扩展点（比如 forecast 类型偏重工具段、chat 类型偏重历史），但没实现。这是和 03 篇 user_input 未使用同款的"教材占位参数"。</p>
+
+<!-- ========== 五 ========== -->
+<h2>五、实测验证：合并策略真的生效了吗</h2>
+<div class="ok">
+  <div class="ok-title">实测：7 段进 → 6 段出，被裁掉的是谁</div>
+  <p>本例 context_pool 共 7 段：1 system + 2 tool 调用前历史（4 段交互）+ 1 tool + 1 当前提问。合并后输出 6 段——<strong>交互历史 5 段只保留了 4 段</strong>（2022 年的提问"2022年GDP增长率是多少？"被裁掉，它的回答留下了）。看合并结果的时间轴：</p>
+  <pre>
+保留：当前提问 → 2023问答 → 2022回答        （4条：input/response 各按需）
+裁掉：2022年提问 "2022年GDP增长率是多少？"   （倒序第5条，超出 [:4] 窗口）
+  </pre>
+  <p>这个实测细节揭示了窗口截断的"锯齿效应"：<strong>截断按条数不按对话轮</strong>——问和答可能被拆开（问被裁、答保留）。生产实现通常按"轮"截断（一轮 = input+response 成对保留），避免出现"只有答案没有问题"的孤儿段。</p>
+</div>
+<div class="ok">
+  <div class="ok-title">LLM 输出验证：合并 prompt 的信息足够回答问题</div>
+  <p>qwen-plus 基于合并后的 prompt 给出了高质量回答："2024年GDP实现5.3%±0.1%概率超75%；<strong>突破5.5%需同时满足三个强假设</strong>...<strong>超过5.5%的可能性不足20%</strong>"——它正确引用了工具段的 5.3% 预测、历史段的 2022（3.0%）/2023（5.2%）数据做推演。<strong>三级筛选没有丢失回答所需的关键信息</strong>，这正是合并策略成功的判据。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、char07 章内演进：上下文处理的完整闭环</h2>
+<table>
+  <tr><th>篇目</th><th>解决什么问题</th><th>核心资产</th><th>一句话概括</th></tr>
+  <tr><td>01 结构化表示</td><td>怎么<strong>表示</strong></td><td>五字段段结构</td><td>上下文是数据</td></tr>
+  <tr><td>02 多段标注</td><td>怎么<strong>组装</strong></td><td>四类标注 + [TYPE] 拼接</td><td>多源信息统一入池</td></tr>
+  <tr><td>03 多路由</td><td>请求怎么<strong>分发</strong></td><td>determine_route</td><td>流量去哪</td></tr>
+  <tr><td>04 模型分支路由</td><td>请求怎么<strong>分发+融合</strong></td><td>route_decision + Hybrid</td><td>流量去哪+多路汇合</td></tr>
+  <tr><td>05 持久化日志</td><td>怎么<strong>留存</strong></td><td>七字段 JSONL</td><td>写下来备查</td></tr>
+  <tr><td>06 提示词缓存</td><td>怎么<strong>复用</strong></td><td>MD5 缓存三件套</td><td>算过的别重算</td></tr>
+  <tr><td><strong>07 动态合并（本篇）</strong></td><td>怎么<strong>挑选</strong></td><td>三级筛选合并策略</td><td>不是都塞，挑着塞</td></tr>
+</table>
+<p>07 篇补上了上下文工程最后一块拼图：<strong>进（01/02 组装入池）→ 存（05/06 持久化）→ 出（07 筛选合并）</strong>。至此，"上下文池"的完整生命周期都有了对应机制。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、架构视角：上下文压缩的三种流派</h2>
+<table>
+  <tr><th>流派</th><th>核心思路</th><th>优点</th><th>缺点</th><th>代表</th></tr>
+  <tr><td><strong>规则窗口截断（本篇）</strong></td><td>按 type/时间硬规则筛选</td><td>零成本、确定性强、可解释</td><td>不理解语义，可能裁掉关键信息</td><td>本篇、char02 BufferMemory</td></tr>
+  <tr><td>语义相关性检索</td><td>embedding 相似度挑 Top-K</td><td>语义精准，长历史也不丢要点</td><td>需要向量库 + 嵌入调用成本</td><td>char06 全章（RAG 本质就是上下文筛选）</td></tr>
+  <tr><td>LLM 摘要压缩</td><td>让小模型把旧历史压缩成摘要</td><td>保留语义且大幅省 Token</td><td>摘要本身有失真 + 额外 LLM 成本</td><td>char04 SummaryMemory 思想</td></tr>
+</table>
+<p>三种流派可以叠加：生产系统常见组合是<strong>"规则粗筛（本篇）→ 语义精选（RAG）→ 摘要兜底（超长历史）"</strong>三层漏斗。</p>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学版 vs 生产版差距</h2>
+<table>
+  <tr><th>教学简化</th><th>生产要求</th></tr>
+  <tr><td>固定条数窗口（[:4]）</td><td>按 Token 预算动态截断（tiktoken 计数，预算内能装多少装多少）</td></tr>
+  <tr><td>按条数截断（锯齿效应）</td><td>按对话轮成对截断，避免孤儿段</td></tr>
+  <tr><td>task_type 参数未使用</td><td>按任务类型切换策略权重（forecast 偏工具段 / chat 偏历史）</td></tr>
+  <tr><td>无相关性判断</td><td>规则粗筛 + embedding 语义精选两层漏斗</td></tr>
+  <tr><td>合并结果无 Token 统计</td><td>记录每次合并后的 prompt 长度，纳入 05 篇式日志做成本审计</td></tr>
+  <tr><td>MacroForecastTool 返回假数据</td><td>真实 API + 超时兜底（char06 惯例）</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习（巩固本篇技能）</h2>
+<ol>
+  <li><strong>复现锯齿效应</strong>：往 context_pool 再加一轮历史对话（问+答），跑一次看合并结果——观察哪段被裁掉、是否出现"答留问丢"。</li>
+  <li><strong>实现按轮截断</strong>：改写第三级筛选，把 input 和 response 按"轮"配对（input 紧跟 response 为一轮），保证截断不拆散对话——对比两种截断的合并结果差异。</li>
+  <li><strong>激活 task_type</strong>：给 dynamic_merge_context 加逻辑——task_type="forecast" 时工具段保留 2 条，task_type="chat" 时历史窗口扩到 6 条（让占位参数真正参与决策）。</li>
+  <li><strong>Token 预算版</strong>：用 <code class="inline">len(prompt) // 2</code> 粗略估算 Token 数（中文约 2 字符/Token），给合并函数加 max_tokens 参数，超预算时从最旧的历史开始裁。</li>
+  <li><strong>进阶：语义精选</strong>：结合 char06 的 DashScopeEmbeddings，在第三级筛选前先算"当前提问"与各历史段的余弦相似度，只保留相似度 Top-4——对比规则窗口与语义窗口在同一份数据上的合并结果。</li>
+</ol>
+
+</div>
+</body>
+</html>

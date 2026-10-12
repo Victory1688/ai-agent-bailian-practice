@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02_多段标注的智能体系统 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>02_多段标注的智能体系统 - 代码解析</h1>
+<div class="meta">对应文件：char07/02_多段标注的智能体系统.py | 教材出处：第7章 MCP协议 例7-2 | 环境实测：qwen-plus + 模拟 DeepSeek 工具 | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char07 第二篇——**MCP 上下文段的三类标注实战**。与 01 篇的五字段结构完全同构，但 01 篇只演示了 input/response/observation 三种 type，本篇把 type 扩展到 **system / memory / input / tool** 四种——<strong>三类标注组装成结构化上下文，让 LLM 同时看到"该怎么说话"、"用户喜欢什么"、"事实是什么"</strong>。这比 LangChain 单一 system prompt + 对话历史的扁平结构更灵活：偏好可以随时更新、工具结果可以随时追加、多任务可以隔离。</p>
+
+<!-- ========== 二 ========== -->
+<h2>四类标注类型速查表（比 01 篇多了 system/memory）</h2>
+<table>
+  <tr><th>type 字段值</th><th>含义</th><th>role 字段值</th><th>在本例中的内容</th><th>作用</th></tr>
+  <tr><td>system</td><td>系统提示段</td><td>system</td><td>"政府咨询顾问，专业简明有依据"</td><td>定义 Agent 身份和风格</td></tr>
+  <tr><td>memory</td><td>记忆偏好段</td><td>memory</td><td>"用户偏好简明扼要，避免冗长"</td><td>注入用户长期偏好</td></tr>
+  <tr><td>input</td><td>用户输入段</td><td>user</td><td>"预测2024财政收入趋势"</td><td>当前用户提问</td></tr>
+  <tr><td>tool</td><td>工具结果段</td><td>tool</td><td>"增长5%，来源消费税/企业所得税"</td><td>整合外部数据辅助推理</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>整体执行流程图</h2>
+<pre>
+  build_segment() × 4 → 四类标注组装
+    [SYSTEM] system: "政府咨询顾问..."    ← 该怎么说话
+    [MEMORY] memory: "用户偏好简明..."    ← 用户喜欢什么
+    [INPUT] user: "预测2024财政收入..."   ← 用户问什么
+    [TOOL] tool: "增长5%，消费税/所得税"  ← 事实是什么（带 meta.tool="deepseek-v1"）
+        │
+        ▼
+  "\n".join([f"[{TYPE}] {role}: {content}" for s in segments])
+    → 拼成带标注的上下文摘要
+        │
+        ▼
+  dashscope.Generation.call(qwen-plus, final_prompt)
+    → LLM 同时看到"该怎么说话"+"用户喜欢什么"+"事实是什么"
+    → 生成回答（专业、简明、有依据——三类标注全部生效）
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>4.1 三类标注的组装逻辑（本篇核心教学资产，原样保留）</h3>
+<pre>
+segments = []
+
+# 标注 1：system —— 定义 Agent 身份
+segments.append(build_segment("system", "政府咨询顾问...", "system", task_id="t001"))
+
+# 标注 2：memory —— 注入用户偏好
+segments.append(build_segment("memory", "用户偏好简明扼要...", "memory", task_id="t001"))
+
+# 标注 3：input —— 当前用户提问
+segments.append(build_segment("user", "预测2024财政收入...", "input", task_id="t001"))
+
+# 标注 4：tool —— 外部工具返回的事实数据
+segments.append(build_segment("tool", tool_response, "tool", task_id="t001",
+                               meta={"tool": "deepseek-v1"}))
+</pre>
+<p>关键设计：<strong>三类标注都是"上下文段"，统一存储、统一传递、统一消费</strong>——不像 LangChain 里 system prompt 是单独字段、对话历史是另一个字段、工具结果又是另一个字段。这种"全部都是段"的设计是 MCP 协议的核心思想之一。</p>
+<h3>4.2 context_summary：带标注的上下文组装（原样保留）</h3>
+<pre>
+context_summary = "\n".join(
+    [f"[{s['type'].upper()}] {s['role']}: {s['content']}" for s in segments]
+)
+# 产出：
+# [SYSTEM] system: 你是一位熟悉中国经济政策的政府咨询顾问...
+# [MEMORY] memory: 用户偏好获取简明扼要的政策摘要...
+# [INPUT] user: 请预测2024年中国的财政收入趋势...
+# [TOOL] tool: [DeepSeek Tool] 增长5%左右，主要来源为消费税和企业所得税
+</pre>
+<p>每行前加 <code class="true">[TYPE]</code> 标注——<strong>让 LLM 一眼看出"这是什么类型的信息"</strong>。LLM 虽然能从 role 猜出，但显式标注让注意力分配更精准（看到 [SYSTEM] 就知道这是角色设定，看到 [TOOL] 就知道这是事实数据）。</p>
+
+<!-- ========== 五 ========== -->
+<h2>隐藏教学点：三类标注 vs LangChain 单一 system prompt</h2>
+<div class="card">
+  <div class="card-title">两种上下文组织方式的本质差异</div>
+  <pre>
+LangChain 扁平结构：                 MCP 多段标注结构：
+  messages = [                          segments = [
+    {"role": "system", "content": "..."},    {role, content, type, task_id, meta},
+    {"role": "user", "content": "..."},      ...（四类标注统一存储）
+  ]                                   ]
+  system 是独立字段                    system 只是一种 type
+  memory 没有独立位置                  memory 有专门的 type
+  tool 结果混在 messages 里            tool 有专门的 type
+  无法区分"用户偏好"和"用户输入"        memory vs input 明确区分
+  </pre>
+  <p><strong>关键认识</strong>：LangChain 的 messages 是"两字段扁平列表"，能表达的只有"谁在说话"——但无法表达"这句话是什么性质"（是角色设定？是用户偏好？是事实数据？）。MCP 的 type 字段补上了这块空白。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（qwen-plus 真实调用 + DeepSeek 模拟工具）</div>
+  <pre>
+--- qwen-plus 回答 ---
+2024年全国一般公共预算收入预计增长约5%，与年初预算目标基本一致。
+主要增长来源为：
+- 消费税：汽车、成品油等重点商品消费回暖...
+- 企业所得税：制造业利润修复、留抵退税政策效应逐步消化。
+（依据：财政部2024年预算报告及一季度执行情况分析）
+  </pre>
+  <p><strong>三类标注全部生效的实证</strong>：回答专业、简明（memory 偏好生效）、有依据（system 角色设定生效 + tool 数据生效）。如果去掉 memory 段，LLM 可能写得更冗长；如果去掉 tool 段，LLM 可能凭训练记忆编数据。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>与 01 篇的对照：type 字段的扩展</h2>
+<pre>
+  01 篇的 type 值：input / response / observation（三种）
+  02 篇的 type 值：system / memory / input / tool（四种）
+  ────────────────────────────────────────────
+  完整 type 枚举（生产可能用到的）：
+    system    —— Agent 角色设定
+    memory    —— 用户偏好/历史
+    input     —— 用户当前输入
+    response  —— LLM 生成回答
+    tool      —— 外部工具返回的事实数据
+    observation —— 辅助模型/监控系统输出（01 篇）
+  → type 字段是"可扩展"的，新增类型不破坏现有结构
+</pre>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角</h2>
+<ul>
+  <li><strong>type 字段的扩展性</strong>：本篇 4 种 type 是生产起点，还可以加 <code class="true">feedback</code>（用户对回答的评价）、<code class="true">plan</code>（Agent 的任务规划）等——<strong>新增类型不破坏现有结构</strong>，这是 MCP 设计的精髓</li>
+  <li><strong>多 Agent 场景</strong>：不同 Agent 可以消费同一个 segments 列表，按 type 过滤各自需要的信息——系统 Agent 看 system，记忆 Agent 看 memory，执行 Agent 看 tool</li>
+  <li><strong>tool 段的 meta 扩展</strong>：生产里可以存 tool_call_id（对应具体的 tool_calls）、latency（工具执行耗时）、status_code（工具返回状态）——这些是可追溯、可调试的关键信息</li>
+  <li><strong>DeepSeek 假标题</strong>：同 01 篇 call_deepseek_v1，保持模拟函数不影响本篇 MCP 教学重心</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>验证三类标注的有效性</strong>：分别去掉 system 段、memory 段、tool 段各跑一次——观察三次回答的差异（专业度/简洁度/数据准确性各受什么影响）。</li>
+  <li><strong>新增 feedback 类型</strong>：加一个 type="feedback" 的段，内容是"用户认为消费税分析不够详细"——观察下一轮对话 LLM 是否能感知这个反馈。</li>
+  <li><strong>meta 字段扩展</strong>：在 tool 段的 meta 里加 latency（工具耗时毫秒数）和 status_code（200）——体验"可追溯"的生产需求。</li>
+  <li><strong>接真 DeepSeek</strong>：把 call_deepseek_tool 改成真调用——openai 兼容模式（base_url="https://api.deepseek.com"），体验工具段里存真实数据。</li>
+</ol>
+
+</div>
+</body>
+</html>

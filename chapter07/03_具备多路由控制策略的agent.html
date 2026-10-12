@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03_具备多路由控制策略的agent - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>03_具备多路由控制策略的agent - 代码解析</h1>
+<div class="meta">对应文件：char07/03_具备多路由控制策略的agent.py | 教材出处：第7章 MCP协议 例7-3 | 环境实测：qwen-plus 真实调用 + 模拟 DeepSeek/Tool 模块 | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char07 第三篇——<strong>基于上下文标注的路由机制</strong>。前两篇解决了"上下文怎么表示"（01 篇五字段结构）、"上下文怎么组装"（02 篇四类标注），本篇解决"请求进来后<strong>该交给谁处理</strong>"：用 <code class="inline">determine_route()</code> 关键词路由函数把复杂请求<strong>拆分成原子子任务</strong>，逐个判断路由目标（Qwen / DeepSeek / 工具 / 默认模型），分发执行后<strong>合并响应</strong>统一输出。这是"多模块智能体系统"的最小调度内核——真实的多 Agent 系统里，路由器就是流量分发的大脑。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、路由规则速查表（determine_route 的四级判断）</h2>
+<table>
+  <tr><th>判断顺序</th><th>命中关键词</th><th>路由目标</th><th>执行者</th><th>设计意图</th></tr>
+  <tr><td>1（最高优先级）</td><td>"政策" 或 "法律"</td><td>qwen</td><td>qwen-plus 真实调用</td><td>政策/法律类问题交给主力大模型</td></tr>
+  <tr><td>2</td><td>"数据" 或 "预测"</td><td>deepseek</td><td>模拟函数（返回假数据）</td><td>数据/预测类问题交给专用模型</td></tr>
+  <tr><td>3</td><td>"调用" 且 "工具"（同时含）</td><td>tool</td><td>DataSummaryTool 本地工具</td><td>明确要求调工具时走本地工具</td></tr>
+  <tr><td>4（兜底）</td><td>以上都不命中</td><td>default</td><td>qwen-plus 真实调用</td><td>默认模型处理长尾请求</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">两个容易忽视的设计细节</div>
+  <ul>
+    <li><strong>顺序即优先级</strong>：if/elif 链决定了"政策"比"数据"优先——一句话同时含两类关键词时，永远路由到先判断的分支。路由表不是集合，是有序规则。</li>
+    <li><strong>"且"与"或"的差别</strong>：tool 路由要求"调用"和"工具"<strong>同时出现</strong>（<code class="inline">and</code>），其他路由是任一命中（<code class="inline">or</code>）——工具误触发的代价高，所以条件最严。</li>
+  </ul>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、整体执行流程图</h2>
+<pre>
+用户复杂请求（未实际使用，拆分是硬编码的）
+  "调用工具分析2023财政数据 + 预测2024 GDP + 说明近期财政政策"
+        │
+        ▼  拆分：3 个原子子任务（硬编码列表）
+  ┌───────────────────────┬───────────────────────────┐
+  │ 子任务1 分析2023财政数据 │ 子任务2 预测2024 GDP增长   │ 子任务3 说明近期财政政策
+  ▼                       ▼                           ▼
+determine_route()       determine_route()           determine_route()
+含"数据" → deepseek     含"预测" → deepseek         含"政策" → qwen
+  ▼                       ▼                           ▼
+call_deepseek_module    call_deepseek_module        dashscope.Generation.call
+（模拟，返回假数据）      （模拟，返回假数据）          （qwen-plus 真实生成）
+  └───────────────────────┴───────────────────────────┘
+        │
+        ▼  responses 列表收集三个结果
+  "--- 多模块合并响应 ---"
+  [子任务1] [DeepSeek] ...
+  [子任务2] [DeepSeek] ...
+  [子任务3] （qwen-plus 的政策详述）
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、逐段代码讲解</h2>
+<h3>4.1 determine_route()：四级关键词路由（本篇核心教学资产，原样保留）</h3>
+<pre>
+def determine_route(user_input: str) -> str:
+    if "政策" in user_input or "法律" in user_input:
+        return "qwen"
+    elif "数据" in user_input or "预测" in user_input:
+        return "deepseek"
+    elif "调用" in user_input and "工具" in user_input:
+        return "tool"
+    else:
+        return "default"
+</pre>
+<p>整份代码最有生命力的部分就是这 8 行：输入一句话，输出一个模块名。<strong>路由函数把"决策"从业务代码里抽离出来</strong>——主循环只认 <code class="inline">route == "qwen"</code> 这样的契约，不关心路由怎么算出来的。将来想把关键词匹配换成 LLM 意图分类或向量相似度，只改这一个函数，主循环零改动。</p>
+<h3>4.2 任务拆分：硬编码的子任务列表（教学简化，注意局限）</h3>
+<pre>
+sub_tasks = [
+    "分析2023年的财政数据",           # 教材注释：route → tool（实测：deepseek，见第五节）
+    "预测2024年中国GDP的增长情况",    # route → deepseek
+    "说明近期的主要财政政策"          # route → qwen
+]
+</pre>
+<p>教材把"复杂请求 → 原子子任务"的拆分<strong>直接硬编码</strong>了。注意 <code class="inline">user_input</code> 变量定义后从未被使用——真实系统里这一步应由 LLM 完成意图拆解（比如让 qwen-plus 输出 JSON 数组的子任务列表），这是本篇与生产之间最大的简化鸿沟。</p>
+<h3>4.3 分发循环：统一契约下的三种执行者</h3>
+<pre>
+for task in sub_tasks:
+    route = determine_route(task)
+    if route == "qwen":
+        response = dashscope.Generation.call(model="qwen-plus",
+            messages=[build_context_message("user", prompt)], ...)
+        result = response.output.choices[0].message.content
+    elif route == "deepseek":
+        result = call_deepseek_module(task)      # 模拟函数
+    elif route == "tool":
+        result = tool.call(task)                 # 本地工具
+    responses.append(result)
+</pre>
+<p>关键观察：<strong>四个分支的产出物契约完全一致</strong>——都返回一个字符串塞进 <code class="inline">responses</code>。远程大模型、模拟函数、本地工具在调度循环眼里没有区别，这就是"面向接口编程"：调度层只依赖"给输入、还字符串"这个最小契约。</p>
+<h3>4.4 build_context_message：虚构 Message → dict</h3>
+<pre>
+# 原写法：return Message(role=role, content=content)   ← qwen_agent.context.Message 虚构类
+return {"role": role, "content": content}              ← dashscope 接受的标准 dict
+</pre>
+<p>与 01/02 篇一致，dashscope 的 <code class="inline">messages</code> 参数吃的就是 <code class="inline">{"role", "content"}</code> 字典列表——虚构的 Message 包装类毫无必要，函数保留是为了让主流程代码结构不变。</p>
+
+<!-- ========== 五 ========== -->
+<h2>五、实测发现：教材注释与实际路由行为不符（本篇最重要的坑）</h2>
+<div class="warn">
+  <div class="warn-title">教材注释标错路由，实测还原真相</div>
+  <p>教材给 sub_tasks[0] 标注 <code class="inline"># route → tool</code>，但实测运行结果：</p>
+  <table>
+    <tr><th>子任务</th><th>教材注释</th><th>实际路由（实测）</th><th>原因</th></tr>
+    <tr><td>分析2023年的财政数据</td><td>route → tool</td><td><strong style="color:#fbbf24">deepseek</strong></td><td>含"数据"（命中第2级），不含"调用"+"工具"（第3级永不命中）</td></tr>
+    <tr><td>预测2024年中国GDP的增长情况</td><td>route → deepseek</td><td>deepseek</td><td>含"预测"，一致</td></tr>
+    <tr><td>说明近期的主要财政政策</td><td>route → qwen</td><td>qwen</td><td>含"政策"，一致</td></tr>
+  </table>
+  <p><strong>根因</strong>：教材想当然认为"分析财政数据"会走 tool 分支，但拆分后的子任务文本已经丢掉了原请求里的"调用工具"字样——<code class="inline">"调用" in "分析2023年的财政数据"</code> 为 False。<strong>tool 路由分支在这份代码里永远不会被触发，是死代码</strong>。这印证了系列方法论：教材注释与输出永远以实测为准。</p>
+</div>
+<div class="warn">
+  <div class="warn-title">附带的第二个观察：max_tokens=512 的截断</div>
+  <p>子任务3 的 qwen-plus 政策详述（赤字率3%、专项债3.9万亿、减税降费等）写到第 5 点"扩大政府采购对中小微"戛然而止——被 512 token 上限截断。教学示例够用，但说明<strong>回答长度预期要与 max_tokens 匹配</strong>。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、char07 章内演进：01 → 02 → 03 的递进关系</h2>
+<table>
+  <tr><th>篇目</th><th>解决什么问题</th><th>核心资产</th><th>一句话概括</th></tr>
+  <tr><td>01 上下文段结构化表示</td><td>上下文怎么<strong>表示</strong></td><td>build_context_segment 五字段（role/content/type/task_id/meta）</td><td>上下文是一等公民的数据结构</td></tr>
+  <tr><td>02 多段标注的智能体系统</td><td>上下文怎么<strong>组装</strong></td><td>四类标注（system/memory/input/tool）+ [TYPE] 前缀拼接</td><td>多源信息统一成带标注的段</td></tr>
+  <tr><td><strong>03 多路由控制策略（本篇）</strong></td><td>请求怎么<strong>分发</strong></td><td>determine_route 路由函数 + 拆分-分发-合并循环</td><td>路由器是系统流量的大脑</td></tr>
+</table>
+<p>三篇合起来是一个完整的"多模块智能体系统"骨架：<strong>结构化上下文（01/02）+ 路由调度（03）</strong>。教材借 MCP 之名讲的是"如果把上下文和请求都当作可编程的数据，智能体系统就能像网络设备一样做转发决策"。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、架构视角：三种"决策机制"的对照</h2>
+<table>
+  <tr><th>机制</th><th>决策依据</th><th>成本</th><th>确定性</th><th>代表</th></tr>
+  <tr><td><strong>关键词路由（本篇）</strong></td><td>硬编码关键词匹配</td><td>零（纯字符串判断）</td><td>100% 确定可复现</td><td>determine_route()、char05-02 条件边</td></tr>
+  <tr><td>Agent function calling</td><td>LLM 自主选择工具</td><td>一次 LLM 调用</td><td>有随机性（temperature）</td><td>char02 agent_chat、char04 initialize_agent</td></tr>
+  <tr><td>显式图条件边</td><td>路由函数 + 映射表</td><td>零</td><td>100% 确定可复现</td><td>char05-02 add_conditional_edges</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">本篇路由与 LangGraph 条件边是"同一家族"</div>
+  <p>本篇的 <code class="inline">route = determine_route(task); if route == "qwen": ...</code> 与 char05-02 的 <code class="inline">add_conditional_edges("judge", route_fn, {"positive": ..., "negative": ...})</code> 思想完全一致：<strong>用确定性函数做流量决策</strong>。区别只是 char05 把决策交给图的引擎执行，本篇手写 for 循环执行。当路由目标多了、需要并行/重试时，就值得迁到 LangGraph——那时本篇的 determine_route 函数可以原封不动地当条件边路由函数用。</p>
+</div>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学版 vs 生产版差距</h2>
+<table>
+  <tr><th>教学简化</th><th>生产要求</th></tr>
+  <tr><td>子任务列表硬编码</td><td>LLM 做意图拆解（输出 JSON 子任务数组），或规则引擎解析</td></tr>
+  <tr><td>关键词精确匹配</td><td>意图分类模型 / 向量相似度 / 小样本微调分类器，处理同义表达（"走势"匹配不到"预测"）</td></tr>
+  <tr><td>call_deepseek_module 返回假数据</td><td>真实 DeepSeek API（dashscope 兼容模式或 openai SDK），带超时与重试</td></tr>
+  <tr><td>串行 for 循环逐个执行</td><td>三个子任务互不依赖，应并行分发（asyncio / 线程池），延迟降为最慢分支</td></tr>
+  <tr><td>responses 简单列表合并</td><td>结果冲突检测 + 汇总 LLM 二次加工（如"综合三个回答生成最终报告"）</td></tr>
+  <tr><td>无失败处理</td><td>某分支失败时的降级路由（qwen 挂了降级到 default）</td></tr>
+</table>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习（巩固本篇技能）</h2>
+<ol>
+  <li><strong>复现注释陷阱</strong>：把 sub_tasks 换回教材注释的预期，加一行 <code class="inline">print(f"实际路由: {determine_route(task)}")</code>，验证"分析2023年的财政数据"确实命中 deepseek 而非 tool。</li>
+  <li><strong>激活死代码</strong>：把子任务1 改成"请调用工具分析2023年的财政数据"（补上"调用"和"工具"），观察 tool 分支首次被触发。</li>
+  <li><strong>升级路由函数</strong>：给 determine_route 增加一条规则——含"翻译"路由到 "translate"，并在主循环加对应分支（体会"加一个路由目标只需要改两处"）。</li>
+  <li><strong>进阶挑战</strong>：用 <code class="inline">concurrent.futures.ThreadPoolExecutor</code> 把串行 for 循环改成并行分发，用计时对比加速比（参考 char03-04 的多线程改造）。</li>
+</ol>
+
+</div>
+</body>
+</html>

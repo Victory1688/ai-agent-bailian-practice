@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char07 汇总说明 - 上下文工程与MCP协议技能总览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+  .phase-bar { display: flex; gap: 8px; margin: 1rem 0; }
+  .phase-item { flex: 1; background: rgba(30, 41, 59, 0.8); border: 1px solid #334155; border-radius: 8px; padding: 0.8rem; text-align: center; font-size: 0.85rem; }
+  .phase-item .num { font-size: 1.4rem; color: #22d3ee; font-weight: bold; display: block; margin-bottom: 0.3rem; }
+  .phase-item .label { color: #34d399; font-weight: bold; margin-bottom: 0.2rem; }
+  .phase-item .files { color: #94a3b8; font-size: 0.75rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>char07 汇总说明 - 上下文工程与MCP协议技能总览</h1>
+<div class="meta">对应目录：char07（7 个 py 文件，全部改写验证于 dashscope qwen-plus）| 配套文档：<a href="arch_汇总说明.md">arch_汇总说明.md</a>（含 Mermaid 架构图）| 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、char07 在课程体系中的定位</h2>
+<p><strong>核心命题：上下文是 Agent 系统的"数据血液"——怎么表示、怎么进出、怎么存、怎么选，决定了 Agent 的上限。</strong></p>
+<p>char01-06 分别解决了"调用壳、循环壳、服务壳、框架壳、图壳、检索壳"，这些壳里流动的都是"上下文"——但前六章都把上下文当作"黑盒子"用（messages 列表、历史对话），没人认真拆解过"上下文到底该长什么样、怎么管"。char07 是<strong>第一次把"上下文"本身当作独立工程对象</strong>来设计的章节，七篇完整覆盖了上下文工程的生命周期。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、四阶段闭环：上下文工程的完整生命周期</h2>
+<div class="phase-bar">
+  <div class="phase-item">
+    <span class="num">①</span>
+    <div class="label">进：表示 + 组装</div>
+    <div class="files">01 五字段表示<br>02 四类标注组装</div>
+  </div>
+  <div class="phase-item">
+    <span class="num">②</span>
+    <div class="label">出：路由 + 分发</div>
+    <div class="files">03 一对一路由<br>04 一对多融合</div>
+  </div>
+  <div class="phase-item">
+    <span class="num">③</span>
+    <div class="label">存：持久化 + 缓存</div>
+    <div class="files">05 JSONL 日志<br>06 MD5 缓存</div>
+  </div>
+  <div class="phase-item">
+    <span class="num">④</span>
+    <div class="label">选：合并 + 压缩</div>
+    <div class="files">07 三级筛选</div>
+  </div>
+</div>
+<p>四个阶段不是线性串联，而是<strong>围绕"上下文池"的多向操作</strong>：新段进入池子（01/02）、请求进来时路由到对应处理者（03/04）、同时落日志（05）+ 查缓存（06）、调 LLM 前从池子里挑出最有价值的段拼成 prompt（07）。</p>
+
+<!-- ========== 三 ========== -->
+<h2>三、七篇文件逐一速览</h2>
+<table>
+  <tr><th>篇</th><th>核心函数/类</th><th>解决什么问题</th><th>实测亮点</th></tr>
+  <tr><td>01 上下文段结构化表示</td><td>build_context_segment（五字段）</td><td>上下文怎么表示成一等公民数据</td><td>五字段 JSON 结构化输出，task_id 跨任务隔离</td></tr>
+  <tr><td>02 多段标注的智能体系统</td><td>build_segment + [TYPE] 拼接</td><td>多源信息（system/memory/input/tool）统一组装</td><td>三类标注全部生效，专业/简明/有依据</td></tr>
+  <tr><td>03 具备多路由控制策略的agent</td><td>determine_route（四级关键词路由）</td><td>一对一请求分发</td><td>实测发现 tool 分支是死代码（子任务丢失关键词）</td></tr>
+  <tr><td>04 模型分支路由与入口决策逻辑</td><td>route_decision（any() 路由）+ HybridAnalysisTool</td><td>一对多 fan-out + 融合</td><td>实测发现 hybrid 分支也是死代码（if/elif 顺序截胡）</td></tr>
+  <tr><td>05 结构化上下文段的持久化日志记录</td><td>create_log_segment（七字段）+ persist_segment</td><td>审计留痕 + 故障恢复</td><td>timestamp 6.5 秒差 = qwen-plus 真实生成耗时</td></tr>
+  <tr><td>06 提示词缓存与快速回放机制</td><td>hash_prompt + load/save/check_cache</td><td>性能优化（省 LLM 调用）</td><td>13.8s → 0.78s，<strong>17.7x 加速比</strong></td></tr>
+  <tr><td>07 动态上下文合并策略能力的agent</td><td>dynamic_merge_context（三级筛选）</td><td>Token 预算管理</td><td>7 段进 6 段出，发现"锯齿效应"（答留问丢）</td></tr>
+</table>
+
+<!-- ========== 四 ========== -->
+<h2>四、char07 独有的三笔"学费清单"（系列最珍贵部分）</h2>
+
+<div class="warn">
+  <div class="warn-title">学费 1：if/elif 顺序即隐式优先级——路由死代码谱系</div>
+  <table>
+    <tr><th>篇</th><th>死代码分支</th><th>根因</th><th>修复方式</th></tr>
+    <tr><td>03 多路由控制策略</td><td>tool 分支</td><td>子任务拆分后丢失"调用"+"工具"关键词</td><td>子任务补上完整意图</td></tr>
+    <tr><td>04 模型分支路由</td><td>hybrid 分支</td><td>if/elif 顺序优先级——"综合分析"排在"政策"之后，被截胡</td><td>hybrid 提升到最高优先级</td></tr>
+  </table>
+  <p><strong>共性结论</strong>：组合类分支（hybrid/tool）的关键词组常常同时包含其他分支的关键词，必须放在最高优先级。这不是路由本身的 bug，是教材写路由时没有意识到"一个 query 可能同时命中多组关键词"。</p>
+</div>
+
+<div class="ok">
+  <div class="ok-title">学费 2：timestamp 是性能审计的天然探针</div>
+  <p>05 篇持久化日志里，前三段的 timestamp 都是 10:18:01（毫秒级间隔，纯本地操作），response 段是 10:18:08——<strong>6.5 秒差正是 qwen-plus 调用的网络往返 + 模型生成耗时</strong>。生产系统的性能审计就是靠这种时间差定位瓶颈的：日志本身就是免费的性能探针。</p>
+</div>
+
+<div class="ok">
+  <div class="ok-title">学费 3：缓存的 17.7x 加速比——LLM 调用是最贵最慢的环节</div>
+  <p>06 篇连续运行两次：第一次 cache miss 调 LLM 花 13.8 秒，第二次 cache hit 直接回放花 0.78 秒——<strong>省掉了全部 LLM 调用开销</strong>。但缓存有个前提：full_prompt 字符串一字不差（MD5 精确匹配），同义改写的 prompt 永远不命中。精确缓存 ≠ 语义缓存，后者需要向量相似度匹配（char06 DashScopeEmbeddings + FAISS 可以直接实现）。</p>
+</div>
+
+<!-- ========== 五 ========== -->
+<h2>五、核心数据结构演进链</h2>
+<pre>
+01 篇五字段：  {role, content, type, task_id, meta}          ← 内存上下文基础
+02 篇 build_segment 同构：{role, content, type, task_id, meta}  ← 加上四类标注扩展
+05 篇七字段：  {id, timestamp, task_id, role, type, model, content}  ← 持久化新增 id/timestamp/model
+07 篇四字段：  {role, content, type, timestamp}               ← 为合并策略简化，新增 timestamp
+</pre>
+<p>字段不是越多越好——每个额外字段都带来存储和处理成本。01 篇的 meta 字段在 05 篇里被拆成独立的 model 字段（持久化场景下 model 比 meta 更有用），07 篇为了合并策略砍掉 task_id/meta 但补上 timestamp——<strong>字段设计跟着用途走</strong>。</p>
+
+<!-- ========== 六 ========== -->
+<h2>六、跨章关联：char07 与前六章的承接</h2>
+<table>
+  <tr><th>关联章节</th><th>关联点</th><th>本篇对应</th></tr>
+  <tr><td>char02-03 PersistentJSONMemory</td><td>JSON 文件持久化记忆</td><td>05 篇 JSONL 日志（追加写，同技术不同用途）</td></tr>
+  <tr><td>char02 agent_chat Agent 循环</td><td>while True + tool_calls 调度</td><td>03/04 路由分发（调度层的另一种形态）</td></tr>
+  <tr><td>char04 BufferMemory / SummaryMemory</td><td>对话记忆管理</td><td>07 篇动态合并（Token 预算管理的显式实现）</td></tr>
+  <tr><td>char05-02 LangGraph 条件边</td><td>显式路由函数 + 映射表</td><td>03/04 determine_route/route_decision（同一家族）</td></tr>
+  <tr><td>char05-10 广播+并行图</td><td>扇出-汇聚拓扑</td><td>04 篇 HybridAnalysisTool（fan-out + fan-in 雏形）</td></tr>
+  <tr><td>char06 全章 RAG</td><td>DashScopeEmbeddings + FAISS 语义检索</td><td>07 篇进阶语义精选、06 篇进阶语义缓存</td></tr>
+</table>
+
+<!-- ========== 七 ========== -->
+<h2>七、char07 独有的设计模式</h2>
+<table>
+  <tr><th>模式</th><th>代表篇</th><th>一句话</th><th>生产升级</th></tr>
+  <tr><td>Memoization 缓存</td><td>06</td><td>相同输入 → 相同输出直接返回</td><td>精确缓存 → 向量语义缓存 → LRU/TTL 淘汰</td></tr>
+  <tr><td>规则窗口截断</td><td>07</td><td>按 type/时间硬规则筛选</td><td>规则粗筛 → 语义精选 → 摘要兜底（三层漏斗）</td></tr>
+  <tr><td>路由函数</td><td>03/04</td><td>决策逻辑从业务代码抽离</td><td>关键词匹配 → LLM 意图分类 → 向量相似度</td></tr>
+  <tr><td>JSONL 事件流</td><td>05</td><td>每行独立 JSON，追加写入</td><td>同本篇（小规模够用）→ 数据库 → 专用日志系统</td></tr>
+  <tr><td>标注前缀拼接</td><td>02/07</td><td>[ROLE-TYPE] 标注让 LLM 一眼看懂信息性质</td><td>同本篇（Token 成本低、注意力收益高）</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、给新人的学习路径</h2>
+<pre>
+① 先跑 01 → 理解五字段数据结构是什么
+   自测：改 role/type 字段值，观察 JSON 输出变化
+
+② 再跑 02 → 理解四类标注怎么让 LLM 行为不同
+   自测：分别去掉 system/memory/tool 标注，观察 qwen-plus 回答差异
+
+③ 连读 03+04 → 对比 determine_route vs route_decision
+   自测：给 route_decision 加"翻译"关键词路由，体会加一行扩关键词
+
+④ 重点读 05+06 → 两种持久化的对比审计回溯 vs 性能优化
+   自测：删 prompt_cache.json → 跑两次 → 计时对比 17.7x 加速比
+
+⑤ 最后读 07 → 理解"不是所有上下文都值得塞给 LLM"
+   自测：往 context_pool 再加一轮对话 → 观察哪段被裁掉 → 修复锯齿效应
+
+⑥ 综合练习：把 07 篇三级筛选的"规则粗筛"升级为"规则粗筛 + 语义精选"
+   用 char06 的 DashScopeEmbeddings + FAISS 实现——这就是三层漏斗的完整雏形
+</pre>
+<p><strong>前置</strong>：char01-06 学完（char06 的 DashScopeEmbeddings + FAISS 是 07 篇进阶练习的依赖）</p>
+<p><strong>后续衔接</strong>：char08（MCP 真实协议实现）——01/02 篇的数据结构和标注思想就是真实 MCP 协议的教学简化版本</p>
+
+</div>
+</body>
+</html>

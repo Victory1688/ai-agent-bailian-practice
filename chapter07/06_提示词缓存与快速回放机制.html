@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06_提示词缓存与快速回放机制 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>06_提示词缓存与快速回放机制 - 代码解析</h1>
+<div class="meta">对应文件：char07/06_提示词缓存与快速回放机制.py | 教材出处：第7章 MCP协议 例7-6 | 环境实测：qwen-plus 真实调用 + 连续两次运行计时 | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>本篇是 char07 第六篇——<strong>提示词级别的 Memoization 缓存</strong>。05 篇的持久化日志是"审计留痕"（每段都记下来给人看），本篇的缓存是"性能优化"（相同 prompt 直接返回上次的答案，不再调 LLM）。核心思路只有四步：<strong>hash 完整 prompt → 查缓存字典 → 命中直接返回 → 未命中调 LLM 并写入缓存</strong>。这个模式在大模型应用里极其重要——高频重复查询、模板化任务、调试场景下反复跑同一段 prompt，缓存能把秒级延迟降到毫秒级。</p>
+
+<!-- ========== 二 ========== -->
+<h2>二、两次运行实测对比（本篇最核心的教学数据）</h2>
+<div class="ok">
+  <div class="ok-title">cache miss vs cache hit 的加速比：约 17.7 倍</div>
+  <pre>
+第一次运行（cache miss）：13.8 秒   ← qwen-plus 真实生成 GDP 走势分析
+第二次运行（cache hit）： 0.78 秒   ← 直接回放，零 LLM 调用
+加速比：13.8 / 0.78 ≈ 17.7x
+  </pre>
+  <p>缓存命中后<strong>省掉了全部 LLM 调用</strong>——只有一次 MD5 哈希（微秒级）+ 一次 JSON 文件读取（毫秒级），所以 13.8 秒直接降到 0.78 秒。这个对比就是本篇存在的意义：<strong>LLM 调用是最贵最慢的环节，能省一次就是一次</strong>。</p>
+</div>
+
+<!-- ========== 三 ========== -->
+<h2>三、缓存三件套：完整架构速查表</h2>
+<table>
+  <tr><th>函数</th><th>职责</th><th>实现细节</th></tr>
+  <tr><td>hash_prompt(prompt)</td><td>把变长 prompt 映射成固定长度缓存 key</td><td>MD5 十六进制（32 字符），UTF-8 编码</td></tr>
+  <tr><td>load_prompt_cache() / save_prompt_cache()</td><td>缓存的持久化载体</td><td>JSON 文件，覆盖写（非追加），跨运行存活</td></tr>
+  <tr><td>check_prompt_cache(prompt, cache)</td><td>缓存命中判断</td><td>hash → dict.get()，命中返回值，未命中返回空串</td></tr>
+</table>
+<pre>
+主流程逻辑（伪代码）：
+  cache = load_prompt_cache()            # 读缓存
+  key = hash_prompt(full_prompt)         # 算 key
+  result = cache.get(key, "")            # 查字典
+  if result:
+      return result                      # 命中：直接回放
+  else:
+      result = call_llm(full_prompt)     # 未命中：调 LLM
+      cache[key] = result                # 写入内存
+      save_prompt_cache(cache)           # 落盘
+      return result
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>四、逐段代码讲解</h2>
+<h3>4.1 hash_prompt：为什么用 MD5 而非直接用 prompt 字符串做 key</h3>
+<pre>
+def hash_prompt(prompt: str) -> str:
+    return hashlib.md5(prompt.encode("utf-8")).hexdigest()
+</pre>
+<p>两个原因：① prompt 可能很长（数千甚至数万字符），当字典 key 太浪费内存；② 字符串直接当 key 时，微小差异（末尾多一个空格、换行符不同）会导致缓存永远不命中，MD5 哈希天然做了"精确全等匹配"——只有 prompt 一字不差才会命中同一个 key。当然这也意味着<strong>语义相同但表述不同的 prompt 不会命中</strong>（见第八节的局限讨论）。</p>
+<h3>4.2 load/save_prompt_cache：JSON 覆盖写 vs 05 篇 JSONL 追加写</h3>
+<pre>
+# 06 本篇：覆盖写（每次写整个字典）
+def save_prompt_cache(cache):
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+
+# 05 篇：追加写（一行一个 JSON）
+def persist_segment(segment):
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(segment) + "\n")
+</pre>
+<p>两种写法服务于不同目的：缓存是<strong>整体替换</strong>（每次保存都是当前完整字典的快照，旧条目被淘汰时自动清理）；日志是<strong>只增不减</strong>（每段独立追加，删了旧条目就丢了审计线索）。<strong>存储格式 = 数据生命周期的直接反映</strong>——缓存要变、日志要攒。</p>
+<h3>4.3 check_prompt_cache：命中判断的优雅写法</h3>
+<pre>
+def check_prompt_cache(prompt: str, cache: Dict[str, str]) -> str:
+    h = hash_prompt(prompt)
+    return cache.get(h, "")    # 字典 .get() 的默认值机制：命中返回值，未命中返回空串
+</pre>
+<p>一行搞定命中/未命中的区分——Python 字典 <code class="inline">.get(key, default)</code> 的默认值参数天然适合"有就拿、没有就给个空"的语义。主流程里 <code class="inline">if cached_output:</code> 就区分了两种情况（空串是 falsy，直接被 Python 短路掉）。</p>
+<h3>4.4 EconomicPredictor：去虚构 Tool 继承 + tool_output 是硬编码</h3>
+<p>与 05 篇不同，本篇的 <code class="inline">tool_output</code> 是硬编码字符串（<code class="inline">"[Tool] 当前CPI指数为2.1%..."</code>），并未真实调 <code class="inline">EconomicPredictor.call()</code>。这是教材的教学简化——本篇重点在缓存逻辑，不是工具调用链，所以把 tool 输出直接写死了。HTML 第八节会提到这也是"prompt 内容完全相同 → 每次 hash 一样 → 缓存一定命中"的前提。</p>
+
+<!-- ========== 五 ========== -->
+<h2>五、实测发现：缓存的"魔法"与"魔法背后"</h2>
+<div class="ok">
+  <div class="ok-title">缓存命中的魔法：13.8 秒 → 0.78 秒</div>
+  <p>完整的 Qwen-plus 生成结果（CPI/PMI/消费/三大 GDP 支撑力）被一次性存入 JSON 文件，下次运行时直接从字典取出原封不动打印——<strong>LLM 调用的全部开销（网络往返 + 推理计算 + token 生成时间）被完全跳过</strong>。对于高频重复查询的场景（比如 FAQ 问答、固定模板的报告生成），这个加速比是线性可累积的。</p>
+</div>
+<div class="warn">
+  <div class="warn-title">魔法背后：缓存 key 是 MD5 哈希，不是"语义指纹"</div>
+  <p>两次运行能命中，是因为 <strong>full_prompt 字符串一字不差</strong>——user_query、system_prompt、tool_output 全是硬编码常量，拼接出来的字符串每次完全相同。如果把 user_query 改成同义但表述不同的句子（"预测 2024 年 GDP 增速" vs "帮我算算 2024 年 GDP 增长多少"），MD5 哈希就会完全不同，缓存永远不命中。<strong>精确缓存 ≠ 语义缓存</strong>，这是两种完全不同的优化方向（见第八节进阶）。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>六、char07 章内演进：持久化的两种目的对照</h2>
+<table>
+  <tr><th>篇目</th><th>持久化载体</th><th>写入模式</th><th>目的</th><th>谁来读</th></tr>
+  <tr><td><strong>05 持久化日志</strong></td><td>JSONL（每行独立 JSON）</td><td>追加写（只增不减）</td><td>审计回溯 + 故障恢复</td><td>工程师 / 运维系统</td></tr>
+  <tr><td><strong>06 提示词缓存（本篇）</strong></td><td>JSON（单一大字典）</td><td>覆盖写（整体替换）</td><td>性能优化（省 LLM 调用）</td><td>程序自己</td></tr>
+</table>
+<p>两篇共用"磁盘存 JSON"的底层技术，但<strong>数据生命周期完全相反</strong>：日志要"越攒越多"（删一条就丢一段历史），缓存要"随时更新"（旧条目可能被淘汰、新条目覆盖进来）。这种"同技术不同用途"的对比是理解系统设计取舍的绝佳素材。</p>
+
+<!-- ========== 七 ========== -->
+<h2>七、架构视角：Memoization 在大模型应用中的定位</h2>
+<table>
+  <tr><th>缓存层级</th><th>缓存什么</th><th>命中条件</th><th>收益</th><th>代表实现</th></tr>
+  <tr><td><strong>Prompt 精确缓存（本篇）</strong></td><td>完整 prompt → 完整回答</td><td>prompt 精确全等（MD5）</td><td>跳过 LLM 调用（省 99% 时间）</td><td>本篇、各类 LLM SDK 的 built-in cache</td></tr>
+  <tr><td>向量语义缓存</td><td>prompt embedding → 最近邻回答</td><td>语义相似度 > 阈值</td><td>跳 LLM + 覆盖同义改写</td><td>LangChain CacheBackedEmbeddings、FAISS similarity_search</td></tr>
+  <tr><td>函数调用缓存</td><td>工具函数输入 → 工具输出</td><td>工具参数精确全等</td><td>跳过 API 调用（省网络时间）</td><td>char02 agent_chat 的工具结果缓存</td></tr>
+</table>
+
+<!-- ========== 八 ========== -->
+<h2>八、教学版 vs 生产版差距</h2>
+<table>
+  <tr><th>教学简化</th><th>生产要求</th></tr>
+  <tr><td>MD5 精确匹配</td><td>同义改写也应命中 → 向量语义缓存（prompt embedding 相似度 > 0.95 即可命中）</td></tr>
+  <tr><td>无缓存淘汰策略</td><td>LRU / LFU / TTL 过期（高频旧条目淘汰、超期条目自动清理）</td></tr>
+  <tr><td>单 JSON 文件全局缓存</td><td>Redis / 分布式缓存（多进程、多节点共享）</td></tr>
+  <tr><td>无一致性保障</td><td>LLM 调用有随机性（temperature > 0 时相同 prompt 可能产生不同回答）——缓存结果需要标注 temperature / seed，或强制 temperature=0</td></tr>
+  <tr><td>硬编码 tool_output</td><td>真实工具调用结果也应纳入缓存（函数调用缓存层），避免"工具每次返回不同 → 缓存永远不命中"</td></tr>
+  <tr><td>MD5 作为哈希</td><td>可考虑 SHA-256（抗碰撞性更好），但 MD5 碰撞概率对短 prompt 可忽略</td></tr>
+</table>
+<div class="card">
+  <div class="card-title">进阶挑战：实现语义缓存</div>
+  <pre>
+# 把精确缓存升级为语义缓存（相同意思不同表述也能命中）
+from langchain_community.embeddings import DashScopeEmbeddings
+import faiss
+import numpy as np
+
+_emb = DashScopeEmbeddings(model="text-embedding-v3", dashscope_api_key=api_key)
+
+class SemanticCache:
+    def __init__(self, threshold=0.95):
+        self.threshold = threshold
+        self.index = faiss.IndexFlatIP(1024)  # 内积相似度（cosine）
+        self.results = []                     # 命中后返回的回答
+
+    def lookup(self, prompt):
+        vec = np.array(_emb.embed_query(prompt), dtype=np.float32).reshape(1, -1)
+        if self.index.ntotal == 0:
+            return None
+        scores, indices = self.index.search(vec, 1)
+        if scores[0][0] > self.threshold:
+            return self.results[indices[0][0]]   # 语义相似 → 命中
+        return None
+
+    def store(self, prompt, result):
+        vec = np.array(_emb.embed_query(prompt), dtype=np.float32).reshape(1, -1)
+        self.index.add(vec)
+        self.results.append(result)
+</pre>
+  <p>这个升级正好用到 char06 学的 DashScopeEmbeddings + FAISS——<strong>把精确匹配换成向量相似度匹配</strong>，同义改写的 prompt 也能命中缓存。</p>
+</div>
+
+<!-- ========== 九 ========== -->
+<h2>九、动手练习（巩固本篇技能）</h2>
+<ol>
+  <li><strong>复现加速比</strong>：删 prompt_cache.json → 跑两次 → 用 PowerShell 的 Stopwatch 计时对比——你应该能得到和本篇一致的 10-20x 加速比。</li>
+  <li><strong>观察缓存文件</strong>：打开 prompt_cache.json，看里面存了什么——一个 key（MD5）对应一个 value（完整回答）。多次运行相同 prompt 不会增加条目数（同一个 key 被覆盖）。</li>
+  <li><strong>验证精确匹配的局限</strong>：把 user_query 改成同义但不同表述的句子（比如加个"，谢谢"），跑两次——第二次应该 cache miss 再调一次 LLM，产生一个新的 cache 条目。</li>
+  <li><strong>强制 temperature=0 让缓存有意义</strong>：把主流程里 temperature 改成 0，跑两次相同 prompt 对比 qwen-plus 的输出是否一字不差（temperature=0 是确定性生成，缓存才有意义；temperature>0 时即使命中缓存也可能返回过时答案）。</li>
+  <li><strong>进阶：实现 TTL 过期</strong>：给每条缓存条目加一个 timestamp，check_prompt_cache 里加过期判断（比如超过 1 小时就视为未命中），让缓存具备"新鲜度"保障——生产中新闻类内容（政策、数据）时效性强，旧答案会误导用户。</li>
+</ol>
+
+</div>
+</body>
+</html>

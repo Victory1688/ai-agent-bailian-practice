@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01_上下文段结构化表示 - 代码解析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; color: #22d3ee; border-bottom: 2px solid #164e63; padding-bottom: 0.6rem; margin-bottom: 0.5rem; }
+  .meta { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.3rem; color: #34d399; margin: 2.2rem 0 1rem; padding-left: 0.6rem; border-left: 4px solid #34d399; }
+  h3 { font-size: 1.05rem; color: #a78bfa; margin: 1.2rem 0 0.6rem; }
+  p { margin-bottom: 0.8rem; }
+  pre { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.8rem 0; font-family: Consolas, "Courier New", monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  code.inline { background: #1e293b; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.88rem; color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { background: #1e293b; color: #22d3ee; padding: 0.55rem 0.8rem; text-align: left; border: 1px solid #334155; }
+  td { padding: 0.55rem 0.8rem; border: 1px solid #334155; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+  .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .card-title { font-weight: bold; color: #22d3ee; margin-bottom: 0.5rem; }
+  .warn { background: rgba(120, 53, 15, 0.25); border: 1px solid #b45309; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .warn-title { color: #fbbf24; font-weight: bold; margin-bottom: 0.4rem; }
+  .ok { background: rgba(6, 78, 59, 0.3); border: 1px solid #059669; border-radius: 10px; padding: 1rem 1.4rem; margin: 1rem 0; }
+  .ok-title { color: #34d399; font-weight: bold; margin-bottom: 0.4rem; }
+  ul { margin: 0.5rem 0 0.8rem 1.5rem; } li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 0.8rem 1.5rem; } ol li { margin-bottom: 0.4rem; }
+  a { color: #22d3ee; text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>01_上下文段结构化表示 - 代码解析</h1>
+<div class="meta">对应文件：char07/01_上下文段结构化表示.py | 教材出处：第7章 MCP协议 例7-1 | 环境实测：qwen-plus + 模拟 DeepSeek | 生成日期：2026-10-12</div>
+
+<!-- ========== 一 ========== -->
+<h2>一、这份代码整体在做什么（一段话讲给新人）</h2>
+<p>char07 是<strong>MCP 协议（Model Context Protocol）开篇</strong>——MCP 解决的核心矛盾是"上下文怎么表示才既能追溯又能恢复"。本篇用一个<strong>五字段上下文段结构</strong>（role/content/type/task_id/meta）把对话历史从"乱序消息列表"变成"可追溯、可过滤、可恢复"的结构化记录。多模型协同（qwen-plus + 模拟 DeepSeek）展示了同一个上下文可以被多个模型消费。</p>
+<div class="warn">
+  <div class="warn-title">标题里的 "DeepSeek" 是假的（同 char06-09 的假标题谱系）</div>
+  <p>call_deepseek_v1() 是模拟函数，直接返回假数据。真接 DeepSeek 可以按 OpenAI 兼容模式改写：<code class="true">openai.OpenAI(base_url="https://api.deepseek.com")</code>。改写时保持原状，因为本篇核心是 MCP 上下文结构，不是多模型调用。</p>
+</div>
+
+<!-- ========== 二 ========== -->
+<h2>上下文段五字段结构速查表</h2>
+<table>
+  <tr><th>字段</th><th>含义</th><th>可选值</th><th>在本例中的作用</th></tr>
+  <tr><td>role</td><td>消息角色</td><td>user / model / tool / system</td><td>区分谁说的</td></tr>
+  <tr><td>content</td><td>上下文内容</td><td>任意字符串</td><td>对话/工具返回的文本</td></tr>
+  <tr><td>type</td><td>段落类型</td><td>input / response / observation</td><td>input=用户输入，response=模型回答，observation=工具/辅助模型输出</td></tr>
+  <tr><td>task_id</td><td>所属任务标识</td><td>任意字符串</td><td>跨任务隔离（t001 是当前任务）</td></tr>
+  <tr><td>meta</td><td>附加元信息</td><td>字典（默认空）</td><td>时间戳、状态码、来源、mock 标记等</td></tr>
+</table>
+
+<!-- ========== 三 ========== -->
+<h2>整体执行流程图</h2>
+<pre>
+  build_context_segment() × 3 → 3 段初始上下文（user-model-user）
+        │
+        ▼
+  StructuredContextQueryTool.call("财政支出趋势？")
+    → 过滤 type in ["input", "response"]（排除 observation）
+    → 取最近 4 段
+    → 拼成 "【对话上下文】+【用户问题】" 格式
+        │
+        ▼
+  dashscope.Generation.call(qwen-plus, structured_prompt)
+    → qwen-plus 基于结构化上下文生成详细回答
+        │
+        ▼
+  call_deepseek_v1(structured_prompt)（模拟）
+    → 返回假数据，但展示"多模型消费同一上下文"的模式
+        │
+        ▼
+  context_segments.append() × 2 → 新增 response + observation 两段
+    → observation 段带 meta={"source": "deepseek", "is_mock": true}
+        │
+        ▼
+  json.dumps(context_segments) → 打印完整五字段结构
+</pre>
+
+<!-- ========== 四 ========== -->
+<h2>逐段代码讲解</h2>
+<h3>4.1 build_context_segment：本篇的灵魂函数（原样保留）</h3>
+<pre>
+def build_context_segment(role, content, segment_type, task_id, meta=None):
+    return {
+        "role": role,         # user / model / tool / system
+        "content": content,   # 对话文本
+        "type": segment_type, # input / response / observation
+        "task_id": task_id,   # 任务隔离
+        "meta": meta or {}    # 时间戳/来源/状态码等
+    }
+</pre>
+<p><strong>这是 MCP 的核心概念之一</strong>——上下文不再是"role + content"两字段的扁平消息列表，而是<strong>五字段的结构化段</strong>。多出来的 type/task_id/meta 让上下文能：①按类型过滤（只看 input/response）；②按任务隔离（t001 的对话和 t002 不混）；③附加元信息（哪个模型回答的、是否 mock）。</p>
+<h3>4.2 StructuredContextQueryTool：上下文查询工具（改写：去掉虚构 Tool 继承）</h3>
+<pre>
+class StructuredContextQueryTool:              # 原：class StructuredContextQueryTool(Tool):
+    def call(self, query: str) -> str:
+        relevant = [seg for seg in self.segments
+                    if seg["type"] in ["input", "response"]]   # 过滤：排除 observation
+        context_summary = "\n".join([
+            f"{seg['role']}: {seg['content']}"
+            for seg in relevant[-4:]                            # 取最近 4 段
+        ])
+        return f"【对话上下文】\n{context_summary}\n【用户问题】\n{query}"
+</pre>
+<p>核心逻辑原样保留——两个关键动作：①按 type 过滤（排除 observation，因为辅助模型的模拟回答不应该进主模型的上下文）；②取最近 4 段（控制上下文窗口，避免过长）。</p>
+
+<!-- ========== 五 ========== -->
+<h2>隐藏教学点：MCP 上下文 vs LangChain messages 的本质差异</h2>
+<div class="card">
+  <div class="card-title">两种上下文表示的对比</div>
+  <pre>
+LangChain messages（char02/03 用的）：     MCP 上下文段（本篇）：
+  [                                          [
+    {"role": "user", "content": "..."},         {"role": "user", "content": "...",
+    {"role": "assistant", "content": "..."},     "type": "input", "task_id": "t001",
+  ]                                              "meta": {}}
+                                              ]
+  两字段：role + content                      五字段：role + content + type + task_id + meta
+  扁平列表，无过滤能力                        可过滤、可隔离、可追溯
+  多任务混在一起                              按 task_id 隔离
+  谁回答的不知道                              meta 里记来源、时间戳
+  </pre>
+  <p><strong>关键认识</strong>：LangChain messages 是"够用但不够用"——简单场景 OK，但多任务、多模型、可追溯、可恢复这些生产需求就不够了。MCP 的五字段结构是"够了"的那个临界点。</p>
+</div>
+
+<!-- ========== 六 ========== -->
+<h2>真实运行输出</h2>
+<div class="ok">
+  <div class="ok-title">已在本机实际运行验证（qwen-plus 真实调用 + DeepSeek 模拟）</div>
+  <pre>
+--- qwen-plus 回答 ---
+2023年财政支出较2022年稳健增长约5.4%（1.40万亿元），
+属于适度扩张、精准发力的态势，而非"快速增长"。
+
+--- DeepSeek 辅助回答（模拟） ---
+[DeepSeek] 回答：根据提示生成的补充视角。
+
+--- 当前上下文段结构（JSON） ---
+[
+  {"role": "user", "content": "我想了解2023年...", "type": "input", "task_id": "t001", "meta": {}},
+  {"role": "model", "content": "2023年中国财政支出...", "type": "response", "task_id": "t001", "meta": {}},
+  {"role": "user", "content": "那2022年与2023年...", "type": "input", "task_id": "t001", "meta": {}},
+  {"role": "model", "content": "2023年一般公共预算支出27.46万亿元...",
+   "type": "response", "task_id": "t001", "meta": {}},                      ← 新增 1
+  {"role": "model", "content": "[DeepSeek] 回答：...",
+   "type": "observation", "task_id": "t001",                                ← 新增 2
+   "meta": {"source": "deepseek", "is_mock": true}}
+]
+  </pre>
+  <p><strong>五字段全部生效</strong>：role/model/user、type/input/response/observation、task_id/t001 贯穿始终、meta 在新增段里存了 source 和 is_mock。StructuredContextQueryTool 能按 type 过滤、按 task_id 隔离——这些在 LangChain messages 里是做不到的。</p>
+</div>
+
+<!-- ========== 七 ========== -->
+<h2>本篇在 char07 中的位置 + 跨章对照</h2>
+<pre>
+  char07 的 MCP 上下文演进线（预测）：
+  01 篇：上下文段结构化（本篇——五字段）
+  后续篇：跨任务恢复 / 会话持久化 / 多 Agent 上下文同步
+  ────────────────────────────────────────────
+  跨章知识对照：
+  char02-03 PersistentJSONMemory：{messages: [...]} → 只有 role+content 两字段
+  char07-01 MCP 上下文段：{role, content, type, task_id, meta} → 五字段
+  → 从"能用"到"好用"的结构化升级
+</pre>
+
+<!-- ========== 八 ========== -->
+<h2>生产视角</h2>
+<ul>
+  <li><strong>MCP 协议的完整定义</strong>：本篇只教了"上下文段"的表示层，完整 MCP 还有工具协议（Tool）、资源协议（Resource）——三个原语构成 Agent 间通信的标准</li>
+  <li><strong>task_id 的生产价值</strong>：多用户、多会话场景下，靠 task_id 隔离上下文是刚需（否则 A 的对话出现在 B 的上下文里）</li>
+  <li><strong>type 字段的过滤价值</strong>：input（用户输入）→ response（模型回答）→ observation（工具/辅助模型输出）的区分，让"只看对话历史"和"看完整决策链路"两种视图成为可能</li>
+  <li><strong>meta 字段的扩展性</strong>：时间戳、token 用量、工具执行耗时、模型版本——这些生产需要追溯的信息都塞这里</li>
+</ul>
+
+<!-- ========== 九 ========== -->
+<h2>动手练习</h2>
+<ol>
+  <li><strong>验证 type 过滤</strong>：把 StructuredContextQueryTool 里的过滤条件改成 <code class="true">["input", "response", "observation"]</code>——让 observation 也进主模型上下文，观察 qwen-plus 的回答是否受模拟 DeepSeek 输出的干扰。</li>
+  <li><strong>多任务隔离实验</strong>：加一个 task_id="t002" 的第二任务，构建独立的 context_segments——验证两个任务的上下文是否真的隔离。</li>
+  <li><strong>meta 扩展</strong>：在 build_context_segment 里加 timestamp 字段（time.time()）——让每条上下文段自带创建时间戳。</li>
+  <li><strong>接真 DeepSeek</strong>：把 call_deepseek_v1 改成真调用——<code class="true">openai.OpenAI(base_url="https://api.deepseek.com", api_key=os.environ.get('DEEPSEEK_API_KEY')).chat.completions.create(...)</code>，体验双模型真协同。</li>
+</ol>
+
+</div>
+</body>
+</html>
