@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>char09 汇总说明 - 多智能体系统工程</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; line-height: 1.7; }
+  h1 { color: #0f766e; border-bottom: 3px solid #14b8a6; padding-bottom: 10px; }
+  h2 { color: #0e7490; margin-top: 2rem; border-left: 5px solid #14b8a6; padding-left: 12px; }
+  h3 { color: #7c3aed; margin-top: 1.4rem; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; background: #fff; }
+  th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #ccfbf1; color: #134e4a; }
+  .card { background: #fff; border-radius: 10px; padding: 18px; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .chip { display: inline-block; background: #14b8a6; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 12px; margin-right: 6px; }
+  .chip-blue { background: #60a5fa; }
+  .chip-red { background: #f87171; }
+  .chip-amber { background: #fbbf24; color: #78350f; }
+  .chip-green { background: #34d399; }
+  a { color: #0e7490; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta { color: #64748b; font-size: 0.9em; }
+  .svg-card { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #e2e8f0; border-radius: 10px; padding: 16px; margin: 12px 0; border: 2px solid #22d3ee; }
+  .svg-card h3 { color: #22d3ee; margin-top: 0; }
+  .svg-card table th { background: #0f172a; color: #22d3ee; border-color: #334155; }
+  .svg-card table td { border-color: #334155; background: #1e293b; color: #e2e8f0; }
+</style>
+</head>
+<body>
+
+<h1>char09 多智能体系统工程 —— 汇总说明</h1>
+<p class="meta">配套架构文档：<a href="arch_汇总说明.md">arch_汇总说明.md</a>（含 Mermaid 图） | 生成日期：2026-10-12</p>
+
+<!-- ========== SVG 架构图速查 ========== -->
+<div class="svg-card">
+  <h3>📊 SVG 独立架构图速查（4 张，点击跳转）</h3>
+  <table>
+    <tr><th>#</th><th>架构图</th><th>视角</th><th>核心内容</th></tr>
+    <tr><td>1</td><td><a href="svg/01_四层架构总图.svg">01_四层架构总图.svg</a></td><td>分层结构</td><td>协作模式 / 调度策略 / 并发管理 / 协议格式 四层落位</td></tr>
+    <tr><td>2</td><td><a href="svg/02_七篇演进线全景图.svg">02_七篇演进线全景图.svg</a></td><td>学习路线</td><td>01→07 递进卡片 + 跨章关联</td></tr>
+    <tr><td>3</td><td><a href="svg/03_并行与隔离联动时序图.svg">03_并行与隔离联动时序图.svg</a></td><td>运行时序</td><td>Thread + Lock + task_id 隔离的完整时序</td></tr>
+    <tr><td>4</td><td><a href="svg/04_三种协作模式对照图.svg">04_三种协作模式对照图.svg</a></td><td>模式对比</td><td>直接传递 / 黑板共享 / 并行隔离同步 三模式</td></tr>
+  </table>
+</div>
+
+<h2>一、char09 的核心命题</h2>
+<p><strong>从单 Agent 到多 Agent——第一次把"多个 Agent 怎么一起干活"当作独立工程对象来设计。</strong></p>
+<p>char01-08 都在"造一个 Agent"——给它加工具、加记忆、加状态、加降级。char09 是全书第一次把多个 Agent 摆在一起，问四个全新的工程问题：</p>
+<ol>
+  <li><strong>协作模式</strong>：两个 Agent 之间的数据怎么传？（直接传递 / 黑板共享）</li>
+  <li><strong>调度策略</strong>：有多个可选 Agent/任务时怎么选？（轮询/加权 / DAG 依赖解锁）</li>
+  <li><strong>并发管理</strong>：多 Agent 同时跑时怎么防串台/写坏？（并行 + 隔离 + 同步）</li>
+  <li><strong>通信协议</strong>：Agent 之间发消息，消息长什么样？（结构化元信息）</li>
+</ol>
+
+<h2>二、四层架构速览</h2>
+<div class="card-grid">
+  <div class="card">
+    <h3><span class="chip">L4</span> 协作模式层（01-02）</h3>
+    <p><strong>怎么一起干活</strong>：01 主控写死调度链（直接传递）→ 02 黑板共享解耦（SharedState）。两种数据交互范式的对照。</p>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-blue">L3</span> 调度策略层（03-04）</h3>
+    <p><strong>怎么选谁先干</strong>：03 无依赖选择（轮询取模 / 重池加权）→ 04 有依赖 DAG（heapq 优先级堆 + depends 解锁）。</p>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-red">L2</span> 并发管理层（05-07）</h3>
+    <p><strong>怎么同时干不坏</strong>：05 并行执行（Thread + join）→ 06 上下文隔离（task_id 命名空间）→ 07 状态同步锁（Lock 临界区）。并发三部曲。</p>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-amber">L1</span> 协议格式层（08）</h3>
+    <p><strong>干的过程中怎么发消息</strong>：08 篇是纯注释 JSON 结构示例——id / from / to / type / priority / context_ref / payload / auth。</p>
+  </div>
+</div>
+
+<h2>三、七篇速查表</h2>
+<table>
+  <tr><th>#</th><th>篇</th><th>核心技能</th><th>验证</th><th>特殊标注</th></tr>
+  <tr><td>01</td><td>3个Agent联动财经系统</td><td>主控写死调度链 + 直接传递</td><td>✅</td><td><span class="chip chip-red">幻觉放大</span>假数据被 LLM 圆报告</td></tr>
+  <tr><td>02</td><td>多智能体状态共享</td><td>SharedState 黑板架构解耦</td><td>✅</td><td>与 01 对照：解耦 vs 耦合；幻觉风险延续</td></tr>
+  <tr><td>03</td><td>任务分配轮训与权重</td><td>TaskDispatcher 轮询/加权</td><td>✅</td><td><span class="chip chip-amber">小样本不收敛</span>3 次 67% vs 理论 20%</td></tr>
+  <tr><td>04</td><td>任务依赖链与优先级</td><td>TaskExecutor DAG + heapq</td><td>✅</td><td>执行顺序 fetch→model→report→graph；依赖优先于优先级</td></tr>
+  <tr><td>05</td><td>子智能体并行执行</td><td>ParallelExecutor Threading</td><td>✅</td><td><span class="chip chip-green">2.59x 加速比</span>1.7s vs 4.4s</td></tr>
+  <tr><td>06</td><td>上下文切换与隔离</td><td>ContextScope task_id 分桶</td><td>✅</td><td>三主题无串台；隔离检查代码段可复用</td></tr>
+  <tr><td>07</td><td>状态同步与锁控制</td><td>SharedLog Lock 临界区</td><td>✅</td><td><span class="chip chip-red">锁内 sleep 是教学演示</span>生产严禁</td></tr>
+  <tr><td>08</td><td>Agent交互元信息</td><td>JSON 通信格式注释示例</td><td>—</td><td>无代码，纯设计参考；文件名拼写"agnet"</td></tr>
+</table>
+
+<h2>四、三种协作模式对照</h2>
+<div class="card-grid">
+  <div class="card" style="border-left: 4px solid #64748b;">
+    <h3>模式一：直接传递（01）</h3>
+    <pre><code>主控.run():
+  news → analysis → report
+  # 上游输出 = 下游输入
+  # 顺序写死，耦合度高</code></pre>
+    <p><span class="chip chip-red">风险</span>上游低质量 → 下游幻觉放大</p>
+  </div>
+  <div class="card" style="border-left: 4px solid #22d3ee;">
+    <h3>模式二：黑板共享（02）</h3>
+    <pre><code>Agent_A → SharedState → Agent_B
+  # 写入者和读取者解耦
+  # 黑板成中间枢纽</code></pre>
+    <p><span class="chip chip-green">优点</span>灵活性高，增减 Agent 不影响其他</p>
+  </div>
+  <div class="card" style="border-left: 4px solid #f87171;">
+    <h3>模式三：并行+隔离+同步（05-07）</h3>
+    <pre><code>Thread_1 ──┐
+Thread_2 ──┼→ SharedLog + Lock
+Thread_3 ──┘
+  # 各线程独立 LLM 调用
+  # ContextScope 分桶防串台</code></pre>
+    <p><span class="chip chip-blue">组合</span>并行加速 + 隔离安全 + 锁保护共享</p>
+  </div>
+</div>
+
+<h2>五、三条不变式（新人最先认出的模式）</h2>
+<h3>不变式 1：统一改写范式</h3>
+<table>
+  <tr><th>问题</th><th>教材写法</th><th>改写为</th></tr>
+  <tr><td>虚构 import</td><td><code>from qwen_agent.agent import Agent</code></td><td><code>dashscope.Generation.call</code></td></tr>
+  <tr><td>虚构 Tool 继承</td><td><code>class XxxAgent(Tool): super().__init__(...)</code></td><td>纯类 + <code>self.name/description</code></td></tr>
+  <tr><td>虚构 Agent.chat</td><td><code>agent = Agent(); agent.chat(messages=[msg])</code></td><td><code>dashscope.Generation.call(model="qwen-plus", messages=[...])</code></td></tr>
+</table>
+
+<h3>不变式 2：调度的本质 = 决策函数</h3>
+<pre><code>03 轮询：  counter % N → 选中 agent_i
+03 加权：  random.choice(重池) → 等概率
+04 DAG：   depends 全空或已执行 → 入堆 → 堆顶先出</code></pre>
+<p>char05 LangGraph 条件边是这个家族的框架化升级版——理解了 03/04 的决策函数，LangGraph 不再是黑盒。</p>
+
+<h3>不变式 3：并发安全三原则（优先级从高到低）</h3>
+<ol>
+  <li><strong>能隔离就不共享</strong>（06 ContextScope：每个任务独立命名空间，数据结构上不可能串）</li>
+  <li><strong>能免锁工具就不手写锁</strong>（queue.Queue：标准库线程安全容器）</li>
+  <li><strong>必须共享时才用 Lock</strong>（05/07：显式互斥，牺牲并发性换正确性）</li>
+</ol>
+
+<h2>六、实测四笔学费</h2>
+<div class="card-grid">
+  <div class="card">
+    <h3><span class="chip chip-red">学费 1</span> 幻觉放大链（01/02）</h3>
+    <p>上游只喂硬编码事实 → 下游 LLM 自行编造 PMI 51.2 / CPI 0.4% 等精确数字 → 报告读起来极其可信但全是幻觉。<strong>幻觉治理要在源头加校验 + LLM 整合加约束。</strong></p>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-amber">学费 2</span> 权重是概率不是配额（03）</h3>
+    <p>权重 1:1:3 的 3 次实测：agent_1 占 67%（理论 20%）。<strong>小样本不能判断权重效果，100 次才收敛。</strong></p>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-red">学费 3</span> 锁内耗时是反模式（07）</h3>
+    <p>sleep(0.5) 放临界区让三次写入至少 1.5s 串行。<strong>生产级做法：锁内只塞队列（微秒），锁外专门线程消费。</strong>生产者-消费者模式。</p>
+  </div>
+  <div class="card">
+    <h3><span class="chip chip-amber">学费 4</span> 文件名拼写错误（08）</h3>
+    <p>08 篇文件名 <code>08_agnet之间交互元信息例子.py</code>——"agnet" 是 "agent" 的拼写错误。内容是纯注释 JSON 示例，无可运行代码。</p>
+  </div>
+</div>
+
+<h2>七、并发三部曲联动图（05+06+07）</h2>
+<p>char09-05/06/07 是并发管理的完整闭环——三者组合就是"多 Agent 并发安全执行"的最小完备方案：</p>
+<pre><code>ParallelExecutor（05）     ContextScope（06）        SharedLog（07）
+┌──────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│ Thread.start │     │ Dict[task_id]    │     │ List[str] + Lock │
+│ Thread.join  │     │ → List[message]  │     │ write_log 临界区 │
+└──────┬───────┘     └────────┬─────────┘     └────────┬─────────┘
+       │ 并行启动              │ 隔离上下文             │ 串行写入
+       └──────────────────────┼─────────────────────────┘
+                              │
+                   ┌──────────▼──────────┐
+                   │  多 Agent 并发安全  │
+                   │  执行系统           │
+                   └─────────────────────┘</code></pre>
+
+<h2>八、生产框架 vs 本篇手写</h2>
+<table>
+  <tr><th>生产框架</th><th>对应本篇概念</th><th>升级点</th></tr>
+  <tr><td>AutoGen（微软）</td><td>01 直接传递 + 08 通信协议</td><td>自动消息路由、人工介入、代码执行</td></tr>
+  <tr><td>CrewAI</td><td>02 黑板共享 + 03 调度策略</td><td>Role 定义、Process 编排、Memory 持久化</td></tr>
+  <tr><td>LangGraph 多 Agent</td><td>04 DAG + 05 并行</td><td>声明式图拓扑、checkpoint、human-in-the-loop</td></tr>
+  <tr><td>MetaGPT</td><td>01-07 全部 + 08 协议</td><td>软件公司角色扮演、SOP 流水线</td></tr>
+</table>
+<p><strong>关键认识</strong>：生产框架只是把本篇的手写模式做成了声明式 API——理解了本篇，任何多 Agent 框架都不是黑盒。</p>
+
+<h2>九、学习路径 + 配套资源</h2>
+<h3>6 步学习路径</h3>
+<ol>
+  <li><strong>跑 01+02</strong> → 对比两种协作模式（自测：说清直接传递 vs 黑板）</li>
+  <li><strong>跑 03+04</strong> → 调度的本质是决策函数（自测：手写 DAG 调度器）</li>
+  <li><strong>跑 05</strong> → 感受并行加速（自测：实测串行 vs 并行耗时）</li>
+  <li><strong>跑 06</strong> → 理解隔离为什么重要（自测：去掉隔离看串台）</li>
+  <li><strong>跑 07</strong> → 理解锁的语义与代价（自测：去掉锁看打印交错）</li>
+  <li><strong>综合</strong> → 05+06+07 组合成完整并发系统，用 04 DAG 做调度</li>
+</ol>
+<h3>配套架构资源</h3>
+<div class="card-grid">
+  <div class="card">
+    <h3>📄 架构汇总文档</h3>
+    <p><a href="arch_汇总说明.md">arch_汇总说明.md</a></p>
+    <p>含 Mermaid 图、四不变式、跨章对照、生产视角</p>
+  </div>
+  <div class="card">
+    <h3>📊 SVG 独立架构图</h3>
+    <p><a href="svg/">svg/ 目录</a>（4 张）</p>
+    <p>四层架构总图 / 七篇演进线 / 并行隔离时序 / 三种协作对照</p>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>char09-02 讲解 - 多智能体间的状态共享机制</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; line-height: 1.7; }
+  h1 { color: #0f766e; border-bottom: 3px solid #14b8a6; padding-bottom: 10px; }
+  h2 { color: #0e7490; margin-top: 2rem; border-left: 5px solid #14b8a6; padding-left: 12px; }
+  h3 { color: #7c3aed; margin-top: 1.4rem; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; background: #fff; }
+  th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #ccfbf1; color: #134e4a; }
+  .tip { background: #ecfdf5; border-left: 4px solid #10b981; padding: 10px 14px; margin: 12px 0; }
+  .warn { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 14px; margin: 12px 0; }
+  .danger { background: #fee2e2; border-left: 4px solid #ef4444; padding: 10px 14px; margin: 12px 0; }
+  .meta { color: #64748b; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>【例9-2】多智能体间的状态共享机制 —— 用中心状态池解耦 Agent</h1>
+<p class="meta">char09 第二篇 | 改写验证于 dashscope qwen-plus | 生成日期：2026-10-12</p>
+
+<h2>一、代码的目的与定位</h2>
+<p><strong>一句话：用一个全局状态字典（SharedState）做"公共信箱"——每个 Agent 只管往里面写或从里面读，彼此不直接调用，实现解耦。</strong></p>
+<p>char09-01 的主从架构里，<code>ForecastAgent.call(summary)</code> 的参数来自 <code>NewsAgent</code> 的返回值——<strong>下游显式依赖上游</strong>。如果以后想换一个新闻来源，就得改 <code>run()</code> 里的参数传递代码。本篇引入 <strong>中心状态管理器</strong> 解决这个问题：</p>
+<table>
+  <tr><th>对比维度</th><th>char09-01（直接传递）</th><th>char09-02（状态共享）</th></tr>
+  <tr><td>数据流向</td><td>上游返回值 → 下游参数</td><td>上游写状态池 key → 下游读同一 key</td></tr>
+  <tr><td>下游感知上游</td><td>知道上游是谁（调了谁的 call）</td><td>不知道，只知道读哪个 key</td></tr>
+  <tr><td>换上游时</td><td>要改 run() 里的调用链</td><td>只改"写 econ_trend 的 Agent"，下游不动</td></tr>
+  <tr><td>可观测性</td><td>散落在各 Agent 的 return 里</td><td>统一 dump() 导出全部中间结果</td></tr>
+</table>
+<div class="tip"><strong>架构一句话</strong>：状态池 = 公共的 Dict[str, Any]，所有 Agent 通过 update()/get() 读写同一个池子——这就是"黑板架构（Blackboard Architecture）"的教学简化版。</div>
+
+<h2>二、原代码问题与改写策略</h2>
+<table>
+  <tr><th>问题</th><th>原写法</th><th>改写</th></tr>
+  <tr><td>虚构框架 import</td><td><code>from qwen_agent.agent import Agent</code> 等 3 行</td><td>注释保留，换 <code>dashscope</code></td></tr>
+  <tr><td>虚构 Tool 继承</td><td><code>class AnalysisAgent(Tool): super().__init__(...)</code></td><td>纯类 + <code>self.name/description</code> 属性</td></tr>
+  <tr><td>虚构 Agent 实例</td><td><code>self.agent = Agent(tools=tools)</code></td><td>删除——主控直调 dashscope</td></tr>
+  <tr><td>虚构 Message 类</td><td><code>Message(role="user", content=...)</code></td><td>普通 dict</td></tr>
+  <tr><td>redis 调用</td><td colspan="2">无——未触发 cache.json 替换（头注释已说明）</td></tr>
+</table>
+<div class="tip"><strong>原样保留的核心教学资产</strong>：SharedState 三类方法（update/get/dump）、两子 Agent 的读写分工、execute() 三步调度链——全部一字未动。</div>
+
+<h2>三、核心设计思想：解耦的三层含义</h2>
+<h3>3.1 角色解耦：写入方不知道谁在读</h3>
+<p><code>AnalysisAgent</code> 只做 <code>self.shared.update("econ_trend", result)</code>——它不知道这个 key 被谁读，也不关心。<code>ReportAgent</code> 只做 <code>self.shared.get("econ_trend")</code>——它也不关心谁写的。这种"只管自己的事"的模式让每个 Agent 可以独立开发和替换。</p>
+<h3>3.2 调用解耦：数据不靠函数参数传递</h3>
+<p>char09-01 的 <code>forecast_tool.call(summary)</code> 需要显式把上游返回值当参数传下去。本篇的 <code>report_tool.call("")</code> 传的是空串——<strong>数据完全靠状态池传递</strong>。这个细节值得注意：</p>
+<pre><code># char09-01：参数传递（显式依赖）
+forecast = self.forecast_tool.call(summary)   # summary 是上游返回值
+
+# char09-02：状态池传递（隐式解耦）
+report = self.report_tool.call("")            # 参数空串，数据在状态池 econ_trend 里</code></pre>
+<h3>3.3 观测解耦：全部中间结果可 dump</h3>
+<p>运行结束后 <code>shared.dump()</code> 能拿到完整快照：<code>{"user_input": "...", "econ_trend": "...", "final_report": "..."}</code>。这在排查"哪个环节出了问题"时极其方便——不需要翻各 Agent 的 return 值，直接看状态池里缺了哪个 key。</p>
+
+<h2>四、代码结构逐段解析</h2>
+<h3>4.1 SharedState：全局状态池（本篇灵魂）</h3>
+<pre><code>class SharedState:
+    def __init__(self):
+        self.state: Dict[str, Any] = {}
+
+    def update(self, key: str, value: Any):
+        print(f"→ [状态更新] {key} = {value}")   # 更新即打印——调试友好
+        self.state[key] = value
+
+    def get(self, key: str, default=None):
+        return self.state.get(key, default)        # 不存在时给默认值
+
+    def dump(self) -> Dict[str, Any]:
+        return self.state.copy()                   # 复制一份——防止外部修改内部</code></pre>
+<p>三个方法覆盖了一个全局 Dict 的全部核心操作——<strong>它不是什么神奇的框架，就是一个带日志的普通 Dict 封装</strong>。但就是这个"薄封装"，把 Agent 间的数据交互标准化成了"写 key 读 key"，比散落在各处的函数返回值统一得多。</p>
+<h3>4.2 两子 Agent：写入方和读取方</h3>
+<pre><code># 写入方：只管写 econ_trend
+class AnalysisAgent:
+    def call(self, query: str) -> str:
+        result = "制造业增长、CPI温和回落、出口回升"   # 模拟数据
+        self.shared.update("econ_trend", result)      # 写状态池
+        return f"[分析完成] 趋势：{result}"
+
+# 读取方：只管读 econ_trend、写 final_report
+class ReportAgent:
+    def call(self, _: str) -> str:                     # 参数 _ 表示不使用
+        trend = self.shared.get("econ_trend", "无数据")  # 读状态池
+        report = f"2024年经济展望：预计{trend}..."
+        self.shared.update("final_report", report)      # 写状态池
+        return report</code></pre>
+<p>两个类各约 10 行，职责清晰。注意 <code>ReportAgent.call(self, _: str)</code> 里的 <code>_</code>——Python 约定用下划线表示"这个参数我不用"。数据不从参数来，从状态池来。</p>
+<h3>4.3 ControllerAgent.execute()：三步调度 + 状态池贯穿</h3>
+<pre><code>def execute(self, user_query: str) -> str:
+    self.shared.update("user_input", user_query)          # Step 0：主控也写状态池
+
+    analysis = self.analysis_tool.call(user_query)        # Step 1：写 econ_trend
+    report = self.report_tool.call("")                    # Step 2：读 econ_trend，写 final_report
+
+    prompt = f"""请基于以下信息生成一段完整用户报告：
+用户问题：{self.shared.get('user_input')}           # 主控读状态池
+分析内容：{self.shared.get('econ_trend')}           # 主控读状态池
+最终报告：{self.shared.get('final_report')}"""       # 主控读状态池</code></pre>
+<p>有意思的是主控 Agent 既是<strong>写入方</strong>（update user_input）也是<strong>读取方</strong>（get 三个 key 拼 prompt）——它自己也用这个公共信箱。这说明状态池不是"子 Agent 专用"，而是<strong>整个多 Agent 系统的共享内存</strong>。</p>
+
+<h2>五、实测运行结果（真机验证）</h2>
+<pre><code>=== 启动多Agent状态共享系统 ===
+→ 主控Agent启动，任务分析中...
+→ [状态更新] user_input = 请分析2024年中国经济走势，并撰写总结报告
+→ [状态更新] econ_trend = 制造业增长、CPI温和回落、出口回升
+→ 分析Agent响应：[分析完成] 趋势：制造业增长、CPI温和回落、出口回升
+→ [状态更新] final_report = 2024年经济展望：预计制造业增长、CPI温和回落、出口回升...
+→ 报告Agent响应：2024年经济展望：预计制造业增长、CPI温和回落、出口回升...
+调用qwen-plus生成中……
+
+--- Qwen3.0最终响应 ---
+**核心分析结论：**
+- 制造业持续回暖：PMI连续6个月扩张区间（2024年1–5月均值为51.2）...
+- CPI温和回落：2024年前五个月CPI同比涨幅为0.4%...
+- 出口明显回升：对共建"一带一路"国家出口增长12.3%...
+预计2024年全年GDP增速稳定在5.0%–5.2%区间</code></pre>
+<h3>实测发现 1：状态池日志 = 系统执行轨迹</h3>
+<p>四行 <code>[状态更新]</code> 日志就是整个系统的执行轨迹——user_input → econ_trend → final_report，key 名即数据流方向。比 char09-01 靠 print() 手动打印 return 值更标准化。</p>
+<h3>实测发现 2：LLM 幻觉放大假数据（与 01 篇同风险）</h3>
+<div class="danger"><strong>同一个教训，换了载体</strong>：状态池里只有三句硬编码事实（制造业增长 / CPI 温和 / 出口回升），但 qwen-plus 照样编造了 PMI 51.2、CPI 0.4%、"新三样"出口 12.3% 等精确数字——<strong>状态共享架构没有解决"假数据被幻觉放大"的问题，它只是解决了"Agent 间怎么传数据"的问题</strong>。幻觉的治理要在数据源头加校验（char08-02）+ 在 LLM 整合 prompt 里显式约束（char09-01 练习 3）。</div>
+
+<h2>六、教学要点与不变式</h2>
+<table>
+  <tr><th>#</th><th>不变式</th><th>本篇体现</th></tr>
+  <tr><td>1</td><td>解耦靠中间层</td><td>SharedState 就是 Agent 间的中间层——类似 char07 的 context_pool</td></tr>
+  <tr><td>2</td><td>数据流向即依赖顺序</td><td>econ_trend 必须先写后读 → Step1 必须在 Step2 之前</td></tr>
+  <tr><td>3</td><td>标注前缀让注意力更精准（char07）</td><td>final_prompt 用 key 名（用户问题/分析内容/最终报告）做标注</td></tr>
+  <tr><td>4</td><td>统一调用范式（全系列）</td><td>dashscope.Generation.call + result_format='message'</td></tr>
+</table>
+
+<h2>七、黑板架构 vs 直接传递：三种多 Agent 数据交互模式</h2>
+<table>
+  <tr><th>模式</th><th>代表</th><th>数据流</th><th>解耦度</th><th>适用场景</th></tr>
+  <tr><td>直接参数传递</td><td>char09-01</td><td>上游 return → 下游 param</td><td>低</td><td>链路固定、Agent 少</td></tr>
+  <tr><td><strong>黑板架构</strong></td><td><strong>本篇 char09-02</strong></td><td>write key → read key</td><td>高</td><td>Agent 多、链路可变、需要中间结果观测</td></tr>
+  <tr><td>消息总线</td><td>char09 后续篇章 / 生产 MQ</td><td>订阅主题 → 发布消息</td><td>最高</td><td>分布式、异步、多消费者</td></tr>
+</table>
+<p>本篇是黑板架构（Blackboard Architecture）的极简教学版——真实系统中"黑板"可能是 Redis（进程间共享）、数据库（持久化共享）、甚至 Redis Streams（带订阅的消息黑板）。但核心模式不变：<strong>写入方不关心谁在读，读取方不关心谁在写</strong>。</p>
+
+<h2>八、动手练习</h2>
+<ol>
+  <li><strong>加新写入方</strong>：新增 <code>MarketAgent</code> 往状态池写 <code>market_index</code>，让 ReportAgent 也读这个 key——观察改动量（应该只改 ReportAgent 的 call 和 SharedState，不动 Controller）。</li>
+  <li><strong>替换写入方</strong>：把 AnalysisAgent 的硬编码换成真 LLM 摘要（调 dashscope），下游 ReportAgent 完全不需要改——验证解耦效果。</li>
+  <li><strong>状态持久化</strong>：把 SharedState 的 <code>self.state</code> 改成 JSON 文件读写（char06 持久化思路），让中间结果跨进程可见——这是走向真实黑板架构的第一步。</li>
+  <li><strong>堵幻觉口子</strong>：在 final_prompt 里加"严格只允许引用状态池中的三句话，禁止补充任何具体数字或百分比"——重跑对比。</li>
+</ol>
+
+<h2>九、总结</h2>
+<p>本篇的核心资产是一个 <strong>30 行的 SharedState 类</strong>——它不是什么框架魔法，就是一个带日志的普通 Dict 封装。但它带来的架构收益是真实的：Agent 间解耦、数据流可观测、替换写入方零成本。char09-01 和 02 形成了一个清晰的对比：当 Agent 数量少时直接传递简单高效，当 Agent 数量增多或链路需要变化时，黑板架构就成了必然选择。</p>
+
+<p>同样必须记住：<strong>状态共享解决的是"Agent 间怎么传数据"的问题，不是"数据质量"的问题</strong>——假数据被幻觉放大的风险在两种架构里都存在，需要在数据源头加校验、在 LLM 整合时加约束。架构能帮你传递数据，但不能帮你保证数据可信。</p>
+
+</body>
+</html>

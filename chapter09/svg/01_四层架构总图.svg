@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1200" height="900" fill="#0f172a"/>
+  <!-- 标题 -->
+  <text x="600" y="48" font-size="28" font-weight="bold" fill="#22d3ee" text-anchor="middle">char09 四层架构总图</text>
+  <text x="600" y="76" font-size="14" fill="#94a3b8" text-anchor="middle">从单 Agent 到多 Agent 协作的四层递进</text>
+  <line x1="100" y1="90" x2="1100" y2="90" stroke="#334155" stroke-width="1"/>
+
+  <!-- ============ L4 协作模式层 ============ -->
+  <rect x="60" y="110" width="1080" height="150" rx="10" fill="#134e4a" stroke="#22d3ee" stroke-width="2"/>
+  <text x="80" y="140" font-size="18" font-weight="bold" fill="#22d3ee">L4 协作模式层（01-02）</text>
+  <text x="1080" y="140" font-size="12" fill="#94a3b8" text-anchor="end">怎么一起干活</text>
+  <!-- 01 -->
+  <rect x="90" y="160" width="470" height="80" rx="8" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="110" y="185" font-size="15" font-weight="bold" fill="#22d3ee">01 直接传递</text>
+  <text x="110" y="208" font-size="12" fill="#e2e8f0">主控.run() 写死调度链：news → analysis → report</text>
+  <text x="110" y="228" font-size="12" fill="#94a3b8">上游输出 = 下游输入 · 耦合度高 · 幻觉放大</text>
+  <!-- 02 -->
+  <rect x="620" y="160" width="470" height="80" rx="8" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="640" y="185" font-size="15" font-weight="bold" fill="#22d3ee">02 黑板共享</text>
+  <text x="640" y="208" font-size="12" fill="#e2e8f0">SharedState 解耦：Agent_A 写入 · Agent_B/C 读取</text>
+  <text x="640" y="228" font-size="12" fill="#94a3b8">写入者和读取者解耦 · 灵活增减 Agent</text>
+
+  <!-- L4→L3 箭头 -->
+  <path d="M600 262 L600 290 L590 280 L600 290 L610 280" stroke="#60a5fa" stroke-width="2" fill="none"/>
+
+  <!-- ============ L3 调度策略层 ============ -->
+  <rect x="60" y="290" width="1080" height="150" rx="10" fill="#1e3a5f" stroke="#60a5fa" stroke-width="2"/>
+  <text x="80" y="320" font-size="18" font-weight="bold" fill="#60a5fa">L3 调度策略层（03-04）</text>
+  <text x="1080" y="320" font-size="12" fill="#94a3b8" text-anchor="end">怎么选谁先干</text>
+  <!-- 03 -->
+  <rect x="90" y="340" width="470" height="80" rx="8" fill="#0f172a" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="110" y="365" font-size="15" font-weight="bold" fill="#60a5fa">03 无依赖选择</text>
+  <text x="110" y="388" font-size="12" fill="#e2e8f0">轮询：counter % N 取模循环</text>
+  <text x="110" y="408" font-size="12" fill="#94a3b8">加权：重池构造 [a,a,b,b,c,c,c] 等概率选 · 小样本不收敛</text>
+  <!-- 04 -->
+  <rect x="620" y="340" width="470" height="80" rx="8" fill="#78350f" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="640" y="365" font-size="15" font-weight="bold" fill="#fbbf24">04 有依赖 DAG + 优先级</text>
+  <text x="640" y="388" font-size="12" fill="#e2e8f0">heapq 优先级堆 + depends 解锁机制</text>
+  <text x="640" y="408" font-size="12" fill="#fbbf24">依赖约束优先于优先级 · 同层按堆顶择优</text>
+
+  <!-- L3→L2 箭头 -->
+  <path d="M600 442 L600 470 L590 460 L600 470 L610 460" stroke="#f87171" stroke-width="2" fill="none"/>
+
+  <!-- ============ L2 并发管理层 ============ -->
+  <rect x="60" y="470" width="1080" height="150" rx="10" fill="#3b1d1d" stroke="#f87171" stroke-width="2"/>
+  <text x="80" y="500" font-size="18" font-weight="bold" fill="#f87171">L2 并发管理层（05-07）</text>
+  <text x="1080" y="500" font-size="12" fill="#94a3b8" text-anchor="end">怎么同时干不坏</text>
+  <!-- 05 -->
+  <rect x="80" y="520" width="320" height="80" rx="8" fill="#0f172a" stroke="#f87171" stroke-width="1.5"/>
+  <text x="100" y="545" font-size="15" font-weight="bold" fill="#f87171">05 并行执行</text>
+  <text x="100" y="568" font-size="12" fill="#e2e8f0">Thread.start() · Thread.join()</text>
+  <text x="100" y="588" font-size="12" fill="#94a3b8">2.59x 加速比（1.7s vs 4.4s）</text>
+  <!-- 06 -->
+  <rect x="440" y="520" width="320" height="80" rx="8" fill="#0f172a" stroke="#f87171" stroke-width="1.5"/>
+  <text x="460" y="545" font-size="15" font-weight="bold" fill="#f87171">06 上下文隔离</text>
+  <text x="460" y="568" font-size="12" fill="#e2e8f0">ContextScope · task_id 命名空间</text>
+  <text x="460" y="588" font-size="12" fill="#94a3b8">三主题无串台 · 数据结构上物理隔离</text>
+  <!-- 07 -->
+  <rect x="800" y="520" width="320" height="80" rx="8" fill="#0f172a" stroke="#f87171" stroke-width="1.5"/>
+  <text x="820" y="545" font-size="15" font-weight="bold" fill="#f87171">07 状态同步锁</text>
+  <text x="820" y="568" font-size="12" fill="#e2e8f0">SharedLog · Lock 临界区互斥</text>
+  <text x="820" y="588" font-size="12" fill="#94a3b8">写入顺序随机但永不交错</text>
+
+  <!-- L2→L1 箭头 -->
+  <path d="M600 622 L600 650 L590 640 L600 650 L610 640" stroke="#64748b" stroke-width="2" fill="none"/>
+
+  <!-- ============ L1 协议格式层 ============ -->
+  <rect x="60" y="650" width="1080" height="100" rx="10" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+  <text x="80" y="680" font-size="18" font-weight="bold" fill="#94a3b8">L1 协议格式层（08）</text>
+  <text x="1080" y="680" font-size="12" fill="#94a3b8" text-anchor="end">干的过程中怎么发消息</text>
+  <text x="110" y="710" font-size="13" fill="#cbd5e1">JSON 通信元信息结构：id / timestamp / from / to / type / priority / context_ref / payload / auth</text>
+  <text x="110" y="732" font-size="12" fill="#64748b">纯注释示例，无可运行代码 · 文件名拼写"agnet"是 typo</text>
+
+  <!-- ============ 底部三条不变式 ============ -->
+  <rect x="60" y="770" width="340" height="110" rx="8" fill="#1e293b" stroke="#22d3ee" stroke-width="1"/>
+  <text x="80" y="795" font-size="14" font-weight="bold" fill="#22d3ee">不变式 1：统一改写范式</text>
+  <text x="80" y="815" font-size="11" fill="#cbd5e1">qwen_agent.Agent → dashscope.Generation.call</text>
+  <text x="80" y="832" font-size="11" fill="#cbd5e1">虚构 Tool → 纯类 + name/description 属性</text>
+  <text x="80" y="849" font-size="11" fill="#cbd5e1">虚构 Message → 普通 dict</text>
+
+  <rect x="430" y="770" width="340" height="110" rx="8" fill="#1e293b" stroke="#60a5fa" stroke-width="1"/>
+  <text x="450" y="795" font-size="14" font-weight="bold" fill="#60a5fa">不变式 2：调度本质 = 决策函数</text>
+  <text x="450" y="815" font-size="11" fill="#cbd5e1">03 轮询：counter % N</text>
+  <text x="450" y="832" font-size="11" fill="#cbd5e1">03 加权：random.choice(重池)</text>
+  <text x="450" y="849" font-size="11" fill="#cbd5e1">04 DAG：depends 全空 → 入堆 → 堆顶先出</text>
+
+  <rect x="800" y="770" width="340" height="110" rx="8" fill="#1e293b" stroke="#f87171" stroke-width="1"/>
+  <text x="820" y="795" font-size="14" font-weight="bold" fill="#f87171">不变式 3：并发安全三原则</text>
+  <text x="820" y="815" font-size="11" fill="#cbd5e1">① 能隔离就不共享（06 ContextScope）</text>
+  <text x="820" y="832" font-size="11" fill="#cbd5e1">② 能免锁工具就不手写锁（queue.Queue）</text>
+  <text x="820" y="849" font-size="11" fill="#cbd5e1">③ 必须共享时才用 Lock（05/07）</text>
+</svg>

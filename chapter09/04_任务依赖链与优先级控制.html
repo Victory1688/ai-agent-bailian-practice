@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>char09-04 讲解 - 任务依赖链与优先级控制</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; line-height: 1.7; }
+  h1 { color: #0f766e; border-bottom: 3px solid #14b8a6; padding-bottom: 10px; }
+  h2 { color: #0e7490; margin-top: 2rem; border-left: 5px solid #14b8a6; padding-left: 12px; }
+  h3 { color: #7c3aed; margin-top: 1.4rem; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; background: #fff; }
+  th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #ccfbf1; color: #134e4a; }
+  .tip { background: #ecfdf5; border-left: 4px solid #10b981; padding: 10px 14px; margin: 12px 0; }
+  .warn { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 14px; margin: 12px 0; }
+  .danger { background: #fee2e2; border-left: 4px solid #ef4444; padding: 10px 14px; margin: 12px 0; }
+  .meta { color: #64748b; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>【例9-4】任务依赖链与优先级控制 —— DAG 调度器入门</h1>
+<p class="meta">char09 第四篇 | 改写验证于 dashscope qwen-plus | 生成日期：2026-10-12</p>
+
+<h2>一、代码的目的与定位</h2>
+<p><strong>一句话：用一个 TaskExecutor 类，实现"依赖约束 + 优先级"的 DAG（有向无环图）调度——先按依赖解锁，同层再按优先级择优执行。</strong></p>
+<p>char09-01/02 的调度是<strong>写死顺序</strong>（run() 里 if...else），03 的调度是<strong>无依赖选一个</strong>（TaskDispatcher 只在"谁都可以干"的 Agent 里选）。本篇解决两个更复杂的问题：</p>
+<ol>
+  <li><strong>依赖约束</strong>：有些任务必须等上游完成才能开始（如 model 分析必须等 fetch_news 抓取）</li>
+  <li><strong>同层优先级</strong>：多个任务同时解锁时，先干重要的（如 report 优先级 2 > graph 优先级 1）</li>
+</ol>
+<p>4 个任务的依赖结构（画成 DAG 一眼就懂）：</p>
+<pre><code>fetch_news(优先级3) → model(优先级4) → report(优先级2)
+                                    → graph(优先级1)</code></pre>
+<p>model 是分叉点——它完成后，report 和 graph <strong>同时解锁</strong>，这时候优先级才发挥作用（report 先执行）。</p>
+
+<h2>二、原代码问题与改写策略</h2>
+<table>
+  <tr><th>问题</th><th>原写法</th><th>改写</th></tr>
+  <tr><td>虚构框架 import</td><td><code>from qwen_agent.agent import Agent</code> / <code>Message</code></td><td>注释保留，换 <code>dashscope</code></td></tr>
+  <tr><td>虚构 Agent 实例化</td><td><code>agent = Agent()</code>（连 tools 参数都没传）</td><td>删除，直调 <code>dashscope.Generation.call</code></td></tr>
+  <tr><td>虚构 Message 类</td><td><code>Message(role="user", content=...)</code></td><td>普通 dict</td></tr>
+  <tr><td>redis 调用</td><td colspan="2">无——未触发 cache.json 替换（头注释已说明）</td></tr>
+</table>
+<div class="tip"><strong>原样保留的核心教学资产</strong>：Task 四元组定义、TaskExecutor 的 heapq 优先级队列 + depends 解锁机制 + 下游级联触发逻辑、4 个任务函数——全部一字未动。</div>
+
+<h2>三、核心设计思想：DAG 调度的三个关键算法</h2>
+<h3>3.1 Task：最小调度单元</h3>
+<pre><code>class Task:
+    def __init__(self, id, func, depends=None, priority=1):
+        self.id = id
+        self.func = func               # 任务函数（无参数，返回值存 result）
+        self.depends = depends or []   # 前置依赖 ID 列表
+        self.priority = priority       # 优先级（越大越高）
+        self.executed = False          # 是否已执行
+        self.result = None             # 执行结果</code></pre>
+<p>Task 是一个纯数据对象——不包含任何调度逻辑。调度逻辑全在 TaskExecutor 里。这种"数据与执行分离"的模式让 Task 可以被序列化、持久化、跨进程传递——生产系统里任务队列（如 Celery、Airflow）都是这种设计。</p>
+<h3>3.2 优先级堆：heapq + 负号 = 大根堆</h3>
+<pre><code>heapq.heappush(pq, (-task.priority, task.id))    # 入堆
+_, tid = heapq.heappop(pq)                       # 出堆 = 堆顶</code></pre>
+<p>Python 标准库 <code>heapq</code> 实现的是<strong>最小堆</strong>（堆顶总是最小值）。要实现"优先级大的先出"，经典技巧就是<strong>存负数</strong>——priority 4 变成 -4，priority 3 变成 -3，-4 < -3，所以堆顶先弹出 priority 4 的任务。</p>
+<div class="warn"><strong>小坑提醒</strong>：如果两个任务优先级相同，heapq 会比较 tuple 的第二个元素（task.id 字符串），按字典序排列——这意味着同优先级任务的执行顺序是确定性的（字典序），而不是随机的。如果需要同优先级内随机，可以给 tuple 加第三个随机元素 <code>(-priority, random.random(), task.id)</code>。</div>
+<h3>3.3 级联解锁：依赖约束优先于优先级</h3>
+<pre><code>while pq:
+    _, tid = heapq.heappop(pq)
+    task = self.tasks[tid]
+
+    if task.executed:     # 已执行过，跳过
+        continue
+    if not self._can_execute(task):  # 依赖还没满足，跳过
+        continue
+
+    # 执行任务...
+    task.executed = True
+
+    # 解锁下游：检查所有未执行任务，哪些现在可以了
+    for t in self.tasks.values():
+        if not t.executed and self._can_execute(t):
+            heapq.heappush(pq, (-t.priority, t.id))</code></pre>
+<p>这里有个精妙之处：<strong>任务可能被多次入堆</strong>。比如 graph 任务在注册时就可以入堆（无依赖？不，它依赖 model），所以初始不入堆。model 执行完后 graph 解锁，入堆。但如果此时 graph 已经在堆里了（比如之前被其他路径解锁过），heapq 允许重复元素——<strong>执行时的 if executed 检查 + if _can_execute 检查就是防重</strong>。</p>
+<div class="tip"><strong>依赖约束优先的实证</strong>：model 的优先级是 4（比 fetch_news 的 3 高），但它必须等 fetch_news 完成才能解锁，所以执行顺序 fetch_news → model——<strong>优先级再高，依赖没满足也得等着</strong>。</div>
+
+<h2>四、实测运行结果（真机验证）</h2>
+<pre><code>=== 启动带依赖与优先级调度的Agent任务系统 ===
+→ 执行任务：fetch_news（优先级：3）    ← 唯一根任务，先执行
+→ 执行任务：model（优先级：4）         ← 依赖 fetch_news，解锁后执行
+→ 执行任务：report（优先级：2）         ← 与 graph 同层，优先级高先执行
+→ 执行任务：graph（优先级：1）          ← 同层优先级低，后执行</code></pre>
+<h3>实测验证了 DAG 调度的两阶段逻辑</h3>
+<table>
+  <tr><th>阶段</th><th>规则</th><th>实证</th></tr>
+  <tr><td>阶段 1：依赖解锁</td><td>所有前置任务 executed 才能入堆</td><td>model 必须等 fetch_news，graph/report 必须等 model</td></tr>
+  <tr><td>阶段 2：同层择优</td><td>堆顶优先级最大的先出</td><td>report(2) > graph(1)，所以 report 先执行</td></tr>
+</table>
+
+<h2>五、算法骨架：与生产级调度器的对照</h2>
+<table>
+  <tr><th>维度</th><th>本篇 TaskExecutor</th><th>生产级（Airflow / Celery / LangGraph）</th></tr>
+  <tr><td>DAG 建模</td><td>depends 列表手写</td><td>声明式拓扑（@dag decorator / 边连接）</td></tr>
+  <tr><td>调度触发</td><td>执行完手动扫全表解锁下游</td><td>事件驱动（执行完 emit 事件 → 下游监听到自动入队）</td></tr>
+  <tr><td>并发</td><td>单线程串行</td><td>多 Worker 并行（同层可独立执行的任务同时跑）</td></tr>
+  <tr><td>容错</td><td>任务失败 = 整个 executor 崩</td><td>重试 / 跳过 / 告警</td></tr>
+  <tr><td>持久化</td><td>内存 Dict</td><td>数据库 / Redis / 消息队列</td></tr>
+</table>
+<p>本篇的调度算法骨架是<strong>拓扑排序 + 优先级队列</strong>——这是几乎所有 DAG 调度器的核心算法。生产级实现只是在并发、容错、持久化上加强，但"依赖约束优先、同层按优先级"这个核心逻辑不变。</p>
+
+<h2>六、跨章节对照：依赖调度的三次升级</h2>
+<table>
+  <tr><th>层次</th><th>代表</th><th>调度方式</th><th>依赖表达</th></tr>
+  <tr><td>手写硬编码</td><td>char09-01/02</td><td>run() 里写死调用顺序</td><td>隐式（代码顺序 = 依赖顺序）</td></tr>
+  <tr><td><strong>DAG + 优先级</strong></td><td><strong>本篇 char09-04</strong></td><td>TaskExecutor heapq 调度</td><td>显式（depends 列表）</td></tr>
+  <tr><td>声明式图拓扑</td><td>char05 LangGraph</td><td>节点 + 条件边自动路由</td><td>显式（边 = 依赖）</td></tr>
+</table>
+<p>char05 的 LangGraph 其实就是本篇 TaskExecutor 的<strong>框架化升级版</strong>——把 depends 列表换成了图的边，把手写 heapq 换成了框架内置的拓扑排序算法。理解了本篇的调度逻辑，再看 LangGraph 的 add_node/add_edge 就不再是黑盒。</p>
+
+<h2>七、动手练习</h2>
+<ol>
+  <li><strong>加一个新根任务</strong>：新增 task_fetch_market（优先级 5），不依赖任何任务——观察它是否与 fetch_news 同时入堆、谁先执行（优先级大的先出）。</li>
+  <li><strong>制造循环依赖</strong>：让 graph 依赖 report，report 依赖 graph——运行看看会发生什么（应该永远解不了锁，executor 空转）。</li>
+  <li><strong>加并发执行</strong>：同层任务解锁后，用 threading 同时执行（如 report 和 graph 一起跑），对比串行耗时。</li>
+  <li><strong>加失败重试</strong>：让某个任务有概率失败，executor 捕获异常后重试 2 次，还是失败则标记为 FAILED 并跳过下游。</li>
+</ol>
+
+<h2>八、总结</h2>
+<p>本篇的核心资产是一个 <strong>60 行的 TaskExecutor 类</strong>——它把"怎么按依赖和优先级调度任务"这个问题，拆成了三个清晰的算法步骤：</p>
+<ol>
+  <li><strong>根任务入堆</strong>：所有 depends 为空的任务先入优先级堆</li>
+  <li><strong>堆顶执行</strong>：堆顶 = 当前优先级最高且依赖满足的任务</li>
+  <li><strong>级联解锁</strong>：执行完后扫全表，把现在能执行的下游任务入堆</li>
+</ol>
+<p>实测执行顺序 fetch_news → model → report → graph 完美验证了"依赖约束优先、同层再看优先级"的调度铁律。这个算法骨架与 Airflow、Celery、LangGraph 等生产级调度器同源——理解了它，再看任何 DAG 调度框架都不会觉得是黑盒。</p>
+
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>char09-03 讲解 - 任务分配策略轮训与权重</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; line-height: 1.7; }
+  h1 { color: #0f766e; border-bottom: 3px solid #14b8a6; padding-bottom: 10px; }
+  h2 { color: #0e7490; margin-top: 2rem; border-left: 5px solid #14b8a6; padding-left: 12px; }
+  h3 { color: #7c3aed; margin-top: 1.4rem; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; background: #fff; }
+  th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #ccfbf1; color: #134e4a; }
+  .tip { background: #ecfdf5; border-left: 4px solid #10b981; padding: 10px 14px; margin: 12px 0; }
+  .warn { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 14px; margin: 12px 0; }
+  .danger { background: #fee2e2; border-left: 4px solid #ef4444; padding: 10px 14px; margin: 12px 0; }
+  .meta { color: #64748b; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>【例9-3】任务分配策略：轮询与权重 —— 多 Agent 调度器入门</h1>
+<p class="meta">char09 第三篇 | 改写验证于 dashscope qwen-plus | 生成日期：2026-10-12</p>
+
+<h2>一、代码的目的与定位</h2>
+<p><strong>一句话：用一个 <code>TaskDispatcher</code> 类封装两种经典调度策略——轮询（均匀）和加权（按权重概率），对比它们在同一组 Agent 上的分配行为。</strong></p>
+<p>char09-01 和 02 的调度都是<strong>写死的</strong>：主控 Agent 里 <code>news.call() → forecast.call()</code> 顺序不可变。但现实中往往有<strong>多个同类 Agent 副本</strong>可以干同一件事（比如 3 个财经预测 Agent 并行排队），这时候就需要一个<strong>调度器</strong>来决定"这次任务给谁"。本篇引入两种最经典的调度策略：</p>
+<table>
+  <tr><th>策略</th><th>核心思想</th><th>代码实现</th><th>适用场景</th></tr>
+  <tr><td><strong>轮询 Round-Robin</strong></td><td>均匀依次分配，循环往复</td><td><code>agents[counter % len(agents)]</code></td><td>所有 Agent 能力相当、任务同质</td></tr>
+  <tr><td><strong>加权 Weighted</strong></td><td>按权重概率分配，强者多干活</td><td><code>_build_weighted_pool()</code> 重池 + <code>random.choice</code></td><td>Agent 能力有差异、想让强者多接任务</td></tr>
+</table>
+<div class="tip"><strong>架构一句话</strong>：调度器 = 策略 + Agent 池。策略决定"选谁"，Agent 池是"候选集"。切换策略不改主控代码，只改 <code>dispatcher.strategy</code>。</div>
+
+<h2>二、原代码问题与改写策略</h2>
+<table>
+  <tr><th>问题</th><th>原写法</th><th>改写</th></tr>
+  <tr><td>虚构框架 import</td><td><code>from qwen_agent.agent import Agent</code> 等 3 行</td><td>注释保留，换 <code>dashscope</code></td></tr>
+  <tr><td>虚构 Tool 继承</td><td><code>class EconomicAgent(Tool): super().__init__(...)</code></td><td>纯类 + <code>self.name/description</code> 属性</td></tr>
+  <tr><td>虚构 Agent 实例</td><td><code>self.agent = Agent(tools=dispatcher.agents)</code></td><td>删除——主控直调 dashscope</td></tr>
+  <tr><td>虚构 Message 类</td><td><code>Message(role="user", content=...)</code></td><td>普通 dict</td></tr>
+  <tr><td>redis 调用</td><td colspan="2">无——未触发 cache.json 替换（头注释已说明）</td></tr>
+</table>
+<div class="tip"><strong>原样保留的核心教学资产</strong>：TaskDispatcher 的 counter / _build_weighted_pool / dispatch 三方法、EconomicAgent 的 quality 属性 + call() 模拟逻辑、主流程双策略对比循环——全部一字未动。</div>
+
+<h2>三、核心设计思想：调度器的三个设计要点</h2>
+<h3>3.1 轮询：一行代码的均匀分配</h3>
+<pre><code>def dispatch(self):
+    if self.strategy == "round_robin":
+        agent = self.agents[self.counter % len(self.agents)]   # 关键：counter % 3 → 0,1,2,0,1,2...
+        self.counter += 1
+        return agent</code></pre>
+<p><code>counter % len(agents)</code> 是轮询的灵魂——计数器每次 +1，对 Agent 数量取模后永远落在合法下标范围内，形成 <code>0→1→2→0→1→2→...</code> 的循环序列。不需要任何额外数据结构，一行搞定。</p>
+<h3>3.2 加权：重池构造 = 把概率问题转成等概率选择</h3>
+<pre><code>def _build_weighted_pool(self):
+    """权重 1:1:3 → pool = [agent1, agent2, agent3, agent3, agent3]"""
+    pool = []
+    for agent in self.agents:
+        weight = self.weights.get(agent.name, 1)
+        pool.extend([agent] * weight)   # 复制 weight 份
+    return pool
+
+def dispatch(self):
+    elif self.strategy == "weighted":
+        return random.choice(self.pool)   # 在重池里等概率选</code></pre>
+<p>这是一个<strong>非常聪明的转换</strong>：把"按权重概率选"这个带概率的问题，转成"在重池里等概率选"这个简单问题。权重 1:1:3 意味着 pool 有 5 个元素，agent3 占 3 份，所以它被 <code>random.choice</code> 选中的概率天然就是 3/5 = 60%。</p>
+<div class="warn"><strong>注意权重与 quality 的关系</strong>：本篇的权重（weight_map 1:1:3）和 quality（0.85/0.90/0.95）是<strong>独立配置</strong>——权重决定"分到多少活"，quality 决定"干得多好"。教学示例故意让高 quality 的 Agent 分到更多权重，但生产环境中这两个维度可能独立调优（比如高 quality 但高成本的 Agent 只分配到关键任务）。</div>
+<h3>3.3 策略可替换：dispatcher 是注入的</h3>
+<pre><code>class ControlSystem:
+    def __init__(self, dispatcher: TaskDispatcher):
+        self.dispatcher = dispatcher   # 注入，不是自己 new
+
+# 主流程里：换策略 = 换 dispatcher 实例
+round_dispatcher = TaskDispatcher(..., strategy="round_robin")
+weighted_dispatcher = TaskDispatcher(..., strategy="weighted", weights=...)</code></pre>
+<p>主控系统不持有调度逻辑——它只持有一个 <code>dispatcher</code> 引用。换策略 = 换一个 <code>dispatcher</code> 实例，主控代码零改动。这就是依赖注入（DI）的简化版——策略与消费者解耦。</p>
+
+<h2>四、实测运行结果（真机验证）</h2>
+<h3>轮询策略 3 次：完美均匀</h3>
+<pre><code>--- 轮询第 1 次 → 分配给Agent：econ_agent_1
+--- 轮询第 2 次 → 分配给Agent：econ_agent_2
+--- 轮询第 3 次 → 分配给Agent：econ_agent_3</code></pre>
+<p>3 次恰好覆盖全部 3 个 Agent，<code>counter % 3</code> 输出 0, 1, 2——轮询行为确定可预测。</p>
+<h3>加权策略 3 次：小样本不严格按比例</h3>
+<pre><code>--- 加权第 1 次 → 分配给Agent：econ_agent_3
+--- 加权第 2 次 → 分配给Agent：econ_agent_1
+--- 加权第 3 次 → 分配给Agent：econ_agent_1</code></pre>
+<div class="warn"><strong>教学点：权重是概率，不是配额</strong>。权重 1:1:3 意味着每个 Agent 被选中的<strong>概率</strong>是 20%/20%/60%，但 3 次样本里 agent_1 分到 2 次（67%）、agent_3 只分到 1 次（33%）——这是正常的随机波动。跑 100 次后比例才会逼近 20%/20%/60%。如果任务量很小但必须严格按比例分配，应该用"加权轮询（Weighted Round-Robin）"而非"加权随机"。</div>
+
+<h2>五、两种调度策略的优劣势对照</h2>
+<table>
+  <tr><th>维度</th><th>轮询 Round-Robin</th><th>加权 Weighted</th></tr>
+  <tr><td>分配行为</td><td>确定性（counter 递增，结果可预测）</td><td>概率性（random.choice，小样本有波动）</td></tr>
+  <tr><td>代码复杂度</td><td>极低（一行取模）</td><td>中（重池构造 + random）</td></tr>
+  <tr><td>负载均衡</td><td>完美均匀</td><td>长期趋近权重比例，短期有波动</td></tr>
+  <tr><td>适合场景</td><td>Agent 能力同质、任务量可预测</td><td>Agent 能力异质、强者该多干活</td></tr>
+  <tr><td>生产升级</td><td>加权轮询（WWRR）平滑过渡</td><td>最小连接数 / 平滑加权轮询</td></tr>
+</table>
+
+<h2>六、跨章节对照：调度思想的三个层次</h2>
+<table>
+  <tr><th>层次</th><th>代表</th><th>调度方式</th><th>决策复杂度</th></tr>
+  <tr><td>手写硬编码</td><td>char09-01/02</td><td>run() 里 if...else 写死调用顺序</td><td>极低（顺序不可变）</td></tr>
+  <tr><td><strong>策略对象封装</strong></td><td><strong>本篇 char09-03</strong></td><td>TaskDispatcher 注入 + 切换 strategy</td><td>中（两种预定义策略）</td></tr>
+  <tr><td>图声明式拓扑</td><td>char05 LangGraph</td><td>节点 + 条件边自动路由</td><td>高（可声明任意拓扑）</td></tr>
+  <tr><td>模型自主决策</td><td>char04-07 function calling</td><td>模型自己决定调哪个 Agent</td><td>最高（每次可能不同）</td></tr>
+</table>
+<p>本篇处于光谱的中间：比手写灵活，比图/模型简单。它的价值是让新人看到"<strong>策略可以被封装成对象、被注入、被替换</strong>"——这条思想向上通往 LangGraph 的声明式路由，向下通向生产级负载均衡器（Nginx 的 upstream 配置就是加权轮询的工业实现）。</p>
+
+<h2>七、动手练习</h2>
+<ol>
+  <li><strong>跑大样本看权重收敛</strong>：把加权策略的循环次数从 3 改成 100，统计每个 Agent 被分到的次数——应该逼近 20/20/60。</li>
+  <li><strong>实现第三种策略：加权轮询</strong>：让高权重 Agent 多轮几次但保持确定性（如权重 1:1:3 → 分配序列 3,1,3,2,3,1,3,2,3...），对比加权随机的差异。</li>
+  <li><strong>把权重绑定到 quality</strong>：让 <code>weights</code> 自动从 Agent 的 <code>quality</code> 属性推导（如 quality×10 取整），实现"能力越强权重越高"。</li>
+  <li><strong>加超时降级</strong>：如果某个 Agent 的 call() 超过 2 秒还没返回，调度器自动切给下一个——这就是 char08-03 异常处理思想在调度层的延伸。</li>
+</ol>
+
+<h2>八、总结</h2>
+<p>本篇的核心资产是一个 <strong>40 行的 TaskDispatcher 类</strong>——它把"怎么选 Agent"这个决策从主控代码里抽离出来，封装成一个可注入、可替换的策略对象。轮询用一行取模实现均匀分配，加权用重池构造把概率问题转成等概率选择——两个设计都值得记住。</p>
+<p>最重要的认知：<strong>权重是概率不是配额</strong>，小样本里的波动是正常现象。如果任务量很小但必须严格按比例，应该用加权轮询而非加权随机——这是教学示例故意没做但生产必须考虑的边界条件。</p>
+
+</body>
+</html>

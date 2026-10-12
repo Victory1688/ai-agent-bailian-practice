@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 850" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1400" height="850" fill="#0f172a"/>
+  <!-- 标题 -->
+  <text x="700" y="44" font-size="26" font-weight="bold" fill="#22d3ee" text-anchor="middle">char09 三种协作模式对照图</text>
+  <text x="700" y="72" font-size="13" fill="#94a3b8" text-anchor="middle">直接传递 vs 黑板共享 vs 并行+隔离+同步——从耦合到解耦的三级进化</text>
+  <line x1="60" y1="86" x2="1340" y2="86" stroke="#334155" stroke-width="1"/>
+
+  <!-- ============ 模式一：直接传递 ============ -->
+  <rect x="60" y="100" width="400" height="480" rx="12" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+  <rect x="60" y="100" width="400" height="50" rx="12" fill="#334155"/>
+  <text x="260" y="133" font-size="18" font-weight="bold" fill="#e2e8f0" text-anchor="middle">模式一：直接传递（01）</text>
+
+  <!-- 数据流图 -->
+  <text x="260" y="180" font-size="13" fill="#94a3b8" text-anchor="middle">数据流</text>
+  <rect x="100" y="195" width="100" height="50" rx="6" fill="#0f172a" stroke="#22d3ee"/>
+  <text x="150" y="215" font-size="12" font-weight="bold" fill="#22d3ee" text-anchor="middle">Agent_1</text>
+  <text x="150" y="232" font-size="10" fill="#94a3b8" text-anchor="middle">资讯分析</text>
+  <text x="200" y="222" font-size="18" fill="#22d3ee">→</text>
+  <rect x="220" y="195" width="100" height="50" rx="6" fill="#0f172a" stroke="#22d3ee"/>
+  <text x="270" y="215" font-size="12" font-weight="bold" fill="#22d3ee" text-anchor="middle">Agent_2</text>
+  <text x="270" y="232" font-size="10" fill="#94a3b8" text-anchor="middle">趋势预测</text>
+  <text x="320" y="222" font-size="18" fill="#22d3ee">→</text>
+  <rect x="340" y="195" width="100" height="50" rx="6" fill="#0f172a" stroke="#22d3ee"/>
+  <text x="390" y="215" font-size="12" font-weight="bold" fill="#22d3ee" text-anchor="middle">Agent_3</text>
+  <text x="390" y="232" font-size="10" fill="#94a3b8" text-anchor="middle">整合报告</text>
+
+  <!-- 直接传递说明 -->
+  <rect x="80" y="265" width="360" height="30" rx="4" fill="#0f172a" stroke="#64748b"/>
+  <text x="260" y="285" font-size="11" fill="#cbd5e1" text-anchor="middle">上游 Agent 的输出字符串直接作为下游 Agent 的输入</text>
+
+  <!-- 四象限 -->
+  <rect x="80" y="310" width="170" height="70" rx="6" fill="#0f172a" stroke="#34d399"/>
+  <text x="165" y="332" font-size="11" font-weight="bold" fill="#34d399" text-anchor="middle">耦合度</text>
+  <text x="165" y="352" font-size="15" font-weight="bold" fill="#34d399" text-anchor="middle">高</text>
+  <text x="165" y="368" font-size="9" fill="#94a3b8" text-anchor="middle">上下游紧耦合</text>
+
+  <rect x="270" y="310" width="170" height="70" rx="6" fill="#0f172a" stroke="#f87171"/>
+  <text x="355" y="332" font-size="11" font-weight="bold" fill="#f87171" text-anchor="middle">并发</text>
+  <text x="355" y="352" font-size="15" font-weight="bold" fill="#f87171" text-anchor="middle">串行</text>
+  <text x="355" y="368" font-size="9" fill="#94a3b8" text-anchor="middle">主控写死顺序</text>
+
+  <rect x="80" y="400" width="170" height="70" rx="6" fill="#0f172a" stroke="#60a5fa"/>
+  <text x="165" y="422" font-size="11" font-weight="bold" fill="#60a5fa" text-anchor="middle">数据流</text>
+  <text x="165" y="442" font-size="12" fill="#60a5fa" text-anchor="middle">单向链式传递</text>
+  <text x="165" y="458" font-size="9" fill="#94a3b8" text-anchor="middle">A → B → C</text>
+
+  <rect x="270" y="400" width="170" height="70" rx="6" fill="#0f172a" stroke="#fbbf24"/>
+  <text x="355" y="422" font-size="11" font-weight="bold" fill="#fbbf24" text-anchor="middle">适用场景</text>
+  <text x="355" y="442" font-size="10" fill="#fbbf24" text-anchor="middle">固定流水线</text>
+  <text x="355" y="458" font-size="9" fill="#94a3b8" text-anchor="middle">步骤固定的 SOP</text>
+
+  <!-- 风险 -->
+  <rect x="80" y="490" width="360" height="70" rx="6" fill="#7f1d1d" stroke="#f87171"/>
+  <text x="100" y="512" font-size="11" font-weight="bold" fill="#f87171">⚠ 风险</text>
+  <text x="100" y="530" font-size="10" fill="#cbd5e1">幻觉放大链：上游低质量数据被下游 LLM 圆报告</text>
+  <text x="100" y="546" font-size="10" fill="#cbd5e1">扩展困难：加一个 Agent 必须改主控 run()</text>
+
+  <!-- ============ 模式二：黑板共享 ============ -->
+  <rect x="500" y="100" width="400" height="480" rx="12" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+  <rect x="500" y="100" width="400" height="50" rx="12" fill="#134e4a"/>
+  <text x="700" y="133" font-size="18" font-weight="bold" fill="#22d3ee" text-anchor="middle">模式二：黑板共享（02）</text>
+
+  <!-- 数据流图 -->
+  <text x="700" y="180" font-size="13" fill="#94a3b8" text-anchor="middle">数据流</text>
+  <rect x="540" y="195" width="100" height="50" rx="6" fill="#0f172a" stroke="#22d3ee"/>
+  <text x="590" y="215" font-size="12" font-weight="bold" fill="#22d3ee" text-anchor="middle">Agent_A</text>
+  <text x="590" y="232" font-size="10" fill="#94a3b8" text-anchor="middle">写入者</text>
+  <text x="650" y="222" font-size="18" fill="#fbbf24">→</text>
+  <!-- 黑板 -->
+  <rect x="670" y="185" width="80" height="70" rx="8" fill="#134e4a" stroke="#fbbf24" stroke-width="2"/>
+  <text x="710" y="210" font-size="11" font-weight="bold" fill="#fbbf24" text-anchor="middle">Shared</text>
+  <text x="710" y="226" font-size="11" font-weight="bold" fill="#fbbf24" text-anchor="middle">State</text>
+  <text x="710" y="244" font-size="9" fill="#fbbf24" text-anchor="middle">黑板</text>
+  <text x="750" y="222" font-size="18" fill="#fbbf24">→</text>
+  <rect x="770" y="195" width="100" height="50" rx="6" fill="#0f172a" stroke="#22d3ee"/>
+  <text x="820" y="215" font-size="12" font-weight="bold" fill="#22d3ee" text-anchor="middle">Agent_B/C</text>
+  <text x="820" y="232" font-size="10" fill="#94a3b8" text-anchor="middle">读取者</text>
+
+  <!-- 黑板说明 -->
+  <rect x="520" y="265" width="360" height="30" rx="4" fill="#0f172a" stroke="#22d3ee"/>
+  <text x="700" y="285" font-size="11" fill="#cbd5e1" text-anchor="middle">所有 Agent 通过 SharedState 黑板解耦通信，增删 Agent 不改主控</text>
+
+  <!-- 四象限 -->
+  <rect x="520" y="310" width="170" height="70" rx="6" fill="#0f172a" stroke="#34d399"/>
+  <text x="605" y="332" font-size="11" font-weight="bold" fill="#34d399" text-anchor="middle">耦合度</text>
+  <text x="605" y="352" font-size="15" font-weight="bold" fill="#34d399" text-anchor="middle">低</text>
+  <text x="605" y="368" font-size="9" fill="#94a3b8" text-anchor="middle">写入/读取解耦</text>
+
+  <rect x="710" y="310" width="170" height="70" rx="6" fill="#0f172a" stroke="#64748b"/>
+  <text x="795" y="332" font-size="11" font-weight="bold" fill="#64748b" text-anchor="middle">并发</text>
+  <text x="795" y="352" font-size="15" font-weight="bold" fill="#64748b" text-anchor="middle">串行*</text>
+  <text x="795" y="368" font-size="9" fill="#94a3b8" text-anchor="middle">本篇实现串行</text>
+
+  <rect x="520" y="400" width="170" height="70" rx="6" fill="#0f172a" stroke="#60a5fa"/>
+  <text x="605" y="422" font-size="11" font-weight="bold" fill="#60a5fa" text-anchor="middle">数据流</text>
+  <text x="605" y="442" font-size="11" fill="#60a5fa" text-anchor="middle">多写多读共享池</text>
+  <text x="605" y="458" font-size="9" fill="#94a3b8" text-anchor="middle">黑板是枢纽</text>
+
+  <rect x="710" y="400" width="170" height="70" rx="6" fill="#0f172a" stroke="#fbbf24"/>
+  <text x="795" y="422" font-size="11" font-weight="bold" fill="#fbbf24" text-anchor="middle">适用场景</text>
+  <text x="795" y="442" font-size="10" fill="#fbbf24" text-anchor="middle">共享上下文</text>
+  <text x="795" y="458" font-size="9" fill="#94a3b8" text-anchor="middle">多 Agent 协作</text>
+
+  <!-- 风险 -->
+  <rect x="520" y="490" width="360" height="70" rx="6" fill="#78350f" stroke="#fbbf24"/>
+  <text x="540" y="512" font-size="11" font-weight="bold" fill="#fbbf24">⚠ 风险</text>
+  <text x="540" y="530" font-size="10" fill="#cbd5e1">黑板成瓶颈：写多读多冲突（并发需加 Lock）</text>
+  <text x="540" y="546" font-size="10" fill="#cbd5e1">幻觉风险延续：黑板传的是假数据，下游照样被污染</text>
+
+  <!-- ============ 模式三：并行+隔离+同步 ============ -->
+  <rect x="940" y="100" width="400" height="480" rx="12" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+  <rect x="940" y="100" width="400" height="50" rx="12" fill="#3b1d1d"/>
+  <text x="1140" y="133" font-size="18" font-weight="bold" fill="#f87171" text-anchor="middle">模式三：并行+隔离+同步（05-07）</text>
+
+  <!-- 数据流图 -->
+  <text x="1140" y="180" font-size="13" fill="#94a3b8" text-anchor="middle">数据流</text>
+  <!-- 三个并行线程 -->
+  <rect x="960" y="195" width="80" height="50" rx="6" fill="#0f172a" stroke="#f87171"/>
+  <text x="1000" y="215" font-size="10" font-weight="bold" fill="#f87171" text-anchor="middle">Thread_1</text>
+  <text x="1000" y="232" font-size="9" fill="#94a3b8" text-anchor="middle">独立 LLM</text>
+  <rect x="1060" y="195" width="80" height="50" rx="6" fill="#0f172a" stroke="#f87171"/>
+  <text x="1100" y="215" font-size="10" font-weight="bold" fill="#f87171" text-anchor="middle">Thread_2</text>
+  <text x="1100" y="232" font-size="9" fill="#94a3b8" text-anchor="middle">独立 LLM</text>
+  <rect x="1160" y="195" width="80" height="50" rx="6" fill="#0f172a" stroke="#f87171"/>
+  <text x="1200" y="215" font-size="10" font-weight="bold" fill="#f87171" text-anchor="middle">Thread_3</text>
+  <text x="1200" y="232" font-size="9" fill="#94a3b8" text-anchor="middle">独立 LLM</text>
+  <!-- 汇聚 -->
+  <line x1="1000" y1="245" x2="1140" y2="275" stroke="#f87171" stroke-width="2"/>
+  <line x1="1100" y1="245" x2="1140" y2="275" stroke="#f87171" stroke-width="2"/>
+  <line x1="1200" y1="245" x2="1140" y2="275" stroke="#f87171" stroke-width="2"/>
+  <!-- SharedLog + ContextScope -->
+  <rect x="1080" y="280" width="120" height="50" rx="6" fill="#78350f" stroke="#fbbf24"/>
+  <text x="1140" y="300" font-size="10" font-weight="bold" fill="#fbbf24" text-anchor="middle">SharedLog</text>
+  <text x="1140" y="316" font-size="9" fill="#fbbf24" text-anchor="middle">+ Lock 临界区</text>
+
+  <!-- 三件套说明 -->
+  <rect x="960" y="340" width="360" height="40" rx="4" fill="#0f172a" stroke="#f87171"/>
+  <text x="1140" y="358" font-size="10" fill="#cbd5e1" text-anchor="middle">① Threading 并行加速 ② ContextScope 隔离防串台 ③ Lock 保护共享写</text>
+  <text x="1140" y="375" font-size="10" fill="#cbd5e1" text-anchor="middle">三者组合 = 多 Agent 并发安全执行</text>
+
+  <!-- 四象限 -->
+  <rect x="960" y="395" width="170" height="70" rx="6" fill="#0f172a" stroke="#34d399"/>
+  <text x="1045" y="417" font-size="11" font-weight="bold" fill="#34d399" text-anchor="middle">耦合度</text>
+  <text x="1045" y="437" font-size="15" font-weight="bold" fill="#34d399" text-anchor="middle">极低</text>
+  <text x="1045" y="453" font-size="9" fill="#94a3b8" text-anchor="middle">各线程独立跑</text>
+
+  <rect x="1150" y="395" width="170" height="70" rx="6" fill="#0f172a" stroke="#34d399"/>
+  <text x="1235" y="417" font-size="11" font-weight="bold" fill="#34d399" text-anchor="middle">并发</text>
+  <text x="1235" y="437" font-size="15" font-weight="bold" fill="#34d399" text-anchor="middle">真并行</text>
+  <text x="1235" y="453" font-size="9" fill="#94a3b8" text-anchor="middle">2.59x 加速比</text>
+
+  <rect x="960" y="485" width="170" height="70" rx="6" fill="#0f172a" stroke="#60a5fa"/>
+  <text x="1045" y="507" font-size="11" font-weight="bold" fill="#60a5fa" text-anchor="middle">数据流</text>
+  <text x="1045" y="527" font-size="10" fill="#60a5fa" text-anchor="middle">各线程独立</text>
+  <text x="1045" y="543" font-size="9" fill="#94a3b8" text-anchor="middle">少量共享写</text>
+
+  <rect x="1150" y="485" width="170" height="70" rx="6" fill="#0f172a" stroke="#fbbf24"/>
+  <text x="1235" y="507" font-size="11" font-weight="bold" fill="#fbbf24" text-anchor="middle">适用场景</text>
+  <text x="1235" y="527" font-size="10" fill="#fbbf24" text-anchor="middle">独立任务+需汇总</text>
+  <text x="1235" y="543" font-size="9" fill="#94a3b8" text-anchor="middle">多 Agent 加速</text>
+
+  <!-- 风险 -->
+  <rect x="960" y="575" width="360" height="70" rx="6" fill="#7f1d1d" stroke="#f87171"/>
+  <text x="980" y="597" font-size="11" font-weight="bold" fill="#f87171">⚠ 风险</text>
+  <text x="980" y="615" font-size="10" fill="#cbd5e1">并发安全三件套缺一不可：缺隔离→串台、缺锁→数据丢、缺 join→漏等</text>
+  <text x="980" y="631" font-size="10" fill="#cbd5e1">锁内耗时是反模式（sleep 放锁内是教学演示）</text>
+
+  <!-- ============ 底部演进线 ============ -->
+  <rect x="60" y="610" width="1280" height="210" rx="12" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="80" y="638" font-size="16" font-weight="bold" fill="#e2e8f0">三种模式的演进关系</text>
+
+  <rect x="80" y="660" width="350" height="130" rx="8" fill="#0f172a" stroke="#64748b"/>
+  <text x="100" y="685" font-size="14" font-weight="bold" fill="#94a3b8">阶段 1：写死流水线</text>
+  <text x="100" y="708" font-size="11" fill="#cbd5e1">01 直接传递 → 主控 run() 里写死 if/elif</text>
+  <text x="100" y="726" font-size="11" fill="#cbd5e1">扩展困难，加 Agent 必须改主控代码</text>
+  <text x="100" y="744" font-size="11" fill="#f87171">风险：幻觉放大链</text>
+  <text x="100" y="765" font-size="10" fill="#64748b">耦合度 ████████░░ 80%</text>
+
+  <path d="M430 725 L460 725 L450 715 L460 725 L450 735" stroke="#22d3ee" stroke-width="2" fill="none"/>
+
+  <rect x="470" y="660" width="350" height="130" rx="8" fill="#0f172a" stroke="#22d3ee"/>
+  <text x="490" y="685" font-size="14" font-weight="bold" fill="#22d3ee">阶段 2：黑板解耦</text>
+  <text x="490" y="708" font-size="11" fill="#cbd5e1">02 共享状态 → 写入者和读取者解耦</text>
+  <text x="490" y="726" font-size="11" fill="#cbd5e1">增删 Agent 不改主控</text>
+  <text x="490" y="744" font-size="11" fill="#fbbf24">风险：黑板成瓶颈（并发需加 Lock）</text>
+  <text x="490" y="765" font-size="10" fill="#64748b">耦合度 ████░░░░░░ 40%</text>
+
+  <path d="M820 725 L850 725 L840 715 L850 725 L840 735" stroke="#f87171" stroke-width="2" fill="none"/>
+
+  <rect x="860" y="660" width="460" height="130" rx="8" fill="#0f172a" stroke="#f87171"/>
+  <text x="880" y="685" font-size="14" font-weight="bold" fill="#f87171">阶段 3：并行+隔离+同步（完整并发安全方案）</text>
+  <text x="880" y="708" font-size="11" fill="#cbd5e1">05 并行 + 06 隔离 + 07 同步锁 = 三件套</text>
+  <text x="880" y="726" font-size="11" fill="#cbd5e1">各线程独立跑 + 上下文分桶防串台 + 共享写加锁保护</text>
+  <text x="880" y="744" font-size="11" fill="#34d399">收益：2.59x 加速比 + 隔离 + 结果完整</text>
+  <text x="880" y="765" font-size="10" fill="#64748b">耦合度 ██░░░░░░░░ 20%</text>
+
+  <!-- 生产框架落点 -->
+  <text x="700" y="815" font-size="11" fill="#64748b" text-anchor="middle">生产框架落点：AutoGen（阶段 1+2）· CrewAI（阶段 2+3）· LangGraph 多 Agent（阶段 3+DAG）· MetaGPT（阶段 1+2+3+SOP）</text>
+</svg>

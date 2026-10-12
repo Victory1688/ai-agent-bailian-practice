@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 700" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1400" height="700" fill="#0f172a"/>
+  <!-- 标题 -->
+  <text x="700" y="48" font-size="26" font-weight="bold" fill="#22d3ee" text-anchor="middle">char09 七篇演进线全景图</text>
+  <text x="700" y="74" font-size="13" fill="#94a3b8" text-anchor="middle">协作模式 → 调度策略 → 并发管理 → 协议格式的四阶段递进</text>
+  <line x1="60" y1="88" x2="1340" y2="88" stroke="#334155" stroke-width="1"/>
+
+  <!-- 时间线 -->
+  <line x1="80" y1="360" x2="1320" y2="360" stroke="#475569" stroke-width="2"/>
+
+  <!-- 01 -->
+  <g transform="translate(90, 120)">
+    <rect width="160" height="220" rx="10" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+    <text x="80" y="28" font-size="20" font-weight="bold" fill="#22d3ee" text-anchor="middle">01</text>
+    <text x="80" y="50" font-size="12" fill="#cbd5e1" text-anchor="middle">直接传递</text>
+    <line x1="15" y1="62" x2="145" y2="62" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="85" font-size="11" fill="#e2e8f0" text-anchor="middle">主控写死调度链</text>
+    <text x="80" y="105" font-size="10" fill="#94a3b8" text-anchor="middle">news → analysis → report</text>
+    <line x1="15" y1="120" x2="145" y2="120" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="145" font-size="10" fill="#f87171" text-anchor="middle">⚠ 幻觉放大链</text>
+    <text x="80" y="162" font-size="9" fill="#64748b" text-anchor="middle">上游假数据 → 下游 LLM 圆报告</text>
+    <circle cx="80" cy="200" r="10" fill="#22d3ee"/>
+    <text x="80" y="204" font-size="11" font-weight="bold" fill="#0f172a" text-anchor="middle">1</text>
+  </g>
+  <path d="M250 340 L270 360 L250 380" stroke="#475569" stroke-width="2" fill="none"/>
+
+  <!-- 02 -->
+  <g transform="translate(280, 120)">
+    <rect width="160" height="220" rx="10" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+    <text x="80" y="28" font-size="20" font-weight="bold" fill="#22d3ee" text-anchor="middle">02</text>
+    <text x="80" y="50" font-size="12" fill="#cbd5e1" text-anchor="middle">黑板共享</text>
+    <line x1="15" y1="62" x2="145" y2="62" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="85" font-size="11" fill="#e2e8f0" text-anchor="middle">SharedState 解耦</text>
+    <text x="80" y="105" font-size="10" fill="#94a3b8" text-anchor="middle">写入/读取分工</text>
+    <line x1="15" y1="120" x2="145" y2="120" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="145" font-size="10" fill="#22d3ee" text-anchor="middle">✓ 解耦 vs 耦合</text>
+    <text x="80" y="162" font-size="9" fill="#64748b" text-anchor="middle">比 01 更灵活</text>
+    <circle cx="80" cy="200" r="10" fill="#22d3ee"/>
+    <text x="80" y="204" font-size="11" font-weight="bold" fill="#0f172a" text-anchor="middle">2</text>
+  </g>
+  <path d="M440 340 L460 360 L440 380" stroke="#475569" stroke-width="2" fill="none"/>
+
+  <!-- 03 -->
+  <g transform="translate(470, 120)">
+    <rect width="160" height="220" rx="10" fill="#1e293b" stroke="#60a5fa" stroke-width="2"/>
+    <text x="80" y="28" font-size="20" font-weight="bold" fill="#60a5fa" text-anchor="middle">03</text>
+    <text x="80" y="50" font-size="12" fill="#cbd5e1" text-anchor="middle">轮询与权重</text>
+    <line x1="15" y1="62" x2="145" y2="62" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="85" font-size="11" fill="#e2e8f0" text-anchor="middle">TaskDispatcher 调度</text>
+    <text x="80" y="105" font-size="10" fill="#94a3b8" text-anchor="middle">轮询取模 / 加权重池</text>
+    <line x1="15" y1="120" x2="145" y2="120" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="145" font-size="10" fill="#fbbf24" text-anchor="middle">⚠ 小样本不收敛</text>
+    <text x="80" y="162" font-size="9" fill="#64748b" text-anchor="middle">3 次 67% vs 理论 20%</text>
+    <circle cx="80" cy="200" r="10" fill="#60a5fa"/>
+    <text x="80" y="204" font-size="11" font-weight="bold" fill="#0f172a" text-anchor="middle">3</text>
+  </g>
+  <path d="M630 340 L650 360 L630 380" stroke="#475569" stroke-width="2" fill="none"/>
+
+  <!-- 04 -->
+  <g transform="translate(660, 120)">
+    <rect width="160" height="220" rx="10" fill="#78350f" stroke="#fbbf24" stroke-width="2"/>
+    <text x="80" y="28" font-size="20" font-weight="bold" fill="#fbbf24" text-anchor="middle">04</text>
+    <text x="80" y="50" font-size="12" fill="#cbd5e1" text-anchor="middle">DAG + 优先级</text>
+    <line x1="15" y1="62" x2="145" y2="62" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="85" font-size="11" fill="#e2e8f0" text-anchor="middle">TaskExecutor 调度</text>
+    <text x="80" y="105" font-size="10" fill="#94a3b8" text-anchor="middle">heapq + depends 解锁</text>
+    <line x1="15" y1="120" x2="145" y2="120" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="145" font-size="10" fill="#fbbf24" text-anchor="middle">★ 依赖优先于优先级</text>
+    <text x="80" y="162" font-size="9" fill="#64748b" text-anchor="middle">fetch→model→report→graph</text>
+    <circle cx="80" cy="200" r="10" fill="#fbbf24"/>
+    <text x="80" y="204" font-size="11" font-weight="bold" fill="#78350f" text-anchor="middle">4</text>
+  </g>
+  <path d="M820 340 L840 360 L820 380" stroke="#475569" stroke-width="2" fill="none"/>
+
+  <!-- 05 -->
+  <g transform="translate(850, 120)">
+    <rect width="160" height="220" rx="10" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+    <text x="80" y="28" font-size="20" font-weight="bold" fill="#f87171" text-anchor="middle">05</text>
+    <text x="80" y="50" font-size="12" fill="#cbd5e1" text-anchor="middle">并行执行</text>
+    <line x1="15" y1="62" x2="145" y2="62" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="85" font-size="11" fill="#e2e8f0" text-anchor="middle">Threading + Lock</text>
+    <text x="80" y="105" font-size="10" fill="#94a3b8" text-anchor="middle">Thread.start / join</text>
+    <line x1="15" y1="120" x2="145" y2="120" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="145" font-size="10" fill="#34d399" text-anchor="middle">★ 2.59x 加速比</text>
+    <text x="80" y="162" font-size="9" fill="#64748b" text-anchor="middle">1.7s vs 4.4s</text>
+    <circle cx="80" cy="200" r="10" fill="#f87171"/>
+    <text x="80" y="204" font-size="11" font-weight="bold" fill="#0f172a" text-anchor="middle">5</text>
+  </g>
+  <path d="M1010 340 L1030 360 L1010 380" stroke="#475569" stroke-width="2" fill="none"/>
+
+  <!-- 06 -->
+  <g transform="translate(1040, 120)">
+    <rect width="160" height="220" rx="10" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+    <text x="80" y="28" font-size="20" font-weight="bold" fill="#f87171" text-anchor="middle">06</text>
+    <text x="80" y="50" font-size="12" fill="#cbd5e1" text-anchor="middle">上下文隔离</text>
+    <line x1="15" y1="62" x2="145" y2="62" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="85" font-size="11" fill="#e2e8f0" text-anchor="middle">ContextScope 命名空间</text>
+    <text x="80" y="105" font-size="10" fill="#94a3b8" text-anchor="middle">task_id 分桶</text>
+    <line x1="15" y1="120" x2="145" y2="120" stroke="#334155" stroke-width="1"/>
+    <text x="80" y="145" font-size="10" fill="#34d399" text-anchor="middle">★ 三主题无串台</text>
+    <text x="80" y="162" font-size="9" fill="#64748b" text-anchor="middle">数据结构上物理隔离</text>
+    <circle cx="80" cy="200" r="10" fill="#f87171"/>
+    <text x="80" y="204" font-size="11" font-weight="bold" fill="#0f172a" text-anchor="middle">6</text>
+  </g>
+  <path d="M1200 340 L1220 360 L1200 380" stroke="#475569" stroke-width="2" fill="none"/>
+
+  <!-- 07 -->
+  <g transform="translate(1230, 120)">
+    <rect width="140" height="220" rx="10" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+    <text x="70" y="28" font-size="20" font-weight="bold" fill="#f87171" text-anchor="middle">07</text>
+    <text x="70" y="50" font-size="12" fill="#cbd5e1" text-anchor="middle">状态同步锁</text>
+    <line x1="10" y1="62" x2="130" y2="62" stroke="#334155" stroke-width="1"/>
+    <text x="70" y="85" font-size="11" fill="#e2e8f0" text-anchor="middle">SharedLog Lock</text>
+    <text x="70" y="105" font-size="10" fill="#94a3b8" text-anchor="middle">临界区互斥</text>
+    <line x1="10" y1="120" x2="130" y2="120" stroke="#334155" stroke-width="1"/>
+    <text x="70" y="145" font-size="10" fill="#34d399" text-anchor="middle">★ 写入永不交错</text>
+    <text x="70" y="162" font-size="9" fill="#64748b" text-anchor="middle">顺序随机但结果完整</text>
+    <circle cx="70" cy="200" r="10" fill="#f87171"/>
+    <text x="70" y="204" font-size="11" font-weight="bold" fill="#0f172a" text-anchor="middle">7</text>
+  </g>
+
+  <!-- 阶段标注 -->
+  <rect x="90" y="390" width="350" height="40" rx="6" fill="#134e4a" stroke="#22d3ee" stroke-width="1"/>
+  <text x="265" y="415" font-size="13" font-weight="bold" fill="#22d3ee" text-anchor="middle">段 1：协作模式（01-02）</text>
+
+  <rect x="470" y="390" width="350" height="40" rx="6" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1"/>
+  <text x="645" y="415" font-size="13" font-weight="bold" fill="#60a5fa" text-anchor="middle">段 2：调度策略（03-04）</text>
+
+  <rect x="850" y="390" width="520" height="40" rx="6" fill="#3b1d1d" stroke="#f87171" stroke-width="1"/>
+  <text x="1110" y="415" font-size="13" font-weight="bold" fill="#f87171" text-anchor="middle">段 3：并发管理（05-07）——并发三部曲</text>
+
+  <!-- 跨章关联 -->
+  <rect x="60" y="460" width="1280" height="210" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="80" y="488" font-size="15" font-weight="bold" fill="#94a3b8">跨章关联</text>
+
+  <rect x="80" y="505" width="300" height="50" rx="6" fill="#0f172a" stroke="#22d3ee" stroke-width="1"/>
+  <text x="95" y="525" font-size="11" fill="#22d3ee">char02 Agent 循环</text>
+  <text x="95" y="543" font-size="10" fill="#cbd5e1">agent_chat 单 Agent → char09 多 Agent 协作</text>
+
+  <rect x="410" y="505" width="300" height="50" rx="6" fill="#0f172a" stroke="#60a5fa" stroke-width="1"/>
+  <text x="425" y="525" font-size="11" fill="#60a5fa">char05 LangGraph 条件边</text>
+  <text x="425" y="543" font-size="10" fill="#cbd5e1">路由函数 → char09 03/04 调度决策函数同一家族</text>
+
+  <rect x="740" y="505" width="300" height="50" rx="6" fill="#0f172a" stroke="#f87171" stroke-width="1"/>
+  <text x="755" y="525" font-size="11" fill="#f87171">char07 上下文工程</text>
+  <text x="755" y="543" font-size="10" fill="#cbd5e1">context_pool → char09 06 ContextScope 同一家族</text>
+
+  <rect x="1070" y="505" width="230" height="50" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="1"/>
+  <text x="1085" y="525" font-size="11" fill="#fbbf24">char08 能力组装</text>
+  <text x="1085" y="543" font-size="10" fill="#cbd5e1">状态/降级 → char09 04 DAG 状态建模</text>
+
+  <!-- 底部提示 -->
+  <text x="700" y="620" font-size="12" fill="#64748b" text-anchor="middle">char09 是 char01-08 的综合应用题——前八章造零件，char09 第一次把多个 Agent 摆在一张桌子上问"怎么一起干活"</text>
+</svg>

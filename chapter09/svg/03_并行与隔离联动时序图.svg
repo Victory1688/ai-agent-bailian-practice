@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 900" font-family="Microsoft YaHei, sans-serif">
+  <rect width="1300" height="900" fill="#0f172a"/>
+  <!-- 标题 -->
+  <text x="650" y="40" font-size="24" font-weight="bold" fill="#22d3ee" text-anchor="middle">char09 并行与隔离联动时序图</text>
+  <text x="650" y="64" font-size="13" fill="#94a3b8" text-anchor="middle">05 ParallelExecutor + 06 ContextScope + 07 SharedLog Lock 三者联动</text>
+  <line x1="40" y1="78" x2="1260" y2="78" stroke="#334155" stroke-width="1"/>
+
+  <!-- 泳道头 -->
+  <rect x="40" y="90" width="150" height="40" rx="6" fill="#134e4a" stroke="#22d3ee"/>
+  <text x="115" y="115" font-size="13" font-weight="bold" fill="#22d3ee" text-anchor="middle">主控 main()</text>
+  <rect x="200" y="90" width="150" height="40" rx="6" fill="#3b1d1d" stroke="#f87171"/>
+  <text x="275" y="115" font-size="13" font-weight="bold" fill="#f87171" text-anchor="middle">Thread_1 (政策)</text>
+  <rect x="360" y="90" width="150" height="40" rx="6" fill="#3b1d1d" stroke="#f87171"/>
+  <text x="435" y="115" font-size="13" font-weight="bold" fill="#f87171" text-anchor="middle">Thread_2 (情绪)</text>
+  <rect x="520" y="90" width="150" height="40" rx="6" fill="#3b1d1d" stroke="#f87171"/>
+  <text x="595" y="115" font-size="13" font-weight="bold" fill="#f87171" text-anchor="middle">Thread_3 (趋势)</text>
+  <rect x="680" y="90" width="150" height="40" rx="6" fill="#1e293b" stroke="#60a5fa"/>
+  <text x="755" y="115" font-size="13" font-weight="bold" fill="#60a5fa" text-anchor="middle">qwen-plus</text>
+  <rect x="840" y="90" width="200" height="40" rx="6" fill="#1e3a5f" stroke="#60a5fa"/>
+  <text x="940" y="115" font-size="13" font-weight="bold" fill="#60a5fa" text-anchor="middle">SharedLog + Lock (07)</text>
+  <rect x="1050" y="90" width="210" height="40" rx="6" fill="#1e3a5f" stroke="#60a5fa"/>
+  <text x="1155" y="115" font-size="13" font-weight="bold" fill="#60a5fa" text-anchor="middle">ContextScope (06)</text>
+
+  <!-- 泳道虚线 -->
+  <line x1="115" y1="135" x2="115" y2="870" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="275" y1="135" x2="275" y2="870" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="435" y1="135" x2="435" y2="870" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="595" y1="135" x2="595" y2="870" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="755" y1="135" x2="755" y2="870" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="940" y1="135" x2="940" y2="870" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="1155" y1="135" x2="1155" y2="870" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+
+  <!-- ============ 时序 ============ -->
+  <!-- Step 1: 主控启动三个线程 -->
+  <line x1="115" y1="160" x2="275" y2="175" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrowCyan)"/>
+  <text x="195" y="155" font-size="10" fill="#22d3ee">Thread.start()</text>
+  <line x1="115" y1="170" x2="435" y2="175" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrowCyan)"/>
+  <text x="275" y="163" font-size="10" fill="#22d3ee">Thread.start()</text>
+  <line x1="115" y1="180" x2="595" y2="175" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrowCyan)"/>
+  <text x="355" y="171" font-size="10" fill="#22d3ee">Thread.start()</text>
+
+  <!-- Step 2: 三个线程同时调 qwen-plus（并行） -->
+  <rect x="275" y="195" width="40" height="20" fill="#3b1d1d" rx="3"/>
+  <text x="295" y="209" font-size="9" fill="#e2e8f0" text-anchor="middle">call</text>
+  <line x1="315" y1="205" x2="755" y2="205" stroke="#f87171" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <rect x="435" y="195" width="40" height="20" fill="#3b1d1d" rx="3"/>
+  <text x="455" y="209" font-size="9" fill="#e2e8f0" text-anchor="middle">call</text>
+  <line x1="475" y1="205" x2="755" y2="215" stroke="#f87171" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <rect x="595" y="195" width="40" height="20" fill="#3b1d1d" rx="3"/>
+  <text x="615" y="209" font-size="9" fill="#e2e8f0" text-anchor="middle">call</text>
+  <line x1="635" y1="205" x2="755" y2="225" stroke="#f87171" stroke-width="2" marker-end="url(#arrowRed)"/>
+
+  <!-- 并行 LLM 调用等待（长条形） -->
+  <rect x="755" y="235" width="40" height="200" fill="#1e293b" rx="3"/>
+  <text x="775" y="340" font-size="10" fill="#60a5fa" text-anchor="middle" transform="rotate(-90, 775, 340)">~12s 并行</text>
+
+  <!-- 并发隔离提示 -->
+  <rect x="800" y="260" width="200" height="60" rx="6" fill="#1e293b" stroke="#60a5fa" stroke-width="1" stroke-dasharray="4,4"/>
+  <text x="900" y="282" font-size="11" fill="#60a5fa" text-anchor="middle">06 ContextScope 隔离生效</text>
+  <text x="900" y="300" font-size="10" fill="#cbd5e1" text-anchor="middle">三线程各写各的 task_id 桶</text>
+  <text x="900" y="316" font-size="10" fill="#cbd5e1" text-anchor="middle">Dict[task_id] → List[msg]</text>
+
+  <!-- Step 3: LLM 返回（顺序随机，假设 Thread_2 最快） -->
+  <line x1="755" y1="445" x2="455" y2="445" stroke="#60a5fa" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <text x="580" y="438" font-size="10" fill="#60a5fa">响应返回（谁先到谁先写）</text>
+  <rect x="435" y="455" width="40" height="20" fill="#134e4a" rx="3"/>
+  <text x="455" y="469" font-size="9" fill="#e2e8f0" text-anchor="middle">锁</text>
+  <line x1="475" y1="465" x2="940" y2="465" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowAmber)"/>
+  <text x="700" y="458" font-size="10" fill="#fbbf24">抢锁 write_log()</text>
+
+  <!-- SharedLog Lock 临界区 -->
+  <rect x="940" y="445" width="40" height="60" fill="#78350f" rx="3"/>
+  <text x="960" y="475" font-size="9" fill="#fbbf24" text-anchor="middle" transform="rotate(-90, 960, 475)">临界区 0.5s</text>
+  <text x="960" y="510" font-size="8" fill="#fbbf24" text-anchor="middle">└── sleep(0.5)</text>
+
+  <!-- Thread_1 第二快 -->
+  <line x1="755" y1="520" x2="295" y2="520" stroke="#60a5fa" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <line x1="315" y1="530" x2="940" y2="540" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowAmber)" stroke-dasharray="3,3"/>
+  <text x="470" y="526" font-size="10" fill="#64748b">等锁中（Thread_2 还在写）</text>
+
+  <!-- Thread_3 最慢 -->
+  <line x1="755" y1="600" x2="615" y2="600" stroke="#60a5fa" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <line x1="635" y1="610" x2="940" y2="620" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowAmber)" stroke-dasharray="3,3"/>
+  <text x="760" y="616" font-size="10" fill="#64748b">等锁中（Thread_1 还在写）</text>
+
+  <!-- Step 4: 屏障等待 -->
+  <rect x="275" y="670" width="40" height="20" fill="#0f172a" rx="3"/>
+  <text x="295" y="684" font-size="9" fill="#94a3b8" text-anchor="middle">join</text>
+  <rect x="435" y="670" width="40" height="20" fill="#0f172a" rx="3"/>
+  <text x="455" y="684" font-size="9" fill="#94a3b8" text-anchor="middle">join</text>
+  <rect x="595" y="670" width="40" height="20" fill="#0f172a" rx="3"/>
+  <text x="615" y="684" font-size="9" fill="#94a3b8" text-anchor="middle">join</text>
+  <line x1="115" y1="680" x2="275" y2="680" stroke="#22d3ee" stroke-width="2"/>
+  <line x1="115" y1="680" x2="435" y2="680" stroke="#22d3ee" stroke-width="2"/>
+  <line x1="115" y1="680" x2="595" y2="680" stroke="#22d3ee" stroke-width="2"/>
+  <text x="60" y="676" font-size="10" fill="#22d3ee" text-anchor="middle">主线程阻塞等最慢的 Thread_3</text>
+
+  <!-- Step 5: 汇总 -->
+  <line x1="115" y1="710" x2="940" y2="710" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrowCyan)"/>
+  <text x="520" y="704" font-size="10" fill="#22d3ee">read_logs() 汇总三条完整日志（无交错）</text>
+  <line x1="115" y1="725" x2="755" y2="725" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrowCyan)"/>
+  <text x="450" y="720" font-size="10" fill="#22d3ee">最终汇总 LLM 调用</text>
+
+  <!-- 实测数据 -->
+  <rect x="80" y="760" width="1140" height="100" rx="8" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="100" y="785" font-size="13" font-weight="bold" fill="#22d3ee">实测数据</text>
+  <text x="100" y="808" font-size="11" fill="#cbd5e1">• 并行 LLM 调用耗时 ≈ 12s（串行预计 ≈ 36s → 3x 加速）</text>
+  <text x="100" y="826" font-size="11" fill="#cbd5e1">• 写入顺序随机（Thread_2 → Thread_1 → Thread_3 或其他组合），但 Lock 保证永不交错</text>
+  <text x="100" y="844" font-size="11" fill="#cbd5e1">• ContextScope 验证：三个 task_id 各 2 条消息，无串台</text>
+  <text x="100" y="862" font-size="11" fill="#fbbf24">• 锁内 sleep(0.5) 是教学演示放大效果 → 生产级用生产者-消费者解耦</text>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#f87171"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#60a5fa"/>
+    </marker>
+    <marker id="arrowAmber" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#fbbf24"/>
+    </marker>
+  </defs>
+</svg>

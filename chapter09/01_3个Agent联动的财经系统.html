@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>char09-01 讲解 - 3个Agent联动的财经系统</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; line-height: 1.7; }
+  h1 { color: #0f766e; border-bottom: 3px solid #14b8a6; padding-bottom: 10px; }
+  h2 { color: #0e7490; margin-top: 2rem; border-left: 5px solid #14b8a6; padding-left: 12px; }
+  h3 { color: #7c3aed; margin-top: 1.4rem; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; background: #fff; }
+  th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #ccfbf1; color: #134e4a; }
+  .tip { background: #ecfdf5; border-left: 4px solid #10b981; padding: 10px 14px; margin: 12px 0; }
+  .warn { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 14px; margin: 12px 0; }
+  .danger { background: #fee2e2; border-left: 4px solid #ef4444; padding: 10px 14px; margin: 12px 0; }
+  .meta { color: #64748b; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>【例9-1】3个Agent联动的财经系统 —— 主从架构多智能体入门</h1>
+<p class="meta">char09 开篇 | 改写验证于 dashscope qwen-plus | 生成日期：2026-10-12</p>
+
+<h2>一、代码的目的与定位</h2>
+<p><strong>一句话：从"一个 Agent 包打天下"跨入"多个 Agent 分工协作"——本篇是 char09（多智能体系统）的开篇，演示最主流的"主控-子任务"主从架构。</strong></p>
+<p>char01-08 全部在打磨<strong>单个</strong> Agent 的能力（状态感知、参数解析、异常处理、记忆、上下文压缩）。当任务复杂到一定程度，单 Agent 的提示词会臃肿不堪、工具列表会超出模型的取舍能力——于是把系统拆成多个各司其职的 Agent，成为自然选择。本篇用一个财经预测系统展示最简分工：</p>
+<table>
+  <tr><th>角色</th><th>类</th><th>职责</th><th>输入来源</th></tr>
+  <tr><td>主控 Agent</td><td><code>ControlAgent</code></td><td>任务拆解、按依赖顺序调度、最终整合</td><td>用户 query</td></tr>
+  <tr><td>资讯 Agent</td><td><code>NewsAgent</code></td><td>抓取财经新闻并生成摘要（模拟）</td><td>用户 query</td></tr>
+  <tr><td>分析 Agent</td><td><code>ForecastAgent</code></td><td>基于资讯做 GDP 预测（模拟）</td><td><strong>资讯 Agent 的输出</strong></td></tr>
+</table>
+<div class="tip"><strong>架构一句话</strong>：主控不干活，只编排；子 Agent 各管一段；上游输出是下游输入——这是一条<strong>串行流水线</strong>。</div>
+
+<h2>二、原代码问题与改写策略</h2>
+<table>
+  <tr><th>问题</th><th>原写法</th><th>改写</th></tr>
+  <tr><td>虚构框架 import</td><td><code>from qwen_agent.agent import Agent</code> 等 3 行</td><td>注释保留，换 <code>dashscope</code></td></tr>
+  <tr><td>虚构 Tool 继承</td><td><code>class NewsAgent(Tool): super().__init__(...)</code></td><td>纯类 + <code>self.name/description</code> 属性，<code>call()</code> 业务逻辑原样保留</td></tr>
+  <tr><td>虚构 Agent 实例</td><td><code>self.agent = Agent(tools=tools)</code></td><td>删除——主控只持有子 Agent 引用，最终整合直调 <code>Generation.call</code></td></tr>
+  <tr><td>虚构消息类</td><td><code>Message(role="user", content=...)</code></td><td>普通 dict <code>{"role": "user", "content": ...}</code></td></tr>
+  <tr><td>redis 调用</td><td colspan="2">无——未触发 cache.json 替换</td></tr>
+</table>
+<div class="tip"><strong>保留的核心教学资产</strong>：<code>run()</code> 的三步调度链一字未动——Step1 资讯 → Step2 预测（输入依赖 Step1 输出）→ Step3 拼 final_prompt 交 LLM 整合。两个子 Agent 的模拟假数据也原样保留（教材刻意为之，本篇重点是调度结构）。</div>
+
+<h2>三、核心设计思想：主从架构的三条分工原则</h2>
+<h3>3.1 职责单一：每个 Agent 只回答一个问题</h3>
+<p><code>NewsAgent</code> 只答"现在有什么消息"，<code>ForecastAgent</code> 只答"消息意味着什么"。对比单 Agent 版本（需要在一条提示词里同时约束检索与建模），职责拆分后每段提示词更短、更聚焦、更容易调试。</p>
+<h3>3.2 依赖显式化：数据流向即调用顺序</h3>
+<p>本例中预测依赖资讯（<code>forecast_tool.call(summary)</code>），所以调用顺序必须是先新闻后分析——<strong>数据依赖决定调度顺序</strong>。这条原则在 char05 的 LangGraph 顺序图中 formalize 过（节点按边连接执行），本篇是它的手写版。</p>
+<h3>3.3 整合收口：LLM 只在"需要智能"的地方出场</h3>
+<p>三个环节里只有最后一步调 LLM：前两步是确定性调度（谁先谁后写死在代码里），只有"把任务目标 + 资讯 + 预测揉成一份报告"需要语言生成能力。这不是偷懒——<strong>能确定的不交给模型</strong>，正是 char02"决策/执行分离"不变式在多 Agent 场景的延续。</p>
+
+<h2>四、代码结构逐段解析</h2>
+<h3>4.1 子 Agent：从 Tool 继承到纯类</h3>
+<pre><code>class NewsAgent:
+    def __init__(self):
+        self.name = "news_agent"          # 原写法：super().__init__(name=..., description=...)
+        self.description = "抓取并提取财经新闻"
+
+    def call(self, query: str) -> str:
+        return f"[资讯摘要] 当前宏观新闻显示：制造业回暖，CPI保持温和，出口增长稳定。"</code></pre>
+<p>去掉虚构的 <code>Tool</code> 继承后，子 Agent 就是一个"有名字、有描述、有 <code>call()</code> 方法"的普通对象。<code>name/description</code> 两个属性看似没用上，实际是为后续升级预留的接口：当主控从"硬编码调度"升级为"function calling 自主选择工具"时（char04 的做法），这两个字段就是注册给模型的工具元数据。</p>
+<h3>4.2 主控 Agent：run() 三步调度链（核心，原样保留）</h3>
+<pre><code>def run(self, user_query: str) -> str:
+    # Step 1：资讯
+    summary = self.news_tool.call(user_query)
+    # Step 2：预测（吃 Step 1 的输出——串行依赖）
+    forecast = self.forecast_tool.call(summary)
+    # Step 3：拼 final_prompt，LLM 整合
+    final_prompt = f"""请基于以下任务链条返回统一回应：
+任务目标：{user_query}
+资讯摘要：{summary}
+预测输出：{forecast}
+请以财经顾问语气生成最终报告："""</code></pre>
+<p>三步的分工一目了然。注意 <code>final_prompt</code> 的构造方式：<strong>把中间结果全部标注来源后塞进提示词</strong>——这就是 char07 上下文工程"标注前缀"思想（<code>[资讯摘要]</code> / <code>[预测结果]</code>）的手工雏形，让模型能区分哪段是目标、哪段是证据。</p>
+<h3>4.3 LLM 调用：虚构 agent.chat 换 dashscope</h3>
+<pre><code>response = dashscope.Generation.call(
+    model="qwen-plus",
+    messages=[{"role": "user", "content": final_prompt}],
+    temperature=0.3, max_tokens=512, result_format='message'
+)
+return response.output.choices[0].message.content</code></pre>
+<p>与 char08 系列完全同款的调用范式——本篇唯一真实的模型调用点。</p>
+
+<h2>五、实测运行结果（真机验证）</h2>
+<pre><code>=== 启动基于职责建模的多Agent系统 ===
+→ 开始执行主控Agent任务拆解与调度
+→ 调用新闻Agent进行资讯提取...
+→ 资讯Agent返回：[资讯摘要] 当前宏观新闻显示：制造业回暖，CPI保持温和，出口增长稳定。
+→ 调用预测Agent进行经济建模...
+→ 分析Agent返回：[预测结果] 综合判断2024年GDP预计增长5.3%。分析依据为：[资讯摘要] 当前宏观新闻显示：...
+调用qwen-plus生成中……
+
+--- Qwen3.0最终响应 ---
+【财经顾问季度宏观展望报告｜2024年中国GDP走势研判】
+基于对最新宏观经济数据与政策动向的系统性评估，我们审慎预测：2024年我国GDP将实现约5.3%的同比增长……
+✅ 制造业持续回暖：1—4月制造业PMI均值达50.7，连续6个月位于荣枯线上方……
+✅ CPI保持温和可控（1—4月平均同比+0.3%）……
+✅ 出口韧性超预期：在"新三样"出口额同比增长29.2%的带动下……</code></pre>
+<h3>实测发现：假数据被 LLM "幻觉放大"成专业报告</h3>
+<div class="danger"><strong>最重要的观察</strong>：子 Agent 只喂了两个硬编码事实（"制造业回暖/温和 CPI/出口稳定" + "GDP 预计 5.3%"），但 qwen-plus 在整合时<strong>自行编造了大量看似精确的支撑细节</strong>——PMI 均值 50.7、CPI +0.3%、新三样出口 29.2%、贸易顺差扩大 18.6%……这些数字全部是模型幻觉，报告读起来却极其可信。</div>
+<p>这正是多 Agent 系统的<strong>经典风险链条</strong>：上游 Agent 给出低质量数据 → 下游 LLM 为了"把报告写圆"而补造证据 → 最终输出比假数据本身危险得多（假数据一眼可见，幻觉报告具有迷惑性）。生产系统中，每个子 Agent 的输出都要过数据校验（如 char08-02 的参数解析思路），LLM 整合 prompt 中应显式约束"只允许引用给定材料，不得补充数据"。</p>
+
+<h2>六、教学要点与不变式</h2>
+<table>
+  <tr><th>#</th><th>不变式</th><th>本篇体现</th></tr>
+  <tr><td>1</td><td>决策/执行分离（char02）</td><td>主控只编排（决策），子 Agent 只执行，LLM 只在整合环节出场</td></tr>
+  <tr><td>2</td><td>数据依赖决定调度顺序（char05）</td><td>forecast 依赖 summary → 必须串行；无依赖时可并行（char05-10）</td></tr>
+  <tr><td>3</td><td>标注前缀让注意力更精准（char07）</td><td>final_prompt 中 [资讯摘要]/[预测输出] 标注信息来源</td></tr>
+  <tr><td>4</td><td>统一调用范式（全系列）</td><td>dashscope.Generation.call + result_format='message'，与 char08 同款</td></tr>
+</table>
+
+<h2>七、跨章节对照：三种"多角色协作"形态</h2>
+<table>
+  <tr><th>形态</th><th>代表</th><th>调度方式</th><th>角色数量</th><th>局限</th></tr>
+  <tr><td>手写串行流水线</td><td><strong>本篇 char09-01</strong></td><td>代码写死调用顺序</td><td>1 主控 + N 子 Agent</td><td>新任务要改代码</td></tr>
+  <tr><td>单 Agent 工具循环</td><td>char02-06 / char04</td><td>模型 function calling 自主决策</td><td>1 个 Agent + 工具集</td><td>任务复杂时提示词臃肿</td></tr>
+  <tr><td>图编排状态机</td><td>char05 LangGraph</td><td>节点 + 条件边声明式拓扑</td><td>N 个节点</td><td>需学习图框架</td></tr>
+</table>
+<p>本篇处于光谱的"最手工"一端：调度逻辑全写在 <code>run()</code> 里。它的价值是让新人<strong>先看清多 Agent 协作的裸骨架</strong>——后续章节再看到"路由 Agent""监督者模式""LangGraph 多节点"时，会发现它们只是把这段手写 if 换成了不同形式的自动调度。</p>
+
+<h2>八、动手练习</h2>
+<ol>
+  <li><strong>加一个下游角色</strong>：新增 <code>RiskAgent</code>（输入 forecast 输出，输出风险提示），挂到调度链 Step 2.5，观察 final_prompt 需要怎么改。</li>
+  <li><strong>把假数据换成真 LLM</strong>：让 NewsAgent 内部也调 dashscope 生成摘要（而不是硬编码），对比运行耗时与报告质量的变化。</li>
+  <li><strong>堵幻觉口子</strong>：在 final_prompt 中加入"严格只允许引用资讯摘要与预测输出中给出的信息，禁止补充任何具体数字"，重跑并对比幻觉细节是否减少。</li>
+  <li><strong>升级为自主调度</strong>：参考 char04-07，把两个子 Agent 注册为 function calling 工具，让模型自己决定调用顺序——对比手写版与自主版的差异。</li>
+</ol>
+
+<h2>九、总结</h2>
+<p>本篇用 60 行代码演示了多智能体系统的最小骨架：<strong>主控编排 + 子 Agent 执行 + 上游输出即下游输入 + LLM 收口整合</strong>。改写只动了框架层（虚构 qwen_agent → dashscope），三类角色的职责划分与三步调度链原样保留。实测暴露了"假数据被幻觉放大"的经典风险——记住这条教训，它比架构本身更值钱。char09 后续篇章将在此基础上展开更多协作形态。</p>
+
+</body>
+</html>

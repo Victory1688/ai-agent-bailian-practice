@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>char09-06 讲解 - 上下文切换与隔离设计</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; line-height: 1.7; }
+  h1 { color: #0f766e; border-bottom: 3px solid #14b8a6; padding-bottom: 10px; }
+  h2 { color: #0e7490; margin-top: 2rem; border-left: 5px solid #14b8a6; padding-left: 12px; }
+  h3 { color: #7c3aed; margin-top: 1.4rem; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; background: #fff; }
+  th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #ccfbf1; color: #134e4a; }
+  .tip { background: #ecfdf5; border-left: 4px solid #10b981; padding: 10px 14px; margin: 12px 0; }
+  .warn { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 14px; margin: 12px 0; }
+  .danger { background: #fee2e2; border-left: 4px solid #ef4444; padding: 10px 14px; margin: 12px 0; }
+  .meta { color: #64748b; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>【例9-6】上下文切换与隔离设计 —— 多任务并发时的"防串台"机制</h1>
+<p class="meta">char09 第六篇 | 改写验证于 dashscope qwen-plus | 生成日期：2026-10-12</p>
+
+<h2>一、代码的目的与定位</h2>
+<p><strong>一句话：用一个 task_id 做命名空间，让三个并行任务的对话历史各存各的、互不污染——解决多任务并发时的"串台"问题。</strong></p>
+<p>char09-05 的并行执行有一个隐含前提：<strong>三个子 Agent 不需要记忆</strong>（各自只干一件事，干完就扔）。但如果每个任务都需要自己的对话上下文（比如多轮对话、中间结果保留），直接并行就会出现一个经典问题：<strong>任务 A 的对话历史被任务 B 读到了</strong>。本篇用一个 ContextScope 类解决这个问题：</p>
+<pre><code># 没有隔离的世界（危险）
+contexts = []
+thread1.append({"role": "user", "content": "中国经济..."})  # 宏观经济对话
+thread2.append({"role": "user", "content": "人工智能..."})  # AI 对话
+# 两个线程共用一个列表 → 上下文混在一起，LLM 会串台！
+
+# 有隔离的世界（安全）
+contexts = {
+  "task_001": [...],   # 宏观经济上下文
+  "task_002": [...],   # AI 上下文
+  "task_003": [...],   # NLP 上下文
+}</code></pre>
+<div class="tip"><strong>架构一句话</strong>：隔离 = 一个大字典，task_id 是 key，每个 key 对应独立的对话历史列表——这就是"命名空间隔离"的最简实现。</div>
+
+<h2>二、原代码问题与改写策略</h2>
+<table>
+  <tr><th>问题</th><th>原写法</th><th>改写</th></tr>
+  <tr><td>虚构 Message 类</td><td><code>Message(role="user", content=...)</code></td><td>普通 dict <code>{"role": "user", "content": ...}</code></td></tr>
+  <tr><td>虚构 Agent 实例化</td><td><code>agent = Agent(); result = agent.chat(messages=history)</code></td><td>直调 <code>dashscope.Generation.call</code></td></tr>
+  <tr><td>虚构 Agent 实例化（最终汇总）</td><td><code>final_agent = Agent(); summary = final_agent.chat(Message(...))</code></td><td>直调 <code>dashscope.Generation.call</code></td></tr>
+  <tr><td>无隔离验证</td><td>原代码没验证隔离效果</td><td>新增隔离检查：打印每个 task_id 的消息数量与角色序列</td></tr>
+  <tr><td>redis 调用</td><td colspan="2">无——未触发 cache.json 替换（头注释已说明）</td></tr>
+</table>
+<div class="tip"><strong>原样保留的核心教学资产</strong>：ContextScope 的 create/append/get/destroy 四方法、AgentTask 的线程化多任务执行、主流程并行启动-等待-汇总——全部一字未动。</div>
+
+<h2>三、核心设计思想：隔离的三层含义</h2>
+<h3>3.1 命名空间隔离：task_id = 物理分界线</h3>
+<pre><code>class ContextScope:
+    def __init__(self):
+        self.contexts: Dict[str, list] = {}   # 一个大字典，key 是 task_id
+
+    def create(self, task_id: str):
+        self.contexts[task_id] = []            # 为每个任务创建独立列表
+
+    def append(self, task_id: str, message: dict):
+        if task_id in self.contexts:
+            self.contexts[task_id].append(message)  # 只往自己的列表追加
+
+    def get(self, task_id: str) -> list:
+        return self.contexts.get(task_id, [])      # 只取自己的列表</code></pre>
+<p>隔离的关键：<strong>所有读写操作都带 task_id 参数</strong>。AgentTask 线程只操作自己 task_id 对应的列表，永远不碰其他 task_id 的数据。这就是"物理隔离"——数据结构层面就不可能串。</p>
+<h3>3.2 生命周期管理：create → append → destroy</h3>
+<pre><code># create：任务开始前创建
+self.scope.create(self.task_id)
+
+# append：运行中随时追加（多轮对话就是多次 append）
+self.scope.append(self.task_id, {"role": "user", "content": ...})
+self.scope.append(self.task_id, {"role": "assistant", "content": ...})
+
+# destroy：任务结束后清理（原代码没调用，但方法已预留）
+self.scope.destroy(self.task_id)</code></pre>
+<p>ContextScope 预留了 <code>destroy()</code> 方法但原代码没调用——生产环境里任务跑完必须清理，否则 <code>self.contexts</code> 会无限膨胀（内存泄漏）。本篇作为教学示例故意省略，但这个"创建-使用-销毁"的生命周期模式值得记住。</p>
+<h3>3.3 线程安全：GIL 下为什么不需要额外锁</h3>
+<p>ContextScope 的 create/append/get 操作都是对 <code>Dict[str, list]</code> 的<strong>单 key 操作</strong>（如 <code>self.contexts[task_id].append(msg)</code>）。在 CPython 中，<strong>单 key 字典操作 + 单 list append 都是原子的</strong>（GIL 保护），所以不需要额外加 Lock——这与 char09-05 的 ParallelExecutor 不同（那里是 <code>results[name] = result</code>，涉及字典大小更新，GIL 下不一定原子）。</p>
+<div class="warn"><strong>小坑提醒</strong>：虽然本篇不需要加锁，但如果 create/append 改为复合操作（如"检查 key 是否存在 → 不存在则创建 → 追加消息"），就需要加锁了。规则：<strong>复合操作必须加锁，单 key 操作靠 GIL</strong>。</div>
+
+<h2>四、实测运行结果（真机验证）</h2>
+<h3>并行执行 + 隔离检查</h3>
+<pre><code>=== 启动多任务上下文隔离系统 ===
+→ 启动任务[task_001]   ← 三个任务几乎同时启动
+→ 启动任务[task_002]
+→ 启动任务[task_003]
+→ 任务[task_003]完成...  ← 各跑各的，耗时取决于 LLM 响应速度
+→ 任务[task_001]完成...
+→ 任务[task_002]完成...
+
+三个任务全部完成，耗时 12.4 秒（并行）
+
+--- 上下文隔离检查 ---
+  task_001: 2 条消息，角色序列 ['user', 'assistant']   ✓ 隔离成功
+  task_002: 2 条消息，角色序列 ['user', 'assistant']   ✓ 隔离成功
+  task_003: 2 条消息，角色序列 ['user', 'assistant']   ✓ 隔离成功</code></pre>
+<h3>三个任务的输出主题完全不同</h3>
+<table>
+  <tr><th>task_id</th><th>主题</th><th>前 50 字验证无串台</th></tr>
+  <tr><td>task_001</td><td>宏观经济</td><td>"当前（2024年中），中国宏观经济呈现稳中有进、承压回升的总体态势..."</td></tr>
+  <tr><td>task_002</td><td>AI 发展</td><td>"2023年是人工智能发展史上具有里程碑意义的一年，核心特征是大模型..."</td></tr>
+  <tr><td>task_003</td><td>NLP 简介</td><td>"自然语言处理（Natural Language Processing, NLP）是人工智能与语言学交..."</td></tr>
+</table>
+<p>三个任务的输出<strong>完全没有互相引用</strong>——task_001 没提 AI，task_002 没提 NLP，task_003 没提经济。隔离机制有效。</p>
+
+<h2>五、隔离 vs 不隔离：对比实验</h2>
+<table>
+  <tr><th>场景</th><th>上下文数据结构</th><th>结果</th></tr>
+  <tr><td>本篇（隔离）</td><td><code>Dict[str, list]</code> 按 task_id 分桶</td><td>三个任务各聊各的，互不干扰</td></tr>
+  <tr><td>不隔离（想象）</td><td><code>list</code> 一个大列表混装所有消息</td><td>task_001 调 LLM 时，历史里有 task_002 的"2023年 AI 发展"，LLM 可能串台</td></tr>
+  <tr><td>生产级隔离</td><td>Redis Hash / 数据库行存储</td><td>跨进程、跨机器的任务隔离</td></tr>
+</table>
+<p>生产系统中的隔离方案与本篇是同一家族：Redis Hash（field=task_id, value=序列化的消息列表）、数据库（每个 task_id 存一行对话历史）、MCP 协议（每个 session 独立上下文）——核心思想都是 <strong>"一个标识符 → 一份独立数据"</strong>。</p>
+
+<h2>六、跨章节对照：上下文管理的演进</h2>
+<table>
+  <tr><th>层次</th><th>代表</th><th>隔离方式</th><th>适用场景</th></tr>
+  <tr><td>单 Agent 无隔离</td><td>char02 Agent / char08 Memory</td><td>只有一个 messages 列表</td><td>单用户单任务</td></tr>
+  <tr><td><strong>按 task_id 分桶</strong></td><td><strong>本篇 char09-06</strong></td><td>Dict[task_id] → List[message]</td><td>多任务并发</td></tr>
+  <tr><td>状态池共享 + 任务 ID</td><td>char07 context_pool</td><td>List + task_id 字段标注</td><td>多 Agent 共享但按任务筛选</td></tr>
+  <tr><td>数据库持久化隔离</td><td>生产级会话存储</td><td>每行一个 task_id 的完整对话</td><td>跨进程、需要持久化</td></tr>
+</table>
+<p>char07 的 context_pool 与本篇有微妙的不同：char07 是"一池多任务"（所有任务的消息都在同一个列表里，靠 task_id 字段筛选），本篇是"多池多任务"（每个任务一个独立列表）。前者灵活（方便跨任务检索），后者安全（天然隔离不会串）——选择哪种取决于业务需求。</p>
+
+<h2>七、动手练习</h2>
+<ol>
+  <li><strong>加多轮对话</strong>：每个 AgentTask 跑 3 轮（用户问 → LLM 答 → 用户追问 → LLM 答 → ...），观察每个 task_id 的消息数量是否正确增长（2 → 4 → 6）。</li>
+  <li><strong>模拟串台</strong>：故意让两个 task_id 写同一个上下文（比如 task_001 和 task_002 共用同一个 task_id），观察 LLM 输出是否开始互相引用。</li>
+  <li><strong>加 destroy + 内存检查</strong>：任务完成后调 scope.destroy(task_id)，跑完三个任务后打印 len(scope.contexts) 验证是否已清理。</li>
+  <li><strong>换 Redis Hash 实现</strong>：把 ContextScope 的 self.contexts 换成 Redis Hash（field=task_id, value=json.dumps(列表)），实现跨进程隔离——这就是生产级的做法。</li>
+</ol>
+
+<h2>八、总结</h2>
+<p>本篇的核心资产是一个 <strong>40 行的 ContextScope 类</strong>——它把"多任务上下文隔离"这个问题，用一个 <code>Dict[str, list]</code> 结构就解决了。隔离的关键只有一条：<strong>所有读写都带 task_id 参数</strong>，让每个任务的数据结构上就不可能串。</p>
+<p>实测验证了隔离的有效性：三个任务主题完全不同（宏观经济 / AI 发展 / NLP 简介），输出<strong>完全没有互相引用</strong>。上下文隔离检查的小代码段（打印每个 task_id 的消息数量与角色序列）也值得记住——<strong>写完隔离代码后，务必加一行验证它真的隔离了</strong>。</p>
+<p>最后记住与 char09-05 的组合：并行执行 + 上下文隔离 = 多任务并发的完整解决方案——5 篇解决"怎么同时跑"，6 篇解决"跑起来不串台"，两者缺一不可。</p>
+
+</body>
+</html>
