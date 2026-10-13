@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>例13-6 MCP协议的上下文路由器 —— 讲解文档</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; color: #1e293b; line-height: 1.75; }
+  h1 { color: #0f172a; border-bottom: 3px solid #22d3ee; padding-bottom: 10px; font-size: 26px; }
+  h2 { color: #0f172a; border-left: 5px solid #22d3ee; padding-left: 12px; margin-top: 40px; font-size: 21px; }
+  h3 { color: #334155; margin-top: 26px; font-size: 17px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px 18px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  code { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-size: 90%; }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { border: 1px solid #cbd5e1; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f1f5f9; }
+  .highlight { background: #ecfeff; border-left: 5px solid #22d3ee; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .warn { background: #fef2f2; border-left: 5px solid #ef4444; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .ok { background: #f0fdf4; border-left: 5px solid #22c55e; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .flow { background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; padding: 14px 18px; margin: 14px 0; text-align: center; font-size: 14px; }
+  .flow b { color: #0e7490; }
+  .small { font-size: 13px; color: #64748b; }
+</style>
+</head>
+<body>
+
+<h1>例13-6 MCP 协议的上下文路由器（char13-06）</h1>
+<p class="small">第13章 项目案例：从零实现一个复合智能体系统 ｜ 改写基准：真实 MCP 规范（Anthropic 2024-11 发布，2025-06-18 修订）｜ 状态：已实测验证（5 项 self-test 全部通过）</p>
+
+<p>复合智能体的多个子系统（知识问答 / 脚本执行 / 闲聊）需要一个<b>路由器</b>：识别用户意图，把请求分发给正确的子系统。教材版给消息加了个 <code>call_type</code> 字段就自称"MCP"——但真实 MCP（Model Context Protocol）是 Anthropic 发布、2025-06-18 修订的跨进程开放标准（JSON-RPC 2.0 信封 + initialize 生命周期 + tools/resources/prompts 原语）。本篇按<b>真实规范</b>重写：路由器成为 MCP 客户端，各子系统成为 MCP Server，意图路由建立在标准协议之上。</p>
+
+<h2>一、教材原版问题</h2>
+<table>
+  <tr><th style="width:60px">编号</th><th style="width:250px">问题</th><th>后果</th></tr>
+  <tr><td>①</td><td><b>"MCP"是借壳命名</b></td><td>教材的 MCPMessage 只是普通消息 + call_type 字段，MCPContext 只是会话历史——与真实 MCP 毫无关系。学生带着"MCP 就是给消息加字段"的错误认知进入生产，是最危险的一类教学伤害</td></tr>
+  <tr><td>②</td><td>虚构类 Qwen2Chat/DeepSeekChat + 过时 import</td><td>同 13-01：import 即崩</td></tr>
+  <tr><td>③</td><td><b>意图劫持 bug</b>：get_last_intent 倒序扫描全部历史</td><td>用户最后说"今天天气真不错"，倒序扫描却命中更早的"执行脚本"→ 误路由到工具子系统。<b>当前意图应只由最后一条 user 消息决定</b>；且关键词表硬编码在方法体内</td></tr>
+  <tr><td>④</td><td>意图 → 模型 if/elif 硬编码</td><td>路由映射写死在 route() 里（13-04 同款平行映射），新增意图要改代码</td></tr>
+  <tr><td>⑤</td><td>路由器职责越界</td><td>名为路由器却亲自调模型生成回答——"决定发给谁"与"实际执行"混在一处，子系统形同虚设</td></tr>
+  <tr><td>⑥</td><td>全史重放转发</td><td>get_langchain_messages 把全部历史发给模型，意图是 A 最后一句是 B 时，模型看到的是混乱的混合上下文</td></tr>
+  <tr><td>⑦</td><td>错误字符串混流</td><td>route 返回 "[ERROR] ..." 字符串，调用方无法程序化判断成功失败</td></tr>
+  <tr><td>⑧</td><td>call_type 摆设字段、无 self-test</td><td>字段记录了全程无人消费；路由正确性不可验证</td></tr>
+</table>
+
+<h2>二、教材"MCP" vs 真实 MCP 规范（2025-06-18）</h2>
+<table>
+  <tr><th>维度</th><th>教材简化版</th><th>真实 MCP 规范（本篇实现）</th></tr>
+  <tr><td>本质定位</td><td>给消息对象加 call_type 字段</td><td>客户端-服务端架构的跨进程开放协议</td></tr>
+  <tr><td>消息格式</td><td>自定义 role/content/call_type</td><td><b>JSON-RPC 2.0</b> 信封（jsonrpc/id/method/params，标准错误码）</td></tr>
+  <tr><td>生命周期</td><td>无</td><td><b>initialize 握手</b>（交换 protocolVersion / capabilities / serverInfo）→ notifications/initialized 确认，然后才能调用</td></tr>
+  <tr><td>能力模型</td><td>无（路由器直调模型）</td><td><b>tools 原语</b>：tools/list 声明能力（含 inputSchema），tools/call 调用；另有 resources / prompts 原语（本篇聚焦 tools）</td></tr>
+  <tr><td>错误语义</td><td>except 返回错误字符串</td><td>两级区分：<b>协议错误</b>（-32601 方法不存在 / -32602 参数不合法）与<b>工具错误</b>（结果内 isError 标记）——失败原因不吞不混</td></tr>
+  <tr><td>版本协商</td><td>无</td><td>protocolVersion 协商（本篇 "2025-06-18"，不兼容直接报错）</td></tr>
+</table>
+<div class="warn"><b>为什么必须较真：</b>MCP 已是主流生态事实标准（Claude、OpenAI、各大 IDE 均已接入）。教材借壳的后果不是"代码跑不通"那么简单——学生以为见过 MCP 了，实际连 JSON-RPC 都没见过。本篇给的是<b>可以对着官方文档读懂生产代码</b>的最小实现。</div>
+
+<h2>三、改写后总览：协议化的路由链路</h2>
+<div class="flow">
+  <b>初始化</b>：MCPRouter 对三个 server 逐一 <b>initialize 握手</b>（协商 protocolVersion=2025-06-18）<br>
+  → notifications/initialized 确认（通知无响应）<br>
+  <br>
+  <b>路由</b>：用户消息 → <b>MCPContext.get_last_intent</b>（只认最后一条 user 消息）<br>
+  ↓ INTENT_ROUTES 路由表：意图 → (server, tool, 参数键)<br>
+  ↓ <b>tools/call</b> JSON-RPC 请求 → 目标 McServer.handle()<br>
+  ｜　├─ knowledge-server.ask_knowledge → qwen-plus 生成（qa）<br>
+  ｜　├─ ops-server.run_script → 模拟执行（tool）<br>
+  ｜　└─ chat-server.chitchat → qwen-turbo 闲聊（dialog）<br>
+  ↓ 返回结构化契约 <code>{"success", "intent", "server", "response"}</code>
+</div>
+<p>教材的业务语义全部保留：三意图分类、关键词识别、不同意图走不同模型（qa→qwen-plus / dialog→qwen-turbo）、demo 场景原文。变化在于<b>路由发生在标准协议之上，执行与路由彻底分离</b>。</p>
+
+<h2>四、核心组件 1：McServer —— 真实 MCP 规范的最小服务端</h2>
+<pre><code>class McServer:
+    def handle(self, request: dict):
+        method = request.get("method", "")
+        req_id = request.get("id")
+        if method.startswith("notifications/"):
+            return None   # MCP 规范：通知不产生响应
+        try:
+            handler = {"initialize": self._initialize,
+                       "tools/list": self._tools_list,
+                       "tools/call": self._tools_call}.get(method)
+            if handler is None:
+                raise JsonRpcError(METHOD_NOT_FOUND, f"方法不存在：{method}")
+            result = handler(request.get("params") or {})
+            return {"jsonrpc": "2.0", "id": req_id, "result": result}
+        except JsonRpcError as e:
+            return {"jsonrpc": "2.0", "id": req_id,
+                    "error": {"code": e.code, "message": e.message}}
+
+    def _tools_call(self, params: dict) -> dict:
+        name = params.get("name")
+        if name not in self.tools:
+            raise JsonRpcError(INVALID_PARAMS, f"工具 {name} 不在本 server 能力列表")
+        for key in TOOL_SPECS[name]["inputSchema"].get("required", []):
+            if key not in (params.get("arguments") or {}):
+                raise JsonRpcError(INVALID_PARAMS, f"缺少必填参数：{key}")
+        try:
+            text = str(TOOL_SPECS[name]["execute"](**args))
+            return {"content": [{"type": "text", "text": text}], "isError": False}
+        except Exception as e:
+            # 工具级错误按 MCP 规范用 isError 标记，不占用协议错误码
+            return {"content": [{"type": "text", "text": f"工具执行失败：{e}"}],
+                    "isError": True}</code></pre>
+<ul>
+  <li><b>单入口 handle()</b>：请求 dict 进、响应 dict 出，所有方法走同一个门——这就是 JSON-RPC 2.0 的形态（生产中经 stdio/HTTP 传输，本篇进程内传递，<b>传输层解耦</b>：MCP 是协议不是传输方式）；</li>
+  <li><b>两级错误语义</b>：调用不存在的工具、缺参数 → 协议错误码 -32602；工具执行中业务失败（如脚本名为空、模型接口非 200）→ 正常响应 + <code>isError: true</code>。教材"一个 except 吞所有"的粗放错误处理被规范化；</li>
+  <li><b>initialize 校验</b>：客户端带不兼容的 protocolVersion 来握手会被直接拒绝。</li>
+</ul>
+
+<h2>五、核心组件 2：MCPContext —— 意图劫持 bug 的修正</h2>
+<pre><code>INTENT_KEYWORDS = {
+    "qa": ("查询", "问答", "介绍"),
+    "tool": ("执行", "运行"),
+    "dialog": (),
+}
+
+def get_last_intent(self) -> str:
+    for msg in reversed(self.history):
+        if msg["role"] != "user":
+            continue
+        text = msg["content"]
+        for intent, keywords in INTENT_KEYWORDS.items():
+            if any(k in text for k in keywords):
+                return intent
+        return "dialog"      # 最后一条 user 不含已知关键词 → 闲聊
+    return "dialog"</code></pre>
+<table>
+  <tr><th>场景</th><th>教材版（倒序扫全史）</th><th>改写版（只认最后一条 user）</th></tr>
+  <tr><td>先说"查询GDP"，再说"执行统计脚本"</td><td>tool（碰巧正确）</td><td>tool</td></tr>
+  <tr><td>先说"执行备份脚本"，最后说"今天天气真不错啊"</td><td><b>tool（旧意图劫持，错误路由）</b></td><td><b>dialog（正确）</b></td></tr>
+</table>
+<p>右列第二行就是 Test 3 实测的对照场景——教材版在"闲聊收尾"的常见对话形态下必然误路由。关键词表同时提为注册表常量（教材硬编码在方法体内），新增意图只改配置。</p>
+
+<h2>六、核心组件 3：MCPRouter —— MCP 客户端（路由与执行分离）</h2>
+<pre><code>INTENT_ROUTES = {
+    "qa":     ("knowledge-server", "ask_knowledge", "query"),
+    "tool":   ("ops-server",       "run_script",    "script"),
+    "dialog": ("chat-server",      "chitchat",      "message"),
+}
+
+def __init__(self):
+    self.servers = build_servers()
+    for name, server in self.servers.items():
+        result = self._request(server, "initialize", {
+            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "capabilities": {},
+            "clientInfo": {"name": "context-router", "version": "1.0.0"}})
+        self._notify(server, "notifications/initialized")
+
+def route(self, context: MCPContext) -> dict:
+    intent = context.get_last_intent()
+    server_name, tool_name, arg_key = INTENT_ROUTES[intent]
+    payload = context.get_last_user_message()      # 只转发当前问题，不重放全史
+    result = self._request(self.servers[server_name], "tools/call",
+                           {"name": tool_name, "arguments": {arg_key: payload}})
+    text = result["content"][0]["text"]
+    return {"success": not result.get("isError", False), "intent": intent,
+            "server": server_name, "response": text}</code></pre>
+<ul>
+  <li><b>规范生命周期</b>：构造时对每个 server 完成 initialize 握手（实测日志：三个 server 均协商到 2025-06-18）——先握手后调用是 MCP 的硬性要求，教材完全没有这个概念；</li>
+  <li><b>只转发当前问题</b>：get_last_user_message 替代教材的全史重放——路由器送出的是"这一件事"，而非混乱的历史拼接；</li>
+  <li><b>结构化契约</b>：返回 {"success", "intent", "server", "response"}，success 由 isError 翻转而来——错误不再混流；</li>
+  <li><b>职责复位</b>：路由器只做协议调用，问答/执行/闲聊由各自 server 的工具完成。</li>
+</ul>
+
+<h2>七、实测验证（5 项 self-test 全部通过）</h2>
+<table>
+  <tr><th style="width:70px">Test</th><th style="width:220px">场景</th><th>结果</th></tr>
+  <tr><td>1</td><td>initialize 生命周期</td><td>握手返回 <code>protocolVersion=2025-06-18</code> + serverInfo；notifications/initialized 无响应；未知方法 → <code>-32601</code></td></tr>
+  <tr><td>2</td><td>tools/list 与参数校验</td><td>tools/list 返回工具名 + inputSchema；tools/call 缺必填参数 / 未知工具 → <code>-32602</code>（协议错误与工具错误两级分离已验证）</td></tr>
+  <tr><td>3</td><td><b>意图劫持修正实证</b></td><td>教材 demo 场景（查询→执行）正确路由 tool；"执行备份脚本"后接"今天天气真不错" → <b>dialog</b>（教材版倒序扫描会误命中旧"执行"路由 tool）</td></tr>
+  <tr><td>4</td><td>真实路由问答</td><td>"查询2023年中国GDP" → qa → knowledge-server.ask_knowledge → qwen-plus 生成"根据国家统计局《2023年国民经济和社会发展统计公报》..."</td></tr>
+  <tr><td>5</td><td>tool+dialog 路由与契约</td><td>"执行统计脚本" → ops-server 模拟执行；"今天天气真不错" → chat-server → qwen-turbo 闲聊；两次返回均含 success/intent/server 四字段</td></tr>
+</table>
+<div class="ok"><b>协议实现的验证方法：</b>协议代码最怕"看起来对"。Test 1/2 直接在协议层断言——握手字段值、通知无响应、每个标准错误码的具体数值——把"符合规范"拆成可断言的最小事实。这与 char12-07 MCP 实现的验证方法一脉相承。</div>
+
+<h2>八、改写前后对照总表</h2>
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td>协议本质</td><td>借壳命名（消息加字段）</td><td>真实 MCP：JSON-RPC 2.0 + initialize 生命周期 + tools 原语</td></tr>
+  <tr><td>架构角色</td><td>路由器直调模型（路由执行混杂）</td><td>MCP 客户端路由器 ↔ 三个 MCP Server（能力自治）</td></tr>
+  <tr><td>意图识别</td><td>倒序扫全史（旧意图劫持）</td><td>只认最后一条 user 消息，关键词表注册表化</td></tr>
+  <tr><td>路由映射</td><td>if/elif 硬编码意图→模型</td><td>INTENT_ROUTES 注册表：意图 → (server, tool, 参数键)</td></tr>
+  <tr><td>转发内容</td><td>全史重放</td><td>只转发最后一条 user 消息</td></tr>
+  <tr><td>错误语义</td><td>except 返回 "[ERROR]" 字符串</td><td>协议错误码（-32601/-32602）与工具 isError 两级分离 + 结构化契约</td></tr>
+  <tr><td>模型切换</td><td>虚构 Qwen2Chat/DeepSeekChat</td><td>能力内聚：qa 工具用 qwen-plus、dialog 工具用 qwen-turbo（dashscope 原生）</td></tr>
+  <tr><td>可验证性</td><td>无测试</td><td>5 项 self-test，协议层逐项断言标准行为</td></tr>
+</table>
+
+<h2>九、与前后章节的衔接 + 动手练习</h2>
+<table>
+  <tr><th>关联</th><th>说明</th></tr>
+  <tr><td>承接 char12-07 MCP 全实现</td><td>char12-07 是 MCP 规范的完整版（含 resources 原语 + 与 Coze 平台集成）；本篇是 tools 原语的最小精简版——两篇对照，理解"协议实现可按需裁剪，但生命周期与错误语义不能省"</td></tr>
+  <tr><td>呼应 char07 MCP 上下文段</td><td>char07 的五字段上下文段（role/content/type/task_id/meta）是教材另一处"类 MCP"设计；本篇给出真实协议的对照锚点</td></tr>
+  <tr><td>承接 例13-02 意图识别</td><td>13-02 是 LLM 驱动的意图识别（语义泛化好、有成本），本篇是关键词路由（零成本、精确但脆）——生产中常以关键词快筛 + LLM 兜底组合</td></tr>
+  <tr><td>承接 例13-04 调度器</td><td>MCPRouter 可整体作为 AgentController 的"路由前置层"：先按意图路由到子系统，再由调度器管理子系统内部状态</td></tr>
+</table>
+
+<h3>动手练习</h3>
+<ul>
+  <li><b>练习 1：版本协商失败路径</b>——用 <code>protocolVersion: "2024-11-05"</code> 来握手，断言服务端返回 -32602 且错误信息含支持版本号；体会 MCP 版本协商的防御意义。</li>
+  <li><b>练习 2：resources 原语</b>——参照 tools 的三方法模式，为 knowledge-server 增加 <code>resources/list</code> 与 <code>resources/read</code>，把知识库文本暴露为 MCP 资源（对照 char12-07 的实现）。</li>
+  <li><b>练习 3：LLM 兜底路由</b>——最后一条 user 消息不含任何关键词时，先返回 dialog；改造为"关键词未命中时调用 qwen-plus 做 13-02 式意图识别"，对比两种路由器的准确率与延迟。</li>
+</ul>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li><b>MCP 官方规范（modelcontextprotocol.io）</b> —— 生命周期、tools/resources/prompts 三原语与错误语义的权威定义（2025-06-18 修订版），本篇实现的最小对照文本；</li>
+  <li><b>JSON-RPC 2.0 规范</b> —— 请求/响应/通知三种消息形态与标准错误码，MCP 的传输载体，10 分钟即可通读；</li>
+  <li><b>char12-07 讲解文档</b> —— MCP 完整实现 + 教材七维差异对照 + 与 Function Calling/A2A 的协议定位图，本篇的上游阅读；</li>
+  <li><b>例13-02 讲解文档</b> —— LLM 意图识别的完整设计（安全解析 + 白名单校验），与本题关键词路由的组合使用是生产常态。</li>
+</ul>
+
+<p class="small">—— char13-06 完 ｜ 上一节：例13-05 RAG 检索问答 ｜ 下一篇：例13-07（待续）——</p>
+</body>
+</html>

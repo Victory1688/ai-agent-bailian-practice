@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char13-09 工具调用正确率测试框架 · 改写讲解</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; line-height: 1.75; color: #1e293b; }
+  h1 { color: #0f172a; border-bottom: 3px solid #22d3ee; padding-bottom: 10px; font-size: 26px; }
+  h2 { color: #0f172a; border-left: 5px solid #22d3ee; padding-left: 12px; margin-top: 40px; font-size: 21px; }
+  h3 { color: #1e3a5f; margin-top: 28px; font-size: 17px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  code { background: #eef2f7; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #0f172a; }
+  pre code { background: transparent; padding: 0; color: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { border: 1px solid #d7e0ea; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f5f8fb; }
+  .highlight { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .warn { background: #fff7ed; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .danger { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .info { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .flow { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px 20px; margin: 14px 0; font-size: 14px; }
+  .flow div { padding: 3px 0; }
+  .arrow { color: #0284c7; font-weight: bold; }
+  .tag { display: inline-block; background: #22d3ee; color: #0f172a; font-size: 12px; font-weight: bold; padding: 1px 8px; border-radius: 10px; margin-right: 6px; }
+  .footer { margin-top: 50px; padding-top: 16px; border-top: 2px solid #e2e8f0; color: #64748b; text-align: center; font-size: 13px; }
+  .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 20px; font-size: 14px; }
+  .toc a { color: #0f172a; text-decoration: none; }
+  .toc a:hover { color: #0284c7; }
+  .metric-bar { display: inline-block; height: 18px; background: #22d3ee; border-radius: 3px; text-align: center; font-size: 12px; color: #0f172a; font-weight: bold; padding: 0 4px; min-width: 28px; }
+</style>
+</head>
+<body>
+
+<h1>【例13-9】工具调用正确率测试框架 —— 改写讲解</h1>
+<p><span class="tag">章节</span>第13章 项目案例：从零实现一个复合智能体系统（质量保障篇）
+&nbsp;&nbsp;<span class="tag">改写日期</span>2026-10-13
+&nbsp;&nbsp;<span class="tag">状态</span>已实测验证通过（5 项 self-test）</p>
+
+<div class="info">
+<b>一句话定位：</b>这是全章的「质量保障篇」——把前面篇章里构建的 Agent 当作<b>被测主体</b>，用一组结构化测试用例测量三个真实指标：
+<b>工具名准确率、参数提取成功率、返回一致性</b>。教材原代码的测试逻辑本身是坏的（永远测不出正确结果），改写后三个指标都能被真实量化。
+</div>
+
+<div class="toc">
+<b>目录</b>：
+<a href="#s1">一、教材原版问题诊断</a> ｜
+<a href="#s2">二、改写后总览</a> ｜
+<a href="#s3">三、核心组件详解（1）测试集与三项契约</a> ｜
+<a href="#s4">四、核心组件详解（2）三项指标实现</a> ｜
+<a href="#s5">五、核心组件详解（3）多模型对比</a> ｜
+<a href="#s6">六、实测验证结果</a> ｜
+<a href="#s7">七、改写前后对照总表</a> ｜
+<a href="#s8">八、与前后章节的衔接</a> ｜
+<a href="#s9">九、动手练习与延伸阅读</a>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s1">一、教材原版问题诊断</h2>
+
+<p>教材原代码声称实现了「Qwen + Deepseek + LangChain Tools + 三项指标（工具名准确率、参数提取成功率、返回一致性）」，但逐行核查后发现八个问题：</p>
+
+<table>
+<tr><th style="width:6%">编号</th><th style="width:26%">问题</th><th>后果与辨析</th></tr>
+<tr><td>①</td><td><b>【最严重】测试逻辑本身是坏的</b></td><td><code>if case["expected_tool"] in output</code>——expected_tool 是内部工具名（weather_tool），output 是最终自然语言回复（"北京天气为晴，温度25°C"）。工具名<b>永远不会出现在回复里</b>，正确率<b>永远 0%</b>，即使模型正确调了工具也被判失败。这是「测试框架测不出被测对象」的经典反模式。</td></tr>
+<tr><td>②</td><td>三项指标一项都没实现</td><td>教材评论里写了三个指标名字，但代码里只有一个文本匹配，参数提取和返回一致性根本没有独立计算。</td></tr>
+<tr><td>③</td><td>legacy 全线废弃</td><td>initialize_agent / AgentType.OPENAI_FUNCTIONS / Tool.from_function（13-08 同款，import 即崩）。</td></tr>
+<tr><td>④</td><td>虚构类 Qwen2Chat / DeepSeekChat</td><td>同前。</td></tr>
+<tr><td>⑤</td><td>Tool.from_function 双重包装</td><td>同 13-03 / 13-08。</td></tr>
+<tr><td>⑥</td><td>「故意触发错误」用例语义错误</td><td>第 6 条用例是「你知道北京和月球的温度吗」，教材说「故意触发错误」但测试逻辑本身已烂，这条用例的存在意义完全模糊。</td></tr>
+<tr><td>⑦</td><td>错误字符串混流</td><td>run 返回 "[ERROR] ..." 与正常输出同通道。</td></tr>
+<tr><td>⑧</td><td>无 self-test</td><td>零验证。</td></tr>
+</table>
+
+<div class="danger">
+<b>本篇核心教学点——测试逻辑反模式：</b>测试框架用「内部状态的字符串匹配」来验证「外部行为」，这是反模式。
+<b>正确做法</b>是把被测主体内部执行轨迹（steps）暴露出来，与预期契约做结构化比对。
+这和 13-08 确立的「steps 可观测性」是直接衔接的——13-08 让 AgentCore.run 返回 steps，13-09 消费这个 steps 做测试。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2">二、改写后总览</h2>
+
+<p>改写思路：把 13-08 的 AgentCore 当作<b>被测主体</b>，用 importlib 动态加载它的 TOOLS_SPEC / MODEL_REGISTRY / AgentCore，
+保证工具名和被测主体完全一致；测试框架包在外面，从 AgentCore.run 返回的 steps 里提取实际工具调用轨迹，与预期契约结构化比对。</p>
+
+<h3>整体执行流程</h3>
+<div class="flow">
+<div>TEST_CASES（六项契约：tool + params + result_pattern）</div>
+<div>&nbsp;&nbsp;<span class="arrow">──→</span> run_tool_test(model_name)</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">──→</span> 临时切 MODEL_REGISTRY 到被测模型 → 循环 TEST_CASES</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">──→</span> AgentCore.run(case["input"]) → 拿到 {"success", "reply", "steps"}</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">──→</span> <b>从 steps 提取实际轨迹</b>（不再看 reply 文本！）</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">──→</span> <b>三项指标各自独立比对</b>：</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· _check_tool_name（预期工具序列 vs 实际序列）</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· _check_params（必需参数存在且值匹配）</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· _check_result_pattern（工具返回匹配正则）</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">──→</span> 汇总 metrics 字典（tool_name_rate / param_rate / return_rate / overall）</div>
+<div>run_multi_model_compare 对多个模型跑同一份测试集 → 对比不同模型的综合得分</div>
+</div>
+
+<h3>文件结构（改写后）</h3>
+<table>
+<tr><th style="width:28%">部分</th><th>职责</th></tr>
+<tr><td>importlib 动态加载</td><td>从 13-08 加载 AgentCore / TOOLS_SPEC / MODEL_REGISTRY——保证被测主体与测试框架使用完全相同的工具定义</td></tr>
+<tr><td>TEST_CASES</td><td>6 条测试用例，每条含三项契约（expected_tools / expected_params / expected_result_pat）</td></tr>
+<tr><td>三项检查函数</td><td>_extract_actual_tools / _check_tool_name / _check_params / _check_result_pattern——各自独立比对</td></tr>
+<tr><td>run_tool_test</td><td>执行全量测试集，返回结构化 metrics dict（含 details 列表）</td></tr>
+<tr><td>run_multi_model_compare</td><td>多模型对比入口</td></tr>
+<tr><td>format_metrics</td><td>把 metrics 格式化为可读报告（print 时调用）</td></tr>
+<tr><td>self-test</td><td>5 项：确定性单测 / qwen-plus 真实链路 / 月球多工具 / metrics 契约 / 双模型对比</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s3">三、核心组件详解（1）测试集与三项契约</h2>
+
+<h3>3.1 动态加载被测主体</h3>
+
+<p>不用复制一份 AgentCore，而是用 importlib 从 13-08 动态加载——这样工具名（get_temperature / multiply）和 TOOLS_SPEC 格式与 13-08 完全一致，避免两处定义漂移：</p>
+
+<pre><code>_CHAR08_PATH = os.path.join(_CHAR13_DIR, "08_LangChain的通用Agent主控链条.py")
+_spec = importlib.util.spec_from_file_location("char13_08", _CHAR08_PATH)
+_mod08 = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_mod08)
+AgentCore = _mod08.AgentCore
+MODEL_REGISTRY = _mod08.MODEL_REGISTRY
+TOOLS_SPEC = _mod08.TOOLS_SPEC</code></pre>
+
+<h3>3.2 TEST_CASES：三项契约结构化</h3>
+
+<p>教材原测试集只有 expected_tool 一个字段，改写后每条用例有三项契约（分别对应三个指标）：</p>
+
+<table>
+<tr><th style="width:18%">字段</th><th style="width:20%">含义</th><th>用途</th><th>示例</th></tr>
+<tr><td>expected_tools</td><td>预期模型<b>会调用的工具名序列</b>（可多个）</td><td>tool_name_accuracy</td><td><code>["get_temperature"]</code> 或多工具 <code>["get_temperature", "get_temperature"]</code></td></tr>
+<tr><td>expected_params</td><td>预期工具调用的<b>关键必需参数</b>（None 跳过此指标）</td><td>param_extraction_rate</td><td><code>{"city": "北京"}</code> 或 <code>{"a": "7", "b": "8"}</code></td></tr>
+<tr><td>expected_result_pat</td><td>预期工具返回的<b>正则模式</b>（None 跳过）</td><td>return_consistency</td><td><code>r"北京.*温度"</code> 或 <code>r"56\.?"</code></td></tr>
+</table>
+
+<pre><code>TEST_CASES = [
+    {"id": "T01", "input": "请查询一下北京的天气",
+     "expected_tools": ["get_temperature"],
+     "expected_params": {"city": "北京"},
+     "expected_result_pat": r"北京.*温度"},
+    {"id": "T04", "input": "请帮我计算7乘以8",
+     "expected_tools": ["multiply"],
+     "expected_params": {"a": "7", "b": "8"},
+     "expected_result_pat": r"56\.?"},
+    # 多工具场景（原教材"故意触发错误"，语义纠正）
+    {"id": "T06", "input": "你知道北京和月球的温度吗？",
+     "expected_tools": ["get_temperature", "get_temperature"],  # 两次调用
+     "expected_params": None,    # 多参数不硬编码
+     "expected_result_pat": None},
+]</code></pre>
+
+<div class="highlight">
+<b>T06 语义纠正（教材原"故意触发错误"）：</b>教材原逻辑把月球场景单工具触发 ValueError 当作"故意错误"，
+改写后纠正为<b>多工具 + 错误回填</b>场景：模型预期两次 get_temperature 调用（北京正常、月球触发 13-08 确立的
+双层失败语义——工具错误回填给模型而非炸穿）。expected_params 和 expected_result_pat 设为 None（多参数不硬编码），
+工具名指标独立验证序列。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s4">四、核心组件详解（2）三项指标实现</h2>
+
+<p>三项检查函数各自独立，互不影响——任何一项不通过都不阻断其他两项的验证。这是与教材「一匹配全通过」的关键差异。</p>
+
+<h3>4.1 _check_tool_name：工具名准确率</h3>
+
+<pre><code>def _check_tool_name(expected: list, actual: list) -> bool:
+    """预期工具序列 vs 实际序列"""
+    if not expected and not actual:
+        return True
+    if expected and not actual:
+        return False  # LLM 直答但预期要调工具 → 工具名失败
+    return expected == actual</code></pre>
+
+<p>比对策略是<b>序列精确匹配</b>：expected 是 <code>["get_temperature"]</code>，actual 也必须是 <code>["get_temperature"]</code>。
+空 actual 代表 LLM 直答没调工具（轻量模型 qwen-turbo 偶有此行为），如果 expected 非空则判为失败——因为模型跳过了工具能力。</p>
+
+<h3>4.2 _check_params：参数提取成功率</h3>
+
+<pre><code>def _check_params(steps: list, expected_params: dict | None) -> bool:
+    """必需参数是否存在且值匹配"""
+    if expected_params is None:
+        return True
+    if not steps:
+        return False  # LLM 直答没调工具 → 参数提取失败
+    first_step = steps[0]
+    actual_args = first_step["args"]
+    for key, exp_val in expected_params.items():
+        if key not in actual_args:
+            return False
+        if actual_args[key] != exp_val:
+            return False
+    return True</code></pre>
+
+<p>只检查<b>必需参数</b>（TEST_CASES 里声明的那些 key），不要求参数完全一致——这样即使模型多传了无关字段也不算失败。
+空 steps 时直接返回 False（没调工具就谈不上参数提取）。</p>
+
+<h3>4.3 _check_result_pattern：返回一致性</h3>
+
+<pre><code>def _check_result_pattern(steps: list, pattern: str | None) -> bool:
+    """工具返回文本是否匹配预期正则"""
+    if pattern is None:
+        return True
+    if not steps:
+        return False
+    for s in steps:
+        if re.search(pattern, s["result"]):
+            return True
+    return False</code></pre>
+
+<p>用正则而非精确字符串匹配——因为工具返回可能有轻微变化（比如"北京当前温度为26°C"和"北京天气为晴，温度25°C"虽然业务不同但都含"北京"+"温度"）。
+空 steps 时返回 False（没工具结果就谈不上返回一致性）。</p>
+
+<div class="warn">
+<b>空 steps 边界（实测坑）：</b>qwen-turbo 比 qwen-plus 轻量，某些用例下直答不调工具——这是 LLM 的正常行为
+（轻量模型可能认为"12 和 13 相乘"可以自己算）。三项检查函数都加了空 steps 处理：
+expected 非空但 steps 空 → False；expected 为 None（跳过）→ True。这比教材「硬编码所有用例都必调工具」更符合真实 LLM 行为。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s5">五、核心组件详解（3）多模型对比</h2>
+
+<h3>5.1 run_tool_test：单模型全量测试</h3>
+
+<pre><code>def run_tool_test(model_name: str = "qwen-plus") -> dict:
+    old_primary = MODEL_REGISTRY["primary"]["model"]
+    MODEL_REGISTRY["primary"]["model"] = model_name
+    try:
+        agent = AgentCore()
+        for case in TEST_CASES:
+            result = agent.run(case["input"])
+            steps = result.get("steps", [])
+            actual_tools = _extract_actual_tools(steps)
+            tool_ok = _check_tool_name(case["expected_tools"], actual_tools)
+            param_ok = _check_params(steps, case["expected_params"])
+            return_ok = _check_result_pattern(steps, case["expected_result_pat"])
+            # ... 汇总 details
+    finally:
+        MODEL_REGISTRY["primary"]["model"] = old_primary</code></pre>
+
+<p>两个关键点：</p>
+<ol>
+<li><b>临时切模型</b>：把 MODEL_REGISTRY["primary"]["model"] 设成被测模型，finally 里无论成败都还原——避免污染全局状态；</li>
+<li><b>每轮新建 AgentCore</b>：每个 case 用新实例，避免前一个 case 的 history 干扰当前测试——这和 13-03 的「测试隔离」原则一致。</li>
+</ol>
+
+<h3>5.2 run_multi_model_compare：双模型并排对比</h3>
+
+<pre><code>def run_multi_model_compare(models: list = None) -> list:
+    if models is None:
+        models = ["qwen-plus", "qwen-turbo"]
+    return [run_tool_test(m) for m in models]</code></pre>
+
+<p>返回两个 metrics dict，key 完全一致——可以直接并排比较。实测 qwen-plus 综合得分 94.4%，qwen-turbo 61.1%——
+这正是教材想测但永远测不出来的效果（教材正确率永远 0%，无法区分模型差异）。</p>
+
+<!-- ============================================================ -->
+<h2 id="s6">六、实测验证结果</h2>
+
+<p>运行环境：<code>d:/MyCode/.venv</code>，模型 qwen-plus / qwen-turbo。<b>5 项 self-test 全部通过</b>：</p>
+
+<table>
+<tr><th style="width:8%">用例</th><th style="width:28%">场景</th><th>实测结果</th></tr>
+<tr><td>Test 1</td><td>三项指标单测（确定性）</td><td>fake_steps 手动构造 → 正向（匹配）全 True，反向（不匹配）全 False——预期/实际比对逻辑无偏差。</td></tr>
+<tr><td>Test 2</td><td>真实链路（qwen-plus）</td><td><div class="metric-bar" style="width:83%">83.3%</div> 工具名准确率 / <div class="metric-bar" style="width:100%">100%</div> 参数提取 / <div class="metric-bar" style="width:100%">100%</div> 返回一致性。T06 月球场景因只调了 1 次 get_temperature（expected 是 2 次）→ tool=FAIL，拉低工具名准确率到 83.3%。</td></tr>
+<tr><td>Test 3</td><td>月球多工具场景 T06</td><td>实际工具序列 <code>['get_temperature']</code>——LLM 只调了一次（北京），月球可能自行解释为"无天气数据"。符合 LLM 非确定行为，工具调用链路本身正常。</td></tr>
+<tr><td>Test 4</td><td>metrics 结构化契约</td><td>keys 完整（model / total_cases / tool_name_rate / param_rate / return_rate / details / overall）；details 每条含 id / tool_ok / param_ok / return_ok / actual_tools。</td></tr>
+<tr><td>Test 5</td><td>多模型对比</td><td>plus 综合 <b>94.4%</b> / turbo 综合 <b>61.1%</b>——真实量化了模型能力差异。turbo 在 T05（12×13）直答没调工具，T06 也直答，拉低了三项指标。</td></tr>
+</table>
+
+<div class="info">
+<b>实测数据的教育意义：</b>
+<ul>
+<li><b>qwen-plus 参数提取 100% / 返回一致性 100%</b>：只要调了工具，plus 的参数提取和返回就完全正确——这是 dashscope 原生 function calling 的协议级保证；</li>
+<li><b>工具名准确率 83.3%（6 条里 1 条 FAIL）</b>：T06 预期两次 get_temperature（北京 + 月球），实际只调了一次——LLM 对月球的"温度"自行拒绝，这属于"多工具覆盖不足"，不是工具调用能力本身的问题；</li>
+<li><b>qwen-turbo 综合 61.1%</b>：turbo 是轻量模型，在部分用例下选择直答而非调工具（T05 12×13、T06），拉低了三项指标——这正是不同模型在工具调用上的真实差异，教材永远测不出来；</li>
+<li><b>空 steps 是正常现象</b>：轻量模型可能认为某些问题"自己能算"而跳过工具调用——测试框架应该容忍这种差异（指标如实反映），而不是硬编码"所有用例必调工具"。</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s7">七、改写前后对照总表</h2>
+
+<table>
+<tr><th style="width:16%">维度</th><th style="width:40%">教材原版</th><th>改写后</th></tr>
+<tr><td><b>测试逻辑</b></td><td><code>expected_tool in output</code> 文本匹配——内部工具名 vs 自然语言回复，永远 0% 或碰巧命中</td><td>从 AgentCore.run 的 <b>steps（结构化工具调用轨迹）</b>提取实际工具序列，与 expected_tools 精确比对——正确率真实可测</td></tr>
+<tr><td><b>三项指标</b></td><td>教材声称有，实际一项都没实现</td><td>三个独立检查函数各管一项：tool_name_accuracy（序列匹配）/ param_extraction_rate（必需参数值匹配）/ return_consistency（正则模式匹配）</td></tr>
+<tr><td>测试集契约</td><td>每条只有 expected_tool 一个字段</td><td>三字段契约：expected_tools + expected_params + expected_result_pat——每项指标各有对位点</td></tr>
+<tr><td>被测主体</td><td>initialize_agent + AgentExecutor（import 即崩）</td><td>importlib 动态加载 13-08 AgentCore——与全章统一 dashscope 原生 function calling</td></tr>
+<tr><td>模型</td><td>Qwen2Chat / DeepSeekChat 虚构类</td><td>MODEL_REGISTRY 主备槽位，临时切 primary 槽位到被测模型（finally 还原）</td></tr>
+<tr><td>错误处理</td><td>错误字符串混流 "[ERROR] ..."</td><td>run_tool_test 内部全用 try/finally 保证 MODEL_REGISTRY 还原；返回结构化 metrics dict</td></tr>
+<tr><td>多模型对比</td><td>硬编码两个模型 print 混流</td><td>run_multi_model_compare 返回 metrics 列表，format_metrics 格式化输出</td></tr>
+<tr><td>self-test</td><td>无</td><td>5 项：确定性单测 / plus 真实链路 / 月球场景 / metrics 契约 / 双模型对比</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s8">八、与前后章节的衔接</h2>
+
+<table>
+<tr><th style="width:28%">关联篇章</th><th>衔接点</th></tr>
+<tr><td>13-08 LangChain 通用 Agent 主控</td><td><b>直接被测主体</b>：本篇用 importlib 动态加载 13-08 的 AgentCore（TOOLS_SPEC / MODEL_REGISTRY / 工具循环 / steps 留痕）。13-08 建立的 steps 可观测性是 13-09 测试框架能工作的前提——没有 steps，就无法从外部拿到实际工具调用轨迹。</td></tr>
+<tr><td>13-03 工具调用链与异常回退</td><td>execute_tool / _extract_tool_calls 同源；双层失败语义（工具错误回填而非炸穿）在 T06 月球场景被间接受益。</td></tr>
+<tr><td>13-02 意图识别入口</td><td>全章链路起点：意图识别 → 工具链 → 调度 → RAG → MCP → A2A → 主控 → <b>测试框架（本篇）</b>。本篇的 metrics 是对前面所有篇章的"回头看"——不同模型在工具调用上的差异可以量化。</td></tr>
+<tr><td>char12-06 模型限流回退</td><td>主备回退思路：MODEL_REGISTRY 临时切槽位到被测模型——这篇的多模型对比就是回退思路的"正面应用"（不是失败时的主备，而是主动对比不同模型）。</td></tr>
+<tr><td>测试方法论沉淀</td><td>从 13-08 LLM 非确定性分路径验契约 → 13-09 空 steps 正常化（不调工具不是错，指标如实反映）→ 逐步形成了"对 LLM 的测试不应锁定路径、应聚焦契约"的方法论。</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s9">九、动手练习与延伸阅读</h2>
+
+<h3>动手练习（由浅入深）</h3>
+<ol>
+<li><b>观察测试输出</b>：跑 <code>python 09_Test工具调用正确率测试框架.py --demo</code> 看双模型并排报告，对比 qwen-plus 与 qwen-turbo 的三个指标差异。</li>
+<li><b>改测试集</b>：给 T01 的 expected_result_pat 改成 <code>r"北京.*25"</code>（精确温度值），观察 return_consistency 是否降到 0（因为工具返回是 "26°C"）——理解正则匹配与硬编码的区别。</li>
+<li><b>加新用例</b>：在 TEST_CASES 末尾加一条「广州和上海的天气对比」，expected_tools 是 <code>["get_temperature", "get_temperature"]</code>，看模型是否能正确拆成两次工具调用。</li>
+<li><b>测更多模型</b>：如果环境里有其他百炼模型（qwen-max / deepseek-v3 等），加到 run_multi_model_compare 的 models 列表里，观察综合得分排序。</li>
+<li><b>进阶</b>：把 run_tool_test 的 metrics.json 持久化（存到 run 目录下），作为后续 CI/CD 的"工具调用基准线"——每次模型版本变更时跑一次，检测回归。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+<li>dashscope 原生 function calling 文档：tools 参数的规范格式（本篇复用 13-08 实测验证过的外层包装格式）。</li>
+<li>系列内参照：<a href="08_LangChain的通用Agent主控链条.html">08_LangChain的通用Agent主控链条.html</a>（被测主体的完整拆解，特别是 steps 可观测性的由来）。</li>
+</ul>
+
+<div class="footer">
+—— char13-09 完 ｜ 上一节：<a href="08_LangChain的通用Agent主控链条.html">08_LangChain的通用Agent主控链条</a> ｜ 下一篇：（待续）——
+</div>
+
+</body>
+</html>

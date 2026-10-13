@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char13-10 多用户并发测试与系统压测 · 改写讲解</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; line-height: 1.75; color: #1e293b; }
+  h1 { color: #0f172a; border-bottom: 3px solid #22d3ee; padding-bottom: 10px; font-size: 26px; }
+  h2 { color: #0f172a; border-left: 5px solid #22d3ee; padding-left: 12px; margin-top: 40px; font-size: 21px; }
+  h3 { color: #1e3a5f; margin-top: 28px; font-size: 17px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  code { background: #eef2f7; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #0f172a; }
+  pre code { background: transparent; padding: 0; color: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { border: 1px solid #d7e0ea; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f5f8fb; }
+  .highlight { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .warn { background: #fff7ed; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .danger { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .info { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .flow { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px 20px; margin: 14px 0; font-size: 14px; }
+  .flow div { padding: 3px 0; }
+  .arrow { color: #0284c7; font-weight: bold; }
+  .tag { display: inline-block; background: #22d3ee; color: #0f172a; font-size: 12px; font-weight: bold; padding: 1px 8px; border-radius: 10px; margin-right: 6px; }
+  .footer { margin-top: 50px; padding-top: 16px; border-top: 2px solid #e2e8f0; color: #64748b; text-align: center; font-size: 13px; }
+  .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 20px; font-size: 14px; }
+  .toc a { color: #0f172a; text-decoration: none; }
+  .toc a:hover { color: #0284c7; }
+</style>
+</head>
+<body>
+
+<h1>【例13-10】多用户并发测试与系统压测 —— 改写讲解</h1>
+<p><span class="tag">章节</span>第13章 项目案例：从零实现一个复合智能体系统（压测篇）
+&nbsp;&nbsp;<span class="tag">改写日期</span>2026-10-13
+&nbsp;&nbsp;<span class="tag">状态</span>已实测验证通过（5 项 self-test）</p>
+
+<div class="info">
+<b>一句话定位：</b>这是全章的「压测篇」——模拟多个用户<b>同时</b>调用 13-08 的 Agent 主控服务，
+测量错误率、平均响应、<b>P50/P95 分位数</b>、QPS，并做<b>串话检测</b>（验证并发下各用户会话确实独立）。
+教材版存在「共享实例并发串话」的并发 bug 与「字符串判错」的脆弱设计，改写后指标完整、结果可复现、结构可验证。
+</div>
+
+<div class="toc">
+<b>目录</b>：
+<a href="#s1">一、教材原版问题诊断</a> ｜
+<a href="#s2">二、改写后总览</a> ｜
+<a href="#s3">三、核心组件详解（1）指标计算纯函数</a> ｜
+<a href="#s4">四、核心组件详解（2）并发安全与串话检测</a> ｜
+<a href="#s5">五、核心组件详解（3）压测调度与报告</a> ｜
+<a href="#s6">六、实测验证结果</a> ｜
+<a href="#s7">七、改写前后对照总表</a> ｜
+<a href="#s8">八、与前后章节的衔接</a> ｜
+<a href="#s9">九、动手练习与延伸阅读</a>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s1">一、教材原版问题诊断</h2>
+
+<p>教材原代码声称实现了「数十用户并发压测 + 平均响应/QPS/错误率指标」，逐行核查后发现八个问题（原代码已全部注释保留在 py 文件头部，编号对应）：</p>
+
+<table>
+<tr><th style="width:6%">编号</th><th style="width:26%">问题</th><th>后果与辨析</th></tr>
+<tr><td>①</td><td>legacy 全线废弃 + 虚构类</td><td>initialize_agent / AgentType.OPENAI_FUNCTIONS / Tool.from_function（13-08/13-09 同款）+ Qwen2Chat / DeepSeekChat 虚构类——<b>import 即崩，从未跑通过</b>。</td></tr>
+<tr><td>②</td><td><b>【最严重】共享实例并发</b></td><td><code>agent = ConcurrentAgent(...)</code> 在并发外创建一次，task_runner 闭包捕获<b>同一个实例</b>。改写后的 AgentCore 有 self.history 会话状态——多线程共享会导致<b>串话</b>（用户A的问题进了用户B的上下文，工具调用错配）。多用户语义下每个用户本就该有独立会话。</td></tr>
+<tr><td>③</td><td>字符串判错</td><td>run 返回 <code>"[ERROR] ..."</code> 混流，统计靠 <code>"[ERROR]" not in output</code> 字符串包含——若模型回复恰好含 "[ERROR]" 字样会<b>误判为失败</b>；异常文案一变就失效。</td></tr>
+<tr><td>④</td><td>指标残缺</td><td>教材声称输出「错误率指标」但只打印失败数没算百分比；压测只看平均值——<b>LLM 响应是长尾分布，平均值会被掩盖</b>，生产压测必须看 P95/P99。</td></tr>
+<tr><td>⑤</td><td>random.choice 无种子</td><td>两次运行任务分配不同，结果<b>不可复现</b>——压测连基线都固定不下来，无法对比优化效果。</td></tr>
+<tr><td>⑥</td><td>输出顺序随机</td><td>results[:5] 按 as_completed 完成顺序输出，每次运行不同，教材却展示为固定输出。</td></tr>
+<tr><td>⑦</td><td>20 并发必触发限流</td><td>20 个线程同时打 LLM API，限流（429）几乎必然发生，教材无任何说明；traceback import 了从未使用。</td></tr>
+<tr><td>⑧</td><td>无 self-test + import 即执行</td><td>run_demo() 写在模块顶层无入口保护。</td></tr>
+</table>
+
+<div class="danger">
+<b>本篇核心教学点——「有状态对象 + 多线程共享」：</b>教材把一个带会话状态（history）的对象交给多个线程共用。
+传统 Web 压测中「共享无状态 service」是安全的，但 Agent 实例<b>自带会话状态</b>——
+<b>多用户并发压测的正确模型是「每请求独立实例」</b>：既符合真实语义（每个用户独立会话），又天然规避串话。
+判断依据不是「线程安全与否」的空谈，而是「对象内部有没有会被并发写的状态」。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2">二、改写后总览</h2>
+
+<p>改写思路：把 13-08 AgentCore 当作<b>被压测主体</b>（importlib 动态加载，13-09 同模式），
+指标计算拆成<b>纯函数</b>（可单测），执行层与统计层解耦，并发模型改为「每请求独立会话」。</p>
+
+<h3>整体执行流程</h3>
+<div class="flow">
+<div>run_concurrent_test(concurrent_users, seed)</div>
+<div>&nbsp;&nbsp;<span class="arrow">──→</span> random.seed(seed) 固定任务分配（可复现）</div>
+<div>&nbsp;&nbsp;<span class="arrow">──→</span> ThreadPoolExecutor(max_workers=N) 提交 N 个请求</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">──→</span> 每请求：<b>新建独立 AgentCore</b> → run(text) → 结构化结果</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{"user_id", "input", "success"(布尔), "reply", "duration", "tool_hits"}</div>
+<div>&nbsp;&nbsp;<span class="arrow">──→</span> as_completed 收集 → 按 user_id 排序</div>
+<div>&nbsp;&nbsp;<span class="arrow">──→</span> <b>compute_metrics</b>（纯函数）：错误率% / avg / <b>P50 / P95</b> / max / QPS</div>
+<div>&nbsp;&nbsp;<span class="arrow">──→</span> <b>_detect_cross_talk</b>（串话检测）：工具调用与各自 input 语义比对</div>
+<div>format_report → 可读报告（含串话警告区段）</div>
+</div>
+
+<h3>文件结构（改写后）</h3>
+<table>
+<tr><th style="width:28%">部分</th><th>职责</th></tr>
+<tr><td>importlib 动态加载</td><td>从 13-08 加载 AgentCore——被压测主体与全章统一</td></tr>
+<tr><td>组件 1：指标纯函数</td><td>_percentile（线性插值分位数）/ compute_metrics（九项指标一次算齐）</td></tr>
+<tr><td>组件 2：单请求执行</td><td>run_single_request——独立会话 + 结构化契约 + tool_hits 留痕</td></tr>
+<tr><td>组件 3：并发调度</td><td>run_concurrent_test（线程池 + 可复现）+ _detect_cross_talk（串话检测）</td></tr>
+<tr><td>组件 4：报告格式化</td><td>format_report——指标字典转可读文本</td></tr>
+<tr><td>self-test</td><td>5 项：指标单测 / 单请求冒烟 / 小并发压测 / 契约与串话 / 分位数合理性</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s3">三、核心组件详解（1）指标计算纯函数</h2>
+
+<h3>3.1 _percentile：线性插值分位数</h3>
+
+<pre><code>def _percentile(sorted_vals: list, p: float) -> float:
+    """线性插值法，与 numpy.percentile 默认语义一致"""
+    pos = p * (len(sorted_vals) - 1)
+    lo, hi = math.floor(pos), math.ceil(pos)
+    if lo == hi:
+        return sorted_vals[lo]
+    # 插值：pos 的小数部分决定两相邻元素的加权比例
+    return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (pos - lo)</code></pre>
+
+<p>分位数实现选了<b>线性插值法</b>（numpy.percentile 默认语义）而非最近秩法：对 [1,2,3,4] 求 P50，
+最近秩法得 3，插值法得 2.5——后者更平滑、更贴近主流工具的行为，压测报告可直接与观测平台对齐。
+实测时先用最近秩法跑出一版，与手工计算的期望值对不上后换成插值法并修正断言——<b>分位数算法没有「想当然」，必须对着定义验</b>。</p>
+
+<h3>3.2 compute_metrics：九项指标一次算齐</h3>
+
+<pre><code>def compute_metrics(results: list, total_time: float) -> dict:
+    durations = sorted(r["duration"] for r in results)
+    success_count = sum(1 for r in results if r["success"])
+    failed_count = len(results) - success_count
+    return {
+        "total": len(results),
+        "success_count": success_count,
+        "failed_count": failed_count,
+        "error_rate": failed_count / len(results),
+        "avg_time": sum(durations) / len(durations),
+        "p50_time": _percentile(durations, 0.50),
+        "p95_time": _percentile(durations, 0.95),
+        "max_time": durations[-1],
+        "qps": len(results) / total_time,
+    }</code></pre>
+
+<div class="highlight">
+<b>纯函数设计的价值：</b>compute_metrics 不碰任何全局状态、不做 IO，输入输出确定——
+因此 Test 1 可以用 4 条 fake 数据<b>手工算出每个指标的期望值</b>做精确断言（错误率 25%、平均 2.5s、P50 2.5、P95 3.85、QPS 0.5）。
+这是 13-09「指标可测」思想的延续：<b>统计逻辑与执行逻辑分离，前者单测覆盖，后者真实链路覆盖</b>。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s4">四、核心组件详解（2）并发安全与串话检测</h2>
+
+<h3>4.1 每请求独立会话（修复共享实例并发 bug）</h3>
+
+<pre><code>def run_single_request(user_id: int, text: str) -> dict:
+    agent = AgentCore()   # 每请求独立实例：history 不跨用户共享（修复串话）
+    st = time.time()
+    result = agent.run(text)
+    duration = time.time() - st
+    return {
+        "user_id": user_id,
+        "input": text,
+        "success": bool(result.get("success")),      # 布尔，替代字符串匹配
+        "reply": result.get("reply", result.get("error", ""))[:80],
+        "duration": duration,
+        "tool_hits": [s["tool"] for s in result.get("steps", [])],
+    }</code></pre>
+
+<p>两个关键决策：</p>
+<ol>
+<li><b>独立实例而非加锁</b>：AgentCore 的 history 会被 run 写入。加锁可以做到线程安全，但会让并发压测退化成串行排队（测不出并发能力）；独立实例既符合「每个用户独立会话」的真实语义，又让请求真正并行——<b>多用户压测的正确抽象就是多会话，不是多线程抢一个会话</b>。dashscope SDK 本身线程安全，网络调用层可放心并发。</li>
+<li><b>success 是布尔不是字符串</b>：直接消费 13-08 AgentCore.run 返回的结构化 {"success", "reply", "steps"}——彻底消除教材 <code>"[ERROR]" in output</code> 的误判可能。</li>
+</ol>
+
+<h3>4.2 _detect_cross_talk：串话检测（并发正确性的行为级验证）</h3>
+
+<pre><code>def _detect_cross_talk(results: list) -> list:
+    """规则：input 含天气词 → tool_hits 应含 get_temperature；
+            input 含乘法词 → tool_hits 应含 multiply。"""
+    suspects = []
+    for r in results:
+        if not r["success"]:
+            continue
+        weather_ask = any(k in r["input"] for k in ("天气", "温度", "气温"))
+        math_ask = any(k in r["input"] for k in ("乘", "计算", "*"))
+        if weather_ask and "get_temperature" not in r["tool_hits"]:
+            suspects.append(r["user_id"])
+        if math_ask and "multiply" not in r["tool_hits"]:
+            suspects.append(r["user_id"])
+    return suspects</code></pre>
+
+<div class="highlight">
+<b>串话检测的原理：</b>如果多个线程共享了带 history 的实例，用户A的问题会混进用户B的上下文，
+模型就会「答非所问」——最直接的行为信号就是<b>工具调用错配</b>（问天气的去调乘法、问乘法的去查天气）。
+检测规则刻意与 13-09 的正确率指标区分：13-09 问「调对了吗」，本篇问「<b>是不是在回答自己的问题</b>」——
+后者是并发正确性指标，前者是能力指标。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s5">五、核心组件详解（3）压测调度与报告</h2>
+
+<h3>5.1 run_concurrent_test：可复现的并发调度</h3>
+
+<pre><code>def run_concurrent_test(concurrent_users: int = DEMO_USERS,
+                        seed: int = RANDOM_SEED) -> dict:
+    random.seed(seed)    # 固定种子：每次运行任务分配完全一致
+    tasks = ["请查询北京的天气", "广州今天什么天气", "请帮我计算 12 * 13",
+             "算一下9乘以7是多少", "帮我查查上海的气温"]
+    start_time = time.time()
+    with ThreadPoolExecutor(max_workers=concurrent_users) as pool:
+        futures = {pool.submit(run_single_request, i, random.choice(tasks)): i
+                   for i in range(concurrent_users)}
+        results = [f.result() for f in as_completed(futures)]
+    total_time = time.time() - start_time
+    results.sort(key=lambda r: r["user_id"])   # 按用户排序（完成顺序≠展示顺序）
+    metrics = compute_metrics(results, total_time)
+    suspects = _detect_cross_talk(results)
+    return {"metrics": metrics, "results": results, "cross_talk_suspects": suspects}</code></pre>
+
+<p>对比教材的三个修正：<b>seed 固定</b>（任务分配可复现）、<b>结果按 user_id 排序</b>（修复输出顺序随机）、
+<b>返回结构化报告字典</b>（替代 print 混流）。</p>
+
+<h3>5.2 LLM 压测与 Web 压测的本质差异</h3>
+
+<table>
+<tr><th style="width:20%">维度</th><th style="width:38%">传统 Web 服务压测</th><th>LLM Agent 服务压测（本篇）</th></tr>
+<tr><td>并发成本</td><td>并发 1 万也几乎零成本</td><td>每个请求真实消耗 token<b>费用线性增长</b>——并发数要克制（本篇 self-test 用 3，demo 用 6）</td></tr>
+<tr><td>限流</td><td>自己服务的容量自己控</td><td>API 平台侧限流（429）是硬约束，20 并发直接打必触发；13-08 的主备回退会被限流连带触发</td></tr>
+<tr><td>响应时间量级</td><td>毫秒级，QPS 上万</td><td><b>秒级</b>（实测单请求 1.6~2.0s），QPS 天然是个位数——QPS 对 LLM 服务是次要指标，P95 才是</td></tr>
+<tr><td>分布形态</td><td>近似正态</td><td><b>长尾分布</b>（偶发的慢请求拉高平均值）——只看平均值会严重误判，必须看 P95/P99</td></tr>
+<tr><td>会话状态</td><td>service 通常无状态，可共享</td><td>Agent 实例带 history，<b>每请求独立实例</b>才符合多用户语义</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s6">六、实测验证结果</h2>
+
+<p>运行环境：<code>d:/MyCode/.venv</code>，模型 qwen-plus。<b>5 项 self-test 全部通过</b>：</p>
+
+<table>
+<tr><th style="width:8%">用例</th><th style="width:28%">场景</th><th>实测结果</th></tr>
+<tr><td>Test 1</td><td>指标计算纯函数单测</td><td>4 条 fake 数据手工验算：错误率 25% / 平均 2.5s / <b>P50 2.5、P95 3.85（线性插值）</b> / QPS 0.5——全部精确命中。中途曾因分位数实现（最近秩法）与期望不符失败一次，换线性插值法后修正。</td></tr>
+<tr><td>Test 2</td><td>单请求冒烟</td><td>12*13 → 独立会话正常 · 1.86s · 工具 <code>['multiply']</code>——结构化契约与 tool_hits 留痕生效。</td></tr>
+<tr><td>Test 3</td><td>小并发压测（3 用户）</td><td>成功 3/3 · 平均 1.64s · P95 1.89s · QPS 1.57——3 个用户<b>真正并行</b>执行（若串行约需 5s+，实测总耗时 ~1.9s），并发模型生效。</td></tr>
+<tr><td>Test 4</td><td>结果契约与串话检测</td><td>每条结果含 user_id/input/success/reply/duration/tool_hits 六键；success 为布尔；<b>串话检测 0 可疑</b>（各用户工具调用与自身 input 语义一致）；同 seed 两次任务分配逐项一致。</td></tr>
+<tr><td>Test 5</td><td>分位数与报告结构</td><td>P50(1.32s) ≤ P95(1.40s) ≤ max(1.41s) 序关系成立；平均值落在 [min, max]；报告含「错误率 / QPS / 串话检测」关键区段。</td></tr>
+</table>
+
+<div class="info">
+<b>实测数据解读：</b>
+<ul>
+<li><b>QPS 1.57 的含义</b>：3 用户 × 每请求约 1.9s 墙钟 → QPS≈1.57。LLM 服务的 QPS 天然是个位数，
+<b>压测重点应放在错误率与 P95 上</b>——这正是改写补全这两个指标的原因；</li>
+<li><b>P95 与平均值接近</b>（1.89 vs 1.64）说明本轮无严重长尾；生产中若 P95 远超平均值，说明存在慢请求聚集（限流重试、网络抖动），平均值完全看不出来；</li>
+<li><b>串话检测 0 可疑</b>从行为层面证明了「每请求独立实例」的并发模型正确——若沿用教材共享实例写法，history 交错会导致工具调用错配，此检测项会立刻报警。</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s7">七、改写前后对照总表</h2>
+
+<table>
+<tr><th style="width:16%">维度</th><th style="width:40%">教材原版</th><th>改写后</th></tr>
+<tr><td><b>并发模型</b></td><td>共享单个 agent 实例（有 history 状态）——串话风险，语义也不成立</td><td>每请求独立 AgentCore 实例——独立会话即多用户真实语义，天然无串话，并有 _detect_cross_talk 行为级验证</td></tr>
+<tr><td><b>成功判定</b></td><td><code>"[ERROR]" not in output</code> 字符串包含</td><td>结构化布尔 success（直接消费 13-08 run 返回契约）</td></tr>
+<tr><td><b>指标</b></td><td>总数/成功数/平均/QPS，声称的错误率只打了个失败数；无分位数</td><td>九项指标：错误率% + avg + <b>P50/P95</b> + max + QPS，compute_metrics 纯函数可单测</td></tr>
+<tr><td><b>可复现</b></td><td>random.choice 无种子；输出按完成顺序随机</td><td>random.seed 固定；结果按 user_id 排序</td></tr>
+<tr><td>被测主体</td><td>initialize_agent + 虚构类（import 即崩）</td><td>importlib 动态加载 13-08 AgentCore（dashscope 原生 function calling）</td></tr>
+<tr><td>并发规模</td><td>20 并发硬打（必限流），无说明</td><td>并发数参数化 + 限流/成本说明（self-test 3 用户，demo 6 用户）</td></tr>
+<tr><td>报告输出</td><td>print 混流 + import 即执行</td><td>format_report 格式化 + main 入口保护（--demo 进演示）</td></tr>
+<tr><td>self-test</td><td>无</td><td>5 项：指标单测 / 冒烟 / 小并发 / 契约与串话 / 分位数合理性</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s8">八、与前后章节的衔接</h2>
+
+<table>
+<tr><th style="width:28%">关联篇章</th><th>衔接点</th></tr>
+<tr><td>13-08 通用 Agent 主控链条</td><td><b>被压测主体</b>：每请求独立实例化 AgentCore；其 run 返回的 {"success", "reply", "steps"} 结构化契约是本篇布尔判错与 tool_hits 留痕的数据来源；其主备回退在并发限流场景下会被连带触发（本篇日志可见）。</td></tr>
+<tr><td>13-09 工具调用正确率测试</td><td><b>同源测试框架模式</b>：同样 importlib 加载 13-08、同样结构化结果契约、同样「指标拆纯函数单测」。分工：13-09 测<b>能力</b>（调对工具了吗），13-10 测<b>负载</b>（并发下还稳吗、会话隔离吗）。</td></tr>
+<tr><td>13-04 子状态管理与任务调度</td><td>state 生命周期思想延伸：压测报告的 metrics 也是一种「可观测状态」，compute_metrics 纯函数与 13-04 的状态机白名单同属「显式契约」风格。</td></tr>
+<tr><td>char12 并发/回退相关篇</td><td>13-08 主备回退在并发下的表现：部分请求限流 → 回退 → backup 接管 → 该请求 duration 变长 → 体现为 P95 抬升——「回退救正确性、压测量化代价」。</td></tr>
+<tr><td>全章定位</td><td>意图识别（02）→ 工具链（03）→ 调度（04）→ RAG（05）→ MCP（06）→ A2A（07）→ 主控（08）→ 正确率测试（09）→ <b>并发压测（10）</b>：功能正确 → 能力可信 → 负载可靠，三步质量闭环。</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s9">九、动手练习与延伸阅读</h2>
+
+<h3>动手练习（由浅入深）</h3>
+<ol>
+<li><b>跑通基线</b>：执行 <code>python 10_Test多用户并发测试与系统压测.py --demo</code>，观察 6 并发的 P50/P95 与串话检测区段；再跑一次，对比同 seed 下任务分配是否一致（QPS 会因网络波动略变，属正常）。</li>
+<li><b>复现串话</b>：把 run_single_request 里的 <code>agent = AgentCore()</code> 提到 run_concurrent_test 里共享（模拟教材写法），多跑几次观察 cross_talk_suspects 是否出现非空——亲眼看一次并发串话比读十遍文档有用。</li>
+<li><b>加 P99</b>：在 compute_metrics 里仿照 P95 加一档 p99_time，并在 20 并发下对比 P95 与 P99 的差距（注意控制成本与限流）。</li>
+<li><b>阶梯压测</b>：写一个 for 循环依次跑 2/4/6/8 并发，输出「并发数-平均响应-P95」阶梯表，观察 QPS 是否随并发线性提升、从哪一档开始被限流压制。</li>
+<li><b>进阶</b>：把压测报告持久化为 JSON（含时间戳与模型名），跑 3 次取中位数作为基线——这就是最朴素的「性能回归检测」雏形。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+<li>ThreadPoolExecutor / as_completed 标准库文档：本篇并发调度的全部机制都在标准库，无需第三方压测框架。</li>
+<li>numpy.percentile 线性插值语义：本篇 _percentile 的对齐目标。</li>
+<li>系列内参照：<a href="08_LangChain的通用Agent主控链条.html">08_LangChain的通用Agent主控链条.html</a>（被压测主体的 steps/契约由来）、<a href="09_Test工具调用正确率测试框架.html">09_Test工具调用正确率测试框架.html</a>（能力测试与负载测试的分工）。</li>
+</ul>
+
+<div class="footer">
+—— char13-10 完 ｜ 上一节：<a href="09_Test工具调用正确率测试框架.html">09_Test工具调用正确率测试框架</a> ｜ 下一篇：（待续）——
+</div>
+
+</body>
+</html>

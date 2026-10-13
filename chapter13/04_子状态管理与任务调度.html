@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>例13-4 子状态管理与任务调度 —— 讲解文档</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; color: #1e293b; line-height: 1.75; }
+  h1 { color: #0f172a; border-bottom: 3px solid #22d3ee; padding-bottom: 10px; font-size: 26px; }
+  h2 { color: #0f172a; border-left: 5px solid #22d3ee; padding-left: 12px; margin-top: 40px; font-size: 21px; }
+  h3 { color: #334155; margin-top: 26px; font-size: 17px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px 18px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  code { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-size: 90%; }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { border: 1px solid #cbd5e1; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f1f5f9; }
+  .highlight { background: #ecfeff; border-left: 5px solid #22d3ee; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .warn { background: #fef2f2; border-left: 5px solid #ef4444; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .ok { background: #f0fdf4; border-left: 5px solid #22c55e; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .flow { background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; padding: 14px 18px; margin: 14px 0; text-align: center; font-size: 14px; }
+  .flow b { color: #0e7490; }
+  .small { font-size: 13px; color: #64748b; }
+</style>
+</head>
+<body>
+
+<h1>例13-4 子状态管理与任务调度（char13-04）</h1>
+<p class="small">第13章 项目案例：从零实现一个复合智能体系统 ｜ 改写基准：dashscope 原生协议 + 显式状态机 ｜ 状态：已实测验证（5 项 self-test 全部通过）</p>
+
+<p>复合智能体不是一个大模型包打天下，而是<b>按任务类型拆成多个子 Agent（意图识别 / 问答 / 工具调用 / 对话），由调度器统一派发</b>。既然有"子系统"，就有两个新问题：每个子 Agent 的<b>状态</b>怎么管（空转 / 运行中 / 成功 / 失败），任务怎么<b>调度</b>（派给谁、失败怎么办）。教材版给了状态字段和调度骨架，但状态机是纸糊的（随便跳）、调度映射是散弹式的（两处平行维护）——本篇讲解怎么把这两件事做实。</p>
+
+<h2>一、教材原版问题</h2>
+<table>
+  <tr><th style="width:60px">编号</th><th style="width:240px">问题</th><th>后果</th></tr>
+  <tr><td>①</td><td>标题又写"Qwen3.0"，代码是 Qwen1.5-7B</td><td>标题内容不符（同 13-03，教材标题谱系问题继续累积）</td></tr>
+  <tr><td>②</td><td>虚构类 <code>Qwen2Chat / DeepSeekChat</code> + 过时 import</td><td>同 13-01：import 即崩，教材代码一行都跑不起来</td></tr>
+  <tr><td>③</td><td><b>虚假异常处理</b>：<code>try: ... except Exception: raise</code></td><td>捕获后原样重抛——零处理、零记录、零转换。看起来有容错，实际什么都没做，还让读者误以为这里有防线。这是"防御性代码表演"</td></tr>
+  <tr><td>④</td><td><b>状态迁移零校验</b></td><td><code>update()</code> 接受任意字符串，idle 可以直接跳 success、可以出现 "paused" 这种野生状态——"状态机"只有字段没有机器</td></tr>
+  <tr><td>⑤</td><td><b>两份平行映射 + 一段死代码</b></td><td>task_type → prompt 的 if/elif 链与 agents 状态字典各自维护，新增子 Agent 要改两处（散弹式修改）；if/elif 末尾的 <code>raise ValueError("未知任务类型")</code> 永远走不到——未注册类型早被前面的 <code>if not agent</code> 拦截</td></tr>
+  <tr><td>⑥</td><td>回退吞掉原始异常</td><td>外层 except 捕获了 e，抛出的却是 <code>RuntimeError("所有模型均执行失败")</code>——哪个模型、什么错、为什么，全部丢失</td></tr>
+  <tr><td>⑦</td><td>状态记录形同摆设</td><td><code>last_result / last_error</code> 记录了，但 <code>get_status_snapshot</code> 只返回 status——失败后排查拿不到错误原因，记录等于没记</td></tr>
+  <tr><td>⑧</td><td>无 self-test</td><td>状态机约束、回退逻辑的正确性全靠肉眼</td></tr>
+</table>
+
+<h2>二、改写后总览</h2>
+<div class="flow">
+  <b>dispatch_task(task_type, input)</b><br>
+  ↓ 查 <b>TASK_REGISTRY</b>（单一注册表：类型 → Agent 名称 + 提示词模板）<br>
+  ↓ 子 Agent 状态 <b>idle → running</b>（状态机白名单校验）<br>
+  ↓ 模板填充（replace，防 13-02 format 花括号坑）→ <b>_execute_with_fallback</b><br>
+  ｜　├─ 主模型 qwen-plus 成功 → <b>success</b>，记录 last_result<br>
+  ｜　└─ 模型级失败 → 备用 qwen-turbo → 全败 → <b>failed</b>，记录 last_error<br>
+  ↓ <b>get_status_snapshot</b>：完整快照（status + last_result 摘要 + last_error）
+</div>
+<p>教材的业务语义全部保留：四类子 Agent、各自的提示词原文、主备回退、"未找到任务类型"提示。改写集中在四件事：<b>状态机做实、映射合一、异常链保留、快照补全</b>。</p>
+
+<h2>三、核心组件 1：AgentState —— 把状态机从"字段"做成"机器"</h2>
+<p>教材的状态只有四个字段没有规则。改写用两张白名单把规则写死：</p>
+<pre><code>VALID_STATUSES = ("idle", "running", "success", "failed")
+# 迁移白名单：success/failed → running 意味着允许重新派发 / 重试
+STATUS_TRANSITIONS = {
+    "idle": {"running"},
+    "running": {"success", "failed"},
+    "success": {"running"},
+    "failed": {"running"},
+}
+
+def update(self, status: str, result=None, error=None):
+    if status not in VALID_STATUSES:
+        raise ValueError(f"{self.name} 非法状态值：{status}（合法值 {VALID_STATUSES}）")
+    if status not in STATUS_TRANSITIONS[self.status]:
+        raise ValueError(f"{self.name} 非法状态迁移：{self.status} → {status}")
+    self.status = status
+    self.last_result = result
+    self.last_error = error</code></pre>
+<ul>
+  <li><b>非法状态值拒绝</b>：想造出 "paused" 这种野生状态？ValueError 立刻拦下；</li>
+  <li><b>非法迁移拒绝</b>：idle → success 的跳步（没跑就"成功"）不可能发生；</li>
+  <li><b>重派显式建模</b>：success/failed → running 是白名单内的合法路径——重试不是"把状态改回去"，而是一次新的合法迁移；</li>
+  <li><b>fail fast</b>：坏状态在写入瞬间报错，而不是等到快照/下游才发现（与 13-01 Message 构造校验同一原则）。</li>
+</ul>
+<div class="highlight"><b>为什么值得较真：</b>状态机bug 的特点是"静默发酵"——idle 直接跳 success 当下看不出问题，直到某天调度器依据"成功过"做决策才炸。对照 char05 的教训（LangGraph State 用裸 dict 定义导致字段静默裁剪），<b>状态容器必须有显式约束</b>，这是贯穿本课程的一条不变式。</div>
+
+<h2>四、核心组件 2：TASK_REGISTRY —— 单一注册表消灭平行映射</h2>
+<pre><code>TASK_REGISTRY = {
+    "intent": {"name": "意图识别Agent", "prompt": "请识别该用户输入的意图：{input}"},
+    "qa":     {"name": "问答Agent",     "prompt": "请回答该问题：{input}"},
+    "tool":   {"name": "工具调用Agent", "prompt": "是否需要调用工具来完成该任务？{input}"},
+    "dialog": {"name": "对话Agent",     "prompt": "请以自然语言与用户继续交谈：{input}"},
+}
+
+# 控制器初始化：状态单元直接从注册表生成（同键对应，不再手工抄写）
+self.agents = {task: AgentState(spec["name"]) for task, spec in TASK_REGISTRY.items()}</code></pre>
+<table>
+  <tr><th>教材做法</th><th>改写做法</th></tr>
+  <tr><td>agents 字典（状态）+ if/elif 链（提示词）<b>两处平行维护</b></td><td>TASK_REGISTRY 一处定义，状态单元由注册表派生</td></tr>
+  <tr><td>新增子 Agent 要改两处，漏一处就是"有状态没行为"或"有行为没状态"</td><td>新增 = 注册表加一行，状态与行为天然同步</td></tr>
+  <tr><td>if/elif 末尾 <code>raise ValueError("未知任务类型")</code> 是<b>死代码</b>（早被 <code>if not agent</code> 拦截）</td><td>未注册类型统一在 <code>TASK_REGISTRY.get()</code> 一处判断，教材提示语义保留</td></tr>
+  <tr><td>模板用 f-string 现拼</td><td>模板存注册表，用 <code>replace("{input}", ...)</code> 填充——例 13-02 实测：模板含花括号时 <code>.format()</code> 会把字面量误解析为占位符（KeyError）</td></tr>
+</table>
+<div class="ok"><b>设计原则：Single Source of Truth。</b>同一件事（"有哪些子 Agent"）只能有一份定义。两份映射短期看是"清晰"，长期看必然漂移——散弹式修改是维护成本膨胀的头号来源。</div>
+
+<h2>五、核心组件 3：AgentController —— 异常链回退 + 完整快照</h2>
+<pre><code>def _execute_with_fallback(self, prompt: str) -> str:
+    last_err = None
+    for slot in ("primary", "backup"):
+        self.attempted_slots.append(slot)          # 记录尝试路径（self-test 验证回退用）
+        try:
+            logger.info(f"[模型] 使用 {slot}({MODEL_REGISTRY[slot]['model']}) 执行")
+            return self._run_model(MODEL_REGISTRY[slot]["model"], prompt)
+        except Exception as e:
+            last_err = e
+            logger.warning(f"[回退] {slot} 模型级失败: {e}")
+    # 教材抛 RuntimeError 但不带原因；改写携带原始异常链便于排查
+    raise RuntimeError(f"所有模型均执行失败，最后错误：{last_err}") from last_err</code></pre>
+<ul>
+  <li><b>教材的 <code>try/raise</code> 噪音删除</b>：_run_model 不再表演容错，只负责调用与把非 200 转成 RuntimeError，兜底集中在 _execute_with_fallback；</li>
+  <li><b><code>raise ... from e</code> 异常链</b>：最终错误携带原始原因（traceback 里能看到"由什么引起"），对照教材裸抛 <code>RuntimeError("所有模型均执行失败")</code> 的信息黑洞；</li>
+  <li><b>快照补全</b>：to_dict() 输出 name / status / last_result（截断 80 字符）/ last_error 四字段——失败排查不再两眼一抹黑；</li>
+  <li><b>attempted_slots 记录</b>：延续了 13-03 的方法论——"回退机制存在"要变成"回退机制可证明"。</li>
+</ul>
+
+<h2>六、实测验证（5 项 self-test 全部通过）</h2>
+<table>
+  <tr><th style="width:70px">Test</th><th style="width:210px">场景</th><th>结果</th></tr>
+  <tr><td>1</td><td>状态机白名单</td><td>合法链 idle→running→success→running 通过（重派路径验证）；<b>idle→success 跳步、非法值 "flying" 全部 ValueError 拦截</b></td></tr>
+  <tr><td>2</td><td>未注册任务类型</td><td><code>dispatch_task("unknown", ...)</code> → "未找到任务类型"提示，全部子 Agent 状态仍为 idle（不受干扰）</td></tr>
+  <tr><td>3</td><td>真实调度与重派</td><td>intent 任务 → "查询北京市天气意图"（qwen-plus）；dialog 任务 → 正常对话回复，success→running→success 重派路径走通，未触发回退</td></tr>
+  <tr><td>4</td><td>快照完整性</td><td>qa 任务调度后快照含全部四字段：<code>{'name': '问答Agent', 'status': 'success', 'last_result': 'Transformer 的注意力机制（特别是缩放点积注意力...）...', 'last_error': None}</code>——教材快照缺 last_error 的问题已修复</td></tr>
+  <tr><td>5</td><td><b>模型级回退实测</b></td><td>注入坏模型名 → primary 报 InvalidParameter Model not exist → <b>backup(qwen-turbo) 接管成功</b>；<code>attempted_slots == ["primary", "backup"]</code>，tool 子 Agent 状态 success，注册表测试后还原</td></tr>
+</table>
+<div class="ok"><b>测试策略说明：</b>Test 5 延续 13-03 的真实回退实测法——不做 mock，直接注入坏模型名让 primary 在真实 API 上失败，验证整条链路（状态机 failed 分支不会走到、备用模型接管、状态记 success、注册表还原）。Test 1 则在单元级把状态机的"堵"与"通"都验证到：该拦的拦得住（跳步/野生状态），该通的通得了（重派）。</div>
+
+<h2>七、改写前后对照总表</h2>
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td>模型与协议</td><td>虚构 Qwen2Chat/DeepSeekChat（import 即崩）</td><td>dashscope 原生协议，MODEL_REGISTRY 主备（qwen-plus / qwen-turbo）</td></tr>
+  <tr><td>异常处理</td><td>try/raise 虚假处理；回退裸抛不带原因</td><td>噪音删除，兜底集中；<code>raise ... from e</code> 保留异常链，失败原因进日志</td></tr>
+  <tr><td>状态机</td><td>update 接受任意值，无迁移约束</td><td>VALID_STATUSES + STATUS_TRANSITIONS 双白名单，非法迁移 ValueError</td></tr>
+  <tr><td>任务映射</td><td>agents 字典 + if/elif 链两处平行维护（含死代码）</td><td>TASK_REGISTRY 单一注册表，状态单元由注册表派生</td></tr>
+  <tr><td>模板填充</td><td>f-string 现拼</td><td>注册表存模板 + replace 填充（规避 13-02 的 format 花括号坑）</td></tr>
+  <tr><td>状态快照</td><td>只有 status，last_result/last_error 白记录</td><td>完整四字段快照，结果截断 80 字符保可读</td></tr>
+  <tr><td>可验证性</td><td>无测试</td><td>5 项 self-test，含状态机单元验证与真实回退实测</td></tr>
+</table>
+
+<h2>八、与前后章节的衔接</h2>
+<table>
+  <tr><th>关联</th><th>说明</th></tr>
+  <tr><td>承接 例13-03 双层回退</td><td>本篇 _execute_with_fallback 与 13-03 的主备回退同一模式；区别在于本篇把回退结果落到<b>子 Agent 状态机</b>上（success/failed 可查可审计）——回退不止是"换个模型再试"，还要留下状态痕迹</td></tr>
+  <tr><td>呼应 char05 LangGraph State</td><td>char05 的教训：裸 dict State 字段静默裁剪，必须显式声明；本篇 AgentState 的白名单迁移是同一思想的强化版——<b>状态容器的每个变化都要有约束与留痕</b></td></tr>
+  <tr><td>呼应 char08-01 状态感知 Agent</td><td>char08-01 已做过单 Agent 的状态感知，本篇升级为<b>多子 Agent + 调度器</b>的群体状态管理——从"我什么状态"到"我的子系统们什么状态"</td></tr>
+  <tr><td>呼应 char09 并发</td><td>本篇调度是单线程串行；若要并行派发（char09 线程池 / char05 并行分支），AgentState.update 需加锁保护——当前教材场景单线程可接受，这是已知的"教学边界"而非疏漏</td></tr>
+  <tr><td>复合智能体全景</td><td>至此 char13 已完成：接口层（13-01）→ 意图识别（13-02）→ 工具调用链（13-03）→ 子系统调度（本篇）。下一块拼图通常是把这些编排成完整系统</td></tr>
+</table>
+
+<h2>九、动手练习与延伸阅读</h2>
+<h3>练习 1：状态历史留痕</h3>
+<p>给 AgentState 加 <code>history: list</code>，每次 update 追加 <code>{"from": 旧状态, "to": 新状态, "at": 时间戳}</code>，并让 to_dict() 输出最近 3 条。思考：如果并发派发，history 需要什么保护？（提示：char09 的 Lock）</p>
+<h3>练习 2：失败重试上限</h3>
+<p>当前 failed → running 可以无限重试。给 AgentState 加 <code>retry_count</code>，failed 后再迁移到 running 时若超过 3 次则拒绝（ValueError），让调度器能识别"该放弃的任务"。</p>
+<h3>练习 3：注册表驱动的新 Agent</h3>
+<p>往 TASK_REGISTRY 加一个 <code>translate</code> 子 Agent（提示词："请将以下内容翻译为英文：{input}"），体验"加一行注册、零改动控制器"的扩展方式——然后回忆教材版要改几处。</p>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li><b>有限状态机（FSM）与 python-statemachine 库</b> —— 本篇手写了两张白名单，生产中有成熟库提供声明式状态机（迁移表、守卫条件、回调钩子）；</li>
+  <li><b>Python 异常链（PEP 3134）</b> —— <code>raise ... from e</code> 的官方规范，理解 <code>__cause__</code> 与 traceback 中的 "The above exception was the direct cause"；</li>
+  <li><b>例13-03 讲解文档</b> —— 双层失败语义（工具级 vs 模型级）的完整辨析，本篇回退是其模型级分支的状态化落地；</li>
+  <li><b>char05 讲解文档（LangGraph State）</b> —— 显式状态约束的图编排版本，与本篇的对象级状态机对照阅读。</li>
+</ul>
+
+<p class="small">—— char13-04 完 ｜ 上一节：例13-03 工具调用链 ｜ 下一篇：例13-05（待续）——</p>
+</body>
+</html>

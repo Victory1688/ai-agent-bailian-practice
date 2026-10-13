@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>例13-7 A2A消息协议的模块注入 —— 讲解文档</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; color: #1e293b; line-height: 1.75; }
+  h1 { color: #0f172a; border-bottom: 3px solid #22d3ee; padding-bottom: 10px; font-size: 26px; }
+  h2 { color: #0f172a; border-left: 5px solid #22d3ee; padding-left: 12px; margin-top: 40px; font-size: 21px; }
+  h3 { color: #334155; margin-top: 26px; font-size: 17px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px 18px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  code { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-size: 90%; }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { border: 1px solid #cbd5e1; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f1f5f9; }
+  .highlight { background: #ecfeff; border-left: 5px solid #22d3ee; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .warn { background: #fef2f2; border-left: 5px solid #ef4444; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .ok { background: #f0fdf4; border-left: 5px solid #22c55e; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .flow { background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; padding: 14px 18px; margin: 14px 0; text-align: center; font-size: 14px; }
+  .flow b { color: #0e7490; }
+  .small { font-size: 13px; color: #64748b; }
+</style>
+</head>
+<body>
+
+<h1>例13-7 A2A 消息协议的模块注入（char13-07）</h1>
+<p class="small">第13章 项目案例：从零实现一个复合智能体系统 ｜ 改写基准：真实 A2A 规范（Google 2025 发布，Agent-to-Agent Protocol）｜ 状态：已实测验证（5 项 self-test 全部通过）</p>
+
+<p>复合智能体最终形态是多 Agent 协作：主 Agent 把任务交给专门的子 Agent（工具代理 / 问答代理），各 Agent 之间用标准协议通信。教材版自造了一个 <code>A2AMessage</code> 四字段结构就自称 A2A——但真实 A2A（Google 2025 年发布，现为 Linux 基金会托管项目）的核心是 <b>Agent Card 自描述 + JSON-RPC 2.0 + Task 任务生命周期</b>。本篇按真实规范重写：每个 Agent 成为一个可被发现、可跟踪任务状态的标准端点，"模块注入"升级为"能力发现 + 协议化派发"。</p>
+
+<h2>一、教材原版问题</h2>
+<table>
+  <tr><th style="width:60px">编号</th><th style="width:250px">问题</th><th>后果</th></tr>
+  <tr><td>①</td><td><b>"A2A"是借壳命名</b></td><td>自造 sender/receiver/payload/metadata 四字段 ≠ 真实协议。学生以为见过 A2A，实际 Agent Card、Task、JSON-RPC 一个都没见过——同 13-06 的 MCP 借壳，是教材协议篇最需要警惕的伤害模式</td></tr>
+  <tr><td>②</td><td>虚构类 Qwen2Chat/DeepSeekChat + 过时 import</td><td>同 13-01：import 即崩</td></tr>
+  <tr><td>③</td><td><code>default_handler</code> 死代码</td><td>定义了"LLM 兜底回应"却从未 <code>register_handler</code> 注册——永远不会被调用；而 <code>receive_message</code> 对未注册类型返回"不支持的任务类型"字符串，兜底与报错自相矛盾</td></tr>
+  <tr><td>④</td><td><b>无任务抽象</b></td><td>handler 返回裸字符串——成功还是失败？任务进行到哪了？结果在哪？全部无法回答，多 Agent 协作无从跟踪</td></tr>
+  <tr><td>⑤</td><td><b>无能力发现</b></td><td>调用方必须预先硬编码 receiver 的 agent 名字——真实 A2A 的核心价值恰是 Agent Card 自描述 + skill 标签匹配，"谁有什么能力"应该是可查询的</td></tr>
+  <tr><td>⑥</td><td>错误字符串混流</td><td>"[ERROR] 目标Agent不存在"与正常响应混在同一返回通道，调用方无法程序化判断</td></tr>
+  <tr><td>⑦</td><td>metadata 无结构约束</td><td>task_type / tool 全是魔法字符串，没有 schema，拼错静默失效</td></tr>
+  <tr><td>⑧</td><td>无 self-test</td><td>协议行为正确性不可验证</td></tr>
+</table>
+
+<h2>二、教材"A2A" vs 真实 A2A 规范（Google 2025）</h2>
+<table>
+  <tr><th>维度</th><th>教材简化版</th><th>真实 A2A 规范（本篇实现）</th></tr>
+  <tr><td>消息结构</td><td>自造 sender/receiver/payload/metadata</td><td><b>JSON-RPC 2.0</b> 信封 + message 由 <b>parts</b> 组成（TextPart 文本 / DataPart 结构化数据）</td></tr>
+  <tr><td>能力发现</td><td>无（硬编码 receiver 名字）</td><td><b>Agent Card</b>（/.well-known/agent.json）：name/description/url/protocolVersion/<b>skills[id, name, description, tags]</b>——按标签发现"谁能干什么"</td></tr>
+  <tr><td>任务模型</td><td>handler 返回字符串，无状态</td><td><b>Task 对象</b>：id + 状态机（working → completed / failed）+ <b>artifacts</b> 承载产物；tasks/get 随时查询</td></tr>
+  <tr><td>失败语义</td><td>错误字符串混流</td><td>两级区分：协议错误（-32601/-32602）vs 任务失败（state=failed + status.message）+ A2A 特有 -32001 TaskNotFound</td></tr>
+  <tr><td>协作哲学</td><td>网关直调 Agent 内部方法</td><td><b>opaque agents</b>：对方是黑盒，只见卡片与 Task，内部实现完全不可见</td></tr>
+</table>
+<div class="highlight"><b>A2A 与 MCP 怎么分工（与 13-06 连读）：</b>MCP 解决 <b>Agent ↔ 工具/资源</b>（给单个 Agent 接外部能力），A2A 解决 <b>Agent ↔ Agent</b>（跨组织的不透明协作）。教材恰好两篇都借壳——13-06 已按真实 MCP 重写，本篇按真实 A2A 重写，两篇连读即补齐双协议认知。</div>
+
+<h2>三、改写后总览：协议化的协作链路</h2>
+<div class="flow">
+  <b>模块注入</b>：A2ARouter.register_agent(ToolAgent / AnswerAgent)（教材语义保留）<br>
+  <b>能力发现</b>：get_agent_card 读卡片；find_agent("qa") 按 skill 标签找到 AnswerAgent<br>
+  <br>
+  <b>派发</b>：A2AMessage（payload + metadata）→ 规范化 role + parts（TextPart + DataPart）<br>
+  ↓ JSON-RPC <b>message/send</b> → 目标 A2AServer.handle()<br>
+  ↓ 创建 Task（state=working）→ 技能执行<br>
+  ｜　├─ 成功 → state=completed + artifacts（TextPart 结果）<br>
+  ｜　└─ 异常 → state=failed + status.message（任务级失败，非协议错误）<br>
+  ↓ 结构化契约 <code>{"success", "taskId", "state", "response"}</code>
+</div>
+<p>教材的业务语义全部保留：ToolAgent 模拟执行（"已调用工具：DataAnalyzer"原文）、AnswerAgent qwen-plus 问答、MainAgent 两条消息的 demo 场景。变化在于<b>协作发生在标准协议之上</b>。</p>
+
+<h2>四、核心组件 1：AgentCard 与能力发现</h2>
+<pre><code>class AgentCard:
+    """对应真实 A2A 的 /.well-known/agent.json"""
+    def as_dict(self) -> dict:
+        return {"name": self.name, "description": self.description,
+                "url": self.url, "version": self.version,
+                "protocolVersion": A2A_PROTOCOL_VERSION, "skills": self.skills}
+
+# 网关端：按 skill 标签发现目标（替代硬编码 receiver 字符串）
+def find_agent(self, skill_tag: str):
+    for name, agent in self.agents.items():
+        if any(skill_tag in s["tags"] for s in agent.card.skills):
+            return name
+    return None</code></pre>
+<ul>
+  <li><b>自描述</b>：卡片是 Agent 的"简历"——name、职责一句话、版本、协议版本、skills（每个 skill 有 id/名称/描述/标签）；</li>
+  <li><b>标签匹配</b>：find_agent("qa") → AnswerAgent，find_agent("tool") → ToolAgent（Test 1 实测）——调用方从"我知道你叫什么"升级为"我知道谁能干什么"，新增 Agent 无需改动调用方代码；</li>
+  <li><b>教学边界</b>：生产中卡片经 <code>GET /.well-known/agent.json</code> 获取（跨进程）；本篇进程内直取，传输层解耦。</li>
+</ul>
+
+<h2>五、核心组件 2：A2AServer —— Task 生命周期</h2>
+<pre><code>def _message_send(self, params: dict) -> dict:
+    message = params.get("message")
+    if not isinstance(message, dict) or not message.get("parts"):
+        raise JsonRpcError(INVALID_PARAMS, "message.parts 不能为空")
+    task_id = params.get("taskId") or message.get("taskId") or str(uuid.uuid4())
+    payload = "".join(p["text"] for p in message["parts"] if p.get("kind") == "text")
+    metadata = dict(message.get("metadata") or {})
+    for p in message["parts"]:                 # DataPart 合入 metadata
+        if p.get("kind") == "data":
+            metadata.update(p.get("data") or {})
+    task = {"id": task_id, "status": {"state": "working"}, "artifacts": []}
+    self._tasks[task_id] = task
+    try:
+        text = str(self.execute(payload, metadata))
+        task["status"] = {"state": "completed"}
+        task["artifacts"] = [{"name": "response",
+                              "parts": [{"kind": "text", "text": text}]}]
+    except Exception as e:
+        # 技能执行失败是任务级失败（业务性），不是协议错误——规范语义
+        task["status"] = {"state": "failed", "message": str(e)}
+    return task</code></pre>
+<table>
+  <tr><th>教材问题</th><th>Task 抽象的修正</th></tr>
+  <tr><td>handler 返回裸字符串，成功失败无法区分</td><td>Task 状态机：working → completed / failed，程序化可判</td></tr>
+  <tr><td>结果与错误混在同一字符串通道</td><td>结果放 <b>artifacts</b>，失败原因放 <b>status.message</b>——通道分离</td></tr>
+  <tr><td>任务发出后即失联</td><td>TaskStore + <b>tasks/get</b>：按 id 随时查询状态（未知 id → -32001 TaskNotFound）</td></tr>
+  <tr><td>metadata 魔法字符串</td><td>DataPart 承载结构化元数据（task_type/tool 有了标准容器）</td></tr>
+  <tr><td>default_handler 死代码</td><td>LLM 兜底语义并入 AnswerAgent 的 qa 技能——兜底真实可达</td></tr>
+</table>
+<div class="ok"><b>两级错误的边界（与 13-06 MCP 的 isError 辨析同源）：</b>协议坏了（方法不存在、参数不合法）→ JSON-RPC 错误码；协议没坏但事没办成（工具故障、模型 5xx）→ Task state=failed。混用两者是协议实现最常见的错误——比如把业务失败报成 -32602，调用方就无法区分"我调错了"还是"它挂了"。</div>
+
+<h2>六、核心组件 3：A2ARouter —— 模块注入 + 结构化派发</h2>
+<pre><code>def dispatch(self, msg: A2AMessage) -> dict:
+    server = self.agents.get(msg.receiver)
+    if server is None:
+        return {"success": False, "taskId": None, "state": "unknown",
+                "response": "", "error": f"目标Agent不存在：{msg.receiver}"}
+    self._next_id += 1
+    request = {"jsonrpc": "2.0", "id": self._next_id, "method": "message/send",
+               "params": {"message": msg.to_a2a_message()}}
+    response = server.handle(request)
+    if "error" in response:
+        err = response["error"]
+        return {"success": False, ..., "error": f"{err['code']} {err['message']}"}
+    task = response["result"]
+    state = task["status"]["state"]
+    text = "".join(p["text"] for a in task.get("artifacts", [])
+                   for p in a.get("parts", [])) if state == "completed" else ...
+    return {"success": state == "completed", "taskId": task["id"],
+            "state": state, "response": text}</code></pre>
+<p>register_agent 模块注入语义保留；dispatch 从"返回字符串"升级为"返回结构化契约"，未注册目标、协议错误、任务失败三条失败路径各有独立字段（修复教材错误混流）。网关本身不懂任何业务——它只搬运 JSON-RPC，这正是协议的价值：<b>网关换掉、Agent 不用改</b>。</p>
+
+<h2>七、实测验证（5 项 self-test 全部通过）</h2>
+<table>
+  <tr><th style="width:70px">Test</th><th style="width:220px">场景</th><th>结果</th></tr>
+  <tr><td>1</td><td>Agent Card 与能力发现</td><td>卡片含 protocolVersion=1.0 + skills；<code>find_agent("qa")→AnswerAgent</code>、<code>find_agent("tool")→ToolAgent</code>、无匹配 → None</td></tr>
+  <tr><td>2</td><td>Task 生命周期（tool_call）</td><td>教材 msg1 原场景 → completed + taskId，artifact 含"已调用工具：DataAnalyzer，执行内容为：请将CSV文件中的数据进行分析"（教材语义原文保留）</td></tr>
+  <tr><td>3</td><td>真实问答（qwen-plus）</td><td>"什么是Transformer架构？" → AnswerAgent.qa 技能 → 完整准确回答（基于自注意力机制的深度学习模型架构...）</td></tr>
+  <tr><td>4</td><td><b>失败路径与 tasks/get</b></td><td>注入必抛异常的技能 → state=<b>failed</b> + status.message（非协议错误）；tasks/get 可查回该任务；未知 id → <b>-32001 TaskNotFound</b></td></tr>
+  <tr><td>5</td><td>协议错误码</td><td>未知方法 → -32601；parts 为空 → -32602；未注册 receiver → 结构化错误 <code>{"success": False, "error": "目标Agent不存在：Ghost"}</code>（不混流）</td></tr>
+</table>
+
+<h2>八、改写前后对照总表</h2>
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td>协议本质</td><td>借壳命名（自造四字段消息）</td><td>真实 A2A：Agent Card + JSON-RPC 2.0 + Task 生命周期</td></tr>
+  <tr><td>能力发现</td><td>硬编码 receiver 字符串</td><td>Agent Card skills + find_agent 标签匹配</td></tr>
+  <tr><td>任务模型</td><td>裸字符串返回，无状态</td><td>Task 状态机 + artifacts + tasks/get 查询</td></tr>
+  <tr><td>消息结构</td><td>payload + 自由 metadata</td><td>role + parts（TextPart / DataPart）</td></tr>
+  <tr><td>失败语义</td><td>错误字符串混流</td><td>协议错误码 / 任务 failed / 未注册目标 三路径分离</td></tr>
+  <tr><td>死代码</td><td>default_handler 从未注册</td><td>兜底语义并入 qa 技能（真实可达）</td></tr>
+  <tr><td>模型</td><td>虚构 Qwen2Chat/DeepSeekChat</td><td>dashscope qwen-plus（native 协议）</td></tr>
+  <tr><td>可验证性</td><td>无测试</td><td>5 项 self-test，协议行为逐项断言</td></tr>
+</table>
+
+<h2>九、与前后章节的衔接 + 动手练习</h2>
+<table>
+  <tr><th>关联</th><th>说明</th></tr>
+  <tr><td>承接 例13-06（MCP 路由器）</td><td>13-06 是 Agent ↔ 工具（MCP），本篇是 Agent ↔ Agent（A2A）——同一个复合智能体，两套标准协议各司其职；连读可建立完整协议版图</td></tr>
+  <tr><td>承接 char12-02（A2A 全实现）</td><td>char12-02 是 A2A v1.0 完整版（Agent Card 三级能力匹配 + 认证 + 更全错误码）；本篇是教学精简版——理解"协议实现可裁剪，Task 抽象与卡片发现不能省"</td></tr>
+  <tr><td>承接 例13-04 调度器</td><td>A2ARouter 可作为 AgentController 的多 Agent 协作层：调度器管子系统内部状态，A2A 管跨 Agent 协作边界</td></tr>
+  <tr><td>opaque 哲学</td><td>教材网关直接调 Agent 内部方法；A2A 只见卡片与 Task——"协作不依赖信任对方实现"，这是跨组织 Agent 生态（不同公司、不同框架）成立的前提</td></tr>
+</table>
+
+<h3>动手练习</h3>
+<ul>
+  <li><b>练习 1：异步任务</b>——把 qa 技能改为 sleep(5) 后返回，dispatch 立即拿到的还是 working 态；用 tasks/get 轮询直到 completed——体会 A2A 长任务的轮询模式（进阶：对照规范了解 push notification）。</li>
+  <li><b>练习 2：新 Agent 即插即用</b>——写一个 TranslateAgent（skills 标签 ["翻译", "translate"]），register_agent 后用 find_agent("翻译") 发现并派发——验证"新增模块零改网关"。</li>
+  <li><b>练习 3：DataPart 结构化产物</b>——让 tool_execute 返回 JSON 结果，Server 端放进 artifacts 的 DataPart；客户端解析时按 kind 分流——对比 TextPart-only 的信息损失。</li>
+</ul>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li><b>A2A 官方规范（Google / Linux 基金会）</b> —— Agent Card 字段全集、message/send 与 tasks/* 方法族、TaskStatus 状态机与流式更新（SSE）的权威定义；</li>
+  <li><b>char12-02 讲解文档</b> —— A2A v1.0 完整实现 + 三级能力匹配 + 认证机制，本篇的上游阅读；</li>
+  <li><b>char12-07 / 例13-06 讲解文档</b> —— MCP 侧实现，与 A2A 对照理解"工具协议 vs Agent 协议"的分工边界；</li>
+  <li><b>JSON-RPC 2.0 规范</b> —— 两种协议共同的消息载体，10 分钟通读。</li>
+</ul>
+
+<p class="small">—— char13-07 完 ｜ 上一节：例13-06 MCP 路由器 ｜ 下一篇：例13-08（待续）——</p>
+</body>
+</html>

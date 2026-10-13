@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char13-11 模型幻觉率与用户满意度评估 · 改写讲解</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; line-height: 1.75; color: #1e293b; }
+  h1 { color: #0f172a; border-bottom: 3px solid #22d3ee; padding-bottom: 10px; font-size: 26px; }
+  h2 { color: #0f172a; border-left: 5px solid #22d3ee; padding-left: 12px; margin-top: 40px; font-size: 21px; }
+  h3 { color: #1e3a5f; margin-top: 28px; font-size: 17px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  code { background: #eef2f7; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #0f172a; }
+  pre code { background: transparent; padding: 0; color: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { border: 1px solid #d7e0ea; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f5f8fb; }
+  .highlight { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .warn { background: #fff7ed; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .danger { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .info { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .flow { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px 20px; margin: 14px 0; font-size: 14px; }
+  .flow div { padding: 3px 0; }
+  .arrow { color: #0284c7; font-weight: bold; }
+  .tag { display: inline-block; background: #22d3ee; color: #0f172a; font-size: 12px; font-weight: bold; padding: 1px 8px; border-radius: 10px; margin-right: 6px; }
+  .footer { margin-top: 50px; padding-top: 16px; border-top: 2px solid #e2e8f0; color: #64748b; text-align: center; font-size: 13px; }
+  .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 20px; font-size: 14px; }
+  .toc a { color: #0f172a; text-decoration: none; }
+  .toc a:hover { color: #0284c7; }
+</style>
+</head>
+<body>
+
+<h1>【例13-11】模型幻觉率与用户满意度评估 —— 改写讲解</h1>
+<p><span class="tag">章节</span>第13章 项目案例：从零实现一个复合智能体系统（评估篇）
+&nbsp;&nbsp;<span class="tag">改写日期</span>2026-10-13
+&nbsp;&nbsp;<span class="tag">状态</span>已实测验证通过（5 项 self-test）</p>
+
+<div class="info">
+<b>一句话定位：</b>这是全章的「评估篇」——前面测了能力（13-09 工具调用）和负载（13-10 并发压测），
+本篇测<b>回答质量</b>：用 <b>LLM-as-a-Judge 裁判模式</b>评估模型回答的事实一致性（幻觉率）与内容评分（满意度模拟）。
+教材版用「字符相似度」冒充幻觉检测、用「随机数」冒充用户评分——实测证明其幻觉率方向都是反的。
+</div>
+
+<div class="toc">
+<b>目录</b>：
+<a href="#s1">一、教材原版问题诊断</a> ｜
+<a href="#s2">二、改写后总览（LLM-as-a-Judge）</a> ｜
+<a href="#s3">三、核心组件详解（1）裁判 prompt 与输出清洗</a> ｜
+<a href="#s4">四、核心组件详解（2）评估流水线</a> ｜
+<a href="#s5">五、核心组件详解（3）difflib 实证对照</a> ｜
+<a href="#s6">六、实测验证结果</a> ｜
+<a href="#s7">七、改写前后对照总表</a> ｜
+<a href="#s8">八、与前后章节的衔接</a> ｜
+<a href="#s9">九、动手练习与延伸阅读</a>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s1">一、教材原版问题诊断</h2>
+
+<p>教材原代码声称实现了「幻觉率 + 用户满意度评估」，逐行核查后发现八个问题（原代码已全部注释保留在 py 文件头部，编号对应）：</p>
+
+<table>
+<tr><th style="width:6%">编号</th><th style="width:26%">问题</th><th>后果与辨析</th></tr>
+<tr><td>①</td><td>虚构类 + 过时 import</td><td>Qwen2Chat / DeepSeekChat 虚构类 + langchain.schema 过时 import（13-08/09/10 同款）——import 即崩，从未跑通过。</td></tr>
+<tr><td>②</td><td><b>【最严重】字符相似度冒充幻觉检测</b></td><td><code>difflib.SequenceMatcher.ratio() &lt; 0.6</code> 判幻觉——<b>字符相似度与事实一致性是两个维度</b>：事实正确但表述不同的回答相似度可能低于阈值（误判）；编造数值的回答因大部分字符相同反而相似度高（漏判）。<b>测出来的幻觉率方向都可能是反的</b>。</td></tr>
+<tr><td>③</td><td><b>满意度是纯随机数</b></td><td><code>random.randint(3, 5)</code> 打分——评分与回答内容<b>毫无关系</b>，统计出的「平均满意度」没有任何意义。</td></tr>
+<tr><td>④</td><td>"[ERROR]" 字符串混流</td><td>错误返回字符串 + user_score 靠 <code>"[ERROR]" in generated</code> 字符串包含判错（13-10 已确立的反模式）。</td></tr>
+<tr><td>⑤</td><td>阈值 0.6 无依据</td><td>拍脑袋值；SequenceMatcher 对中英混排、标点差异极敏感，同一事实换个标点相似度就大变。</td></tr>
+<tr><td>⑥</td><td>import 即执行</td><td>run_demo() 写在模块顶层，无入口保护。</td></tr>
+<tr><td>⑦</td><td>无失败隔离</td><td>某条模型调用失败不会计入统计口径（error 字符串会被当回答参与相似度计算）。</td></tr>
+<tr><td>⑧</td><td>无 self-test</td><td>零验证——②③两个根本性错误因此从未被发现。</td></tr>
+</table>
+
+<div class="danger">
+<b>本篇核心教学点——「测什么」与「用什么测」必须匹配：</b>幻觉检测的对象是<b>事实一致性</b>（语义维度），
+而 difflib 测的是<b>字面重叠</b>（形式维度）。用形式指标冒充语义判断，是评估系统设计中最隐蔽也最致命的错误——
+它能跑、能出数、甚至数字看起来很稳定，但<b>数字的含义是错的</b>。这也是真实业界转向 LLM-as-a-Judge 的根本原因：
+语义判断只能由具备语义理解能力的评估者（裁判模型）来做。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2">二、改写后总览（LLM-as-a-Judge）</h2>
+
+<p>LLM-as-a-Judge 是 2024-2025 业界 LLM 评估的主流路线（Ragas、DeepEval、OpenAI evals 均是此路线）：
+用一个（更强的）模型当裁判，按明确的判定标准对被测模型的输出做结构化评判。</p>
+
+<h3>整体执行流程</h3>
+<div class="flow">
+<div>EVAL_SET（教材 5 条 QA 原样保留：question + reference）</div>
+<div>&nbsp;&nbsp;<span class="arrow">──→</span> 对每条：</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">──→</span> <b>被测模型</b>（qwen-plus）生成回答</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">──→</span> <b>裁判模型</b>（qwen-plus）判定：</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;faithful（事实一致？表述不同不影响）/ score（1~5 内容评分）/ reason</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">──→</span> 裁判输出 → <b>_clean_json 三步安全清洗</b>（剥围栏→括号定位→严格解析）</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">──→</span> difflib 相似度（<b>辅助指标</b>，单独报告，与事实判定分开）</div>
+<div>&nbsp;&nbsp;<span class="arrow">──→</span> 汇总 metrics：幻觉率 / 平均满意度 / 平均相似度 / 裁判失败数 / 逐条详情</div>
+</div>
+
+<h3>两个模型各司其职</h3>
+<table>
+<tr><th style="width:20%">角色</th><th style="width:24%">模型</th><th>职责</th></tr>
+<tr><td>被测模型</td><td>qwen-plus</td><td>对评估问题生成回答——它是「考生」，其回答质量是被测对象</td></tr>
+<tr><td>裁判模型</td><td>qwen-plus（生产建议更强模型）</td><td>按 faithfulness 标准判定事实一致性 + 给内容评分——它是「考官」，输出结构化 JSON</td></tr>
+</table>
+
+<div class="warn">
+<b>「裁判也是 qwen-plus，自己给自己判」的说明：</b>教学场景下为控制成本与依赖复杂度，裁判复用同一模型。
+真实生产中裁判应选<b>更强或至少不同家族</b>的模型（如 qwen-max、或第三方模型）以降低「自我偏好」偏差；
+评估框架本身（JUDGE_MODEL 常量）已预留切换点，改一行即可换裁判。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s3">三、核心组件详解（1）裁判 prompt 与输出清洗</h2>
+
+<h3>3.1 JUDGE_PROMPT：判定标准显式化</h3>
+
+<pre><code>JUDGE_PROMPT = """你是严格的事实性评估裁判。给定【问题】【模型回答】【参考答案】，请判定：
+1. faithful：模型回答的核心事实是否与参考答案一致。判定标准：
+   - 关键事实（数值、主体、时间、名单）不矛盾即为一致，即使表述方式完全不同；
+   - 回答补充了参考答案之外的正确信息，不影响一致性判定；
+   - 关键事实错误、编造、或与参考答案冲突，判为不一致。
+2. score：作为用户对该回答的满意度评分（1~5 整数）：
+   1=答非所问或关键事实错误；3=基本正确但不完整；5=准确完整且表述清晰。
+只输出一个 JSON 对象，不要输出任何其他内容：
+{"faithful": true或false, "score": 1到5的整数, "reason": "一句话理由"}"""</code></pre>
+
+<p>prompt 的三个设计要点：</p>
+<ol>
+<li><b>正例与反例边界都写明</b>：「表述方式完全不同不影响判定」直接封死教材 difflib 的误判路径；「补充正确信息不影响」避免裁判把完整性问题混淆为事实问题；</li>
+<li><b>score 的分档语义明确</b>（1/3/5 锚点），减少裁判打分的随机漂移；</li>
+<li><b>只输出 JSON</b>——结构化输出是下游可解析的前提，配合下面的安全清洗。</li>
+</ol>
+
+<h3>3.2 _clean_json：三步安全清洗（13-02 确立模式）</h3>
+
+<pre><code>def _clean_json(text: str) -> dict:
+    cleaned = text.strip()
+    # 第一步：剥 ```json 围栏（若存在）
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        if cleaned.startswith("json"):
+            cleaned = cleaned[4:]
+    # 第二步：定位首尾大括号（截掉前后缀文本）
+    start, end = cleaned.find("{"), cleaned.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError(f"裁判输出中未找到 JSON：{text[:80]}")
+    # 第三步：严格 json.loads（不 eval，杜绝代码执行）
+    return json.loads(cleaned[start:end + 1])</code></pre>
+
+<div class="highlight">
+<b>为什么必须清洗：</b>裁判模型即使被要求「只输出 JSON」，实测仍可能输出 <code>```json 围栏</code> 或
+「评估结果如下：{...} 以上。」这类前后缀。三步清洗（剥围栏 → 括号定位 → 严格 json.loads）与 13-02 意图识别入口
+的清洗逻辑同源——<b>LLM 输出永远当数据不当代码</b>（不用 eval），且永远做结构容错（三种输出形态都接得住）。
+Test 1 对这三种形态做了确定性单测。
+</div>
+
+<h3>3.3 judge_answer：None 与 False 的语义区分</h3>
+
+<pre><code>return {"faithful": bool(verdict.get("faithful")),
+        "score": int(verdict.get("score", 0)),
+        "reason": str(verdict.get("reason", ""))}
+# 裁判调用失败时：{"faithful": None, "score": None, "reason": "失败说明"}</code></pre>
+
+<p><b>None ≠ False</b>：False 是「裁判判定为不一致」，None 是「裁判没判成」（网络失败/输出不合法）。
+两者在统计口径上严格分开——幻觉率只按裁判成功的条目计算，失败条目单独计数（judge_failures 字段），
+避免把「评估基础设施故障」算进「被测模型的幻觉」。</p>
+
+<!-- ============================================================ -->
+<h2 id="s4">四、核心组件详解（2）评估流水线</h2>
+
+<h3>4.1 evaluate_case：单条评估的三步</h3>
+
+<pre><code>def evaluate_case(item: dict) -> dict:
+    generated = generate_answer(item["question"])           # 1. 被测模型生成
+    verdict = judge_answer(item["question"], generated,
+                           item["reference"])               # 2. 裁判判定
+    return {
+        "question": item["question"],
+        "generated": generated[:60],
+        "reference": item["reference"],
+        "faithful": verdict["faithful"],
+        "score": verdict["score"],
+        "reason": verdict["reason"],
+        "similarity": round(text_similarity(generated, item["reference"]), 3),
+    }</code></pre>
+
+<h3>4.2 run_evaluation：统计口径设计</h3>
+
+<pre><code>judged = [d for d in details if d["faithful"] is not None]  # 裁判成功的条目
+hallucinated = sum(1 for d in judged if not d["faithful"])
+metrics = {
+    "total": len(details),
+    "hallucinated": hallucinated,
+    "halluc_rate": round(hallucinated / len(judged), 3) if judged else None,
+    "avg_score": round(sum(scored) / len(scored), 3) if scored else None,
+    "avg_similarity": ...,        # 辅助指标单独汇报
+    "judge_failures": len(details) - len(judged),
+    "details": details,
+}</code></pre>
+
+<div class="highlight">
+<b>满意度指标的定位澄清：</b>改写后的 score 由裁判模型<b>基于回答内容</b>给出（准确性/完整性/清晰度分档），
+比教材的 random.randint 至少是「内容相关的代理评分」。但必须明确：<b>它仍是模拟评分</b>——
+真实用户满意度应从产品埋点采集（点赞/点踩、会话留存、复访率）。
+评估代码里叫「满意度」，文档里要讲清「这是内容质量代理，不是真实用户数据」——教材的毛病恰恰是把随机数直接叫「用户评分」。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s5">五、核心组件详解（3）difflib 实证对照</h2>
+
+<p>改写<b>没有删除</b> difflib 相似度，而是把它降级为<b>辅助指标</b>单独报告——并用实测数据证明「为什么它不能当幻觉检测」：</p>
+
+<table>
+<tr><th style="width:50%">实测场景</th><th>结果</th></tr>
+<tr><td>qwen-plus 对 5 条教材题的回答<b>全部事实正确</b>（裁判判定幻觉率 0.0、均分 5.0）</td><td>但 difflib <b>平均文本相似度仅 0.089</b></td></tr>
+<tr><td>按教材标准（相似度 &lt; 0.6 判幻觉）</td><td><b>这 5 条全部正确的回答会被 100% 误判为幻觉</b>——教材算法的方向完全相反</td></tr>
+<tr><td>Test 3 编造用例：「地球上最大的哺乳动物是非洲象」</td><td>与参考答案字符相似度约 0.72（&gt; 阈值 0.6，教材会<b>漏判</b>）；裁判模型正确判为不一致、评分 1</td></tr>
+</table>
+
+<div class="danger">
+<b>双向失灵的完整证据链：</b>正确的回答被误判（0.089 &lt; 0.6）、编造的回答被漏判（0.72 &gt; 0.6）——
+教材的幻觉检测在两个方向上都是反的。这组实测数据是本篇最有教学价值的产出：
+<b>相似度可以告诉你「两个文本长得像不像」，永远不能告诉你「两句话说的是不是同一个事实」。</b>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s6">六、实测验证结果</h2>
+
+<p>运行环境：<code>d:/MyCode/.venv</code>，被测 qwen-plus / 裁判 qwen-plus。<b>5 项 self-test 全部通过</b>：</p>
+
+<table>
+<tr><th style="width:8%">用例</th><th style="width:30%">场景</th><th>实测结果</th></tr>
+<tr><td>Test 1</td><td>裁判输出 JSON 清洗单测</td><td>纯 JSON / ```json 围栏包裹 / 前后缀混杂三种形态均可正确提取；无大括号输出正确抛 ValueError——确定性覆盖。</td></tr>
+<tr><td>Test 2</td><td>文本相似度单测</td><td>相同文本 = 1.0；相关文本中等；无关文本低——辅助指标语义正确（作为对照基线存在）。</td></tr>
+<tr><td>Test 3</td><td><b>裁判判别力实测</b></td><td>「世界上最大的哺乳动物是蓝鲸，体长可达30米」（表述不同但事实正确）→ 判<b>一致</b>、评分 5；「…是非洲象」（编造）→ 判<b>不一致</b>、评分 1——裁判能跨表述识别事实，并拉开评分差距。</td></tr>
+<tr><td>Test 4</td><td>全量真实评估（5 条教材题）</td><td>幻觉率 <b>0.0</b> · 均分 <b>5.0</b> · 平均相似度 <b>0.089</b> · 裁判失败 0 条——qwen-plus 对这 5 条常识题全部答对；0.089 的相似度反证教材算法会把正确回答全判为幻觉。</td></tr>
+<tr><td>Test 5</td><td>metrics 结构契约</td><td>七键完整（total/hallucinated/halluc_rate/avg_score/avg_similarity/judge_failures/details）；details 每条七字段；报告含三大指标区段。</td></tr>
+</table>
+
+<div class="info">
+<b>Test 4 数据的解读示范：</b>幻觉率 0.0 且均分 5.0 并不代表「qwen-plus 没有幻觉能力」——这 5 条都是高常识度、
+训练数据充分覆盖的稳定事实题。<b>评估集的难度决定结论的强度</b>：想测出真实幻觉率，需要时效性题（训练截止后的事件）、
+长尾知识题、多跳推理题。教材选这 5 条题本身就在「给模型送分」，这也是评估设计的隐性问题。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s7">七、改写前后对照总表</h2>
+
+<table>
+<tr><th style="width:16%">维度</th><th style="width:40%">教材原版</th><th>改写后</th></tr>
+<tr><td><b>幻觉检测</b></td><td>difflib 字符相似度 &lt; 0.6 判幻觉——实测双向失灵（正确回答 0.089 被误判、编造回答 0.72 被漏判）</td><td><b>LLM-as-a-Judge</b>：裁判模型按 faithfulness 标准判定事实一致性，输出结构化 {"faithful", "score", "reason"}；difflib 降级为辅助指标单独报告</td></tr>
+<tr><td><b>满意度</b></td><td>random.randint(3,5) 纯随机数</td><td>裁判模型按 1/3/5 分档锚点基于内容评分（代理评估，文档明确非真实用户数据）</td></tr>
+<tr><td>裁判输出解析</td><td>无（不涉及）</td><td>_clean_json 三步安全清洗（剥围栏/括号定位/严格 json.loads，不 eval）</td></tr>
+<tr><td>失败口径</td><td>"[ERROR]" 字符串混流，错误回答参与相似度计算</td><td>None/False 语义区分；judge_failures 单独计数，幻觉率只按裁判成功条目计算</td></tr>
+<tr><td>模型</td><td>Qwen2Chat / DeepSeekChat 虚构类（import 即崩）</td><td>dashscope 原生协议：EVAL_MODEL 被测 + JUDGE_MODEL 裁判（常量可切换）</td></tr>
+<tr><td>输出</td><td>print 混流 + import 即执行</td><td>结构化 metrics + format_report + main 入口保护（--demo）</td></tr>
+<tr><td>self-test</td><td>无</td><td>5 项：清洗单测 / 相似度单测 / 裁判判别力 / 全量评估 / metrics 契约</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s8">八、与前后章节的衔接</h2>
+
+<table>
+<tr><th style="width:28%">关联篇章</th><th>衔接点</th></tr>
+<tr><td>13-02 用户意图识别与入口解析</td><td><b>安全清洗同源</b>：_clean_json 的三步清洗（剥围栏→括号定位→严格解析）正是 13-02 确立的 LLM 输出处理规范——凡消费 LLM 结构化输出的场景都必须过这道工序；同样杜绝 str.format 花括号陷阱。</td></tr>
+<tr><td>13-09 工具调用正确率测试</td><td><b>测试框架同模式</b>：结构化 metrics、指标纯函数化、self-test 分层（确定性单测 + 真实链路）。分工演进：09 测工具调用能力 → 10 测并发负载 → <b>11 测回答质量</b>。</td></tr>
+<tr><td>13-10 并发压测</td><td>结果契约一致（布尔判错、结构化详情）；13-10 的 LLM 压测差异表（成本/限流）同样适用于本篇——全量评估 5 条 × 2 次调用也是成本，评估集规模要克制。</td></tr>
+<tr><td>13-05 RAG 检索问答</td><td>潜在闭环：RAG 系统的「检索命中但答案错误」（faithfulness 问题）正是本篇裁判模式的用武之地——生产 RAG 评估=检索指标（recall/precision）+ 生成指标（faithfulness），本篇实现了后者。</td></tr>
+<tr><td>全章定位</td><td>质量三部曲收官：功能正确（02-08 实现）→ 能力可信（09 工具）→ 负载可靠（10 并发）→ <b>内容可信（11 幻觉/满意度）</b>。</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s9">九、动手练习与延伸阅读</h2>
+
+<h3>动手练习（由浅入深）</h3>
+<ol>
+<li><b>跑通基线</b>：执行 <code>python 11_Test模型幻觉率与用户满意度评估.py --demo</code>，逐条观察 faithful/score/reason/similarity——重点看「reason 一句话理由」是否说到点子上（裁判可解释性）。</li>
+<li><b>复现教材误判</b>：对 5 条 EVAL_SET 手动算一遍 difflib 相似度（Test 2 的 text_similarity 现成可用），对照阈值 0.6——亲眼确认「全对却被判全幻觉」。</li>
+<li><b>加难度题</b>：在 EVAL_SET 里加 2 条时效性题（如「截至2025年X事件的最新进展」）与 1 条陷阱题（问题隐含错误前提），观察幻觉率是否从 0 开始上升——体会「评估集难度决定结论强度」。</li>
+<li><b>换裁判</b>：把 JUDGE_MODEL 改为 qwen-max（若账号可用），对比同一组回答两裁判的判定是否一致——引出「裁判间一致性（judge agreement）」概念。</li>
+<li><b>进阶</b>：把裁判 prompt 的 score 改为多维输出（准确性/完整性/清晰度各 1~5 分），观察维度分解后能暴露哪些单分数掩盖的问题（如事实全对但表述混乱）。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+<li>Ragas / DeepEval 开源评估框架：faithfulness / answer_relevancy 指标的工业级实现（与本篇 judge_answer 同一思路）。</li>
+<li>LLM-as-a-Judge 论文（MT-Bench / Chatbot Arena 方法论）：裁判偏差（自我偏好、位置偏差）与缓解手段。</li>
+<li>系列内参照：<a href="02_用户意图识别与入口解析.html">02_用户意图识别与入口解析.html</a>（_clean_json 三步清洗的原始推导）、<a href="09_Test工具调用正确率测试框架.html">09_Test工具调用正确率测试框架.html</a>（指标纯函数与 self-test 分层模式）。</li>
+</ul>
+
+<div class="footer">
+—— char13-11 完 ｜ 上一节：<a href="10_Test多用户并发测试与系统压测.html">10_Test多用户并发测试与系统压测</a> ｜ 下一篇：（待续）——
+</div>
+
+</body>
+</html>

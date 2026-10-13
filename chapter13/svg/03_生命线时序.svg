@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="770" viewBox="0 0 1000 770" font-family="Microsoft YaHei">
+  <rect width="1000" height="770" fill="#0f172a"/>
+  <text x="500" y="40" fill="#22d3ee" font-size="24" font-weight="bold" text-anchor="middle">char13 生命线时序 · 一次用户请求的完整旅程</text>
+  <text x="500" y="64" fill="#94a3b8" font-size="13" text-anchor="middle">入口清洗 → 主控调度 → 工具/知识执行 → 主备回退 → 终答留痕 → 测试层观测</text>
+
+  <!-- 泳道头 -->
+  <rect x="30" y="84" width="130" height="34" rx="6" fill="#164e63" stroke="#22d3ee"/>
+  <text x="95" y="106" fill="#e2e8f0" font-size="13" text-anchor="middle">用户</text>
+  <rect x="185" y="84" width="130" height="34" rx="6" fill="#164e63" stroke="#22d3ee"/>
+  <text x="250" y="106" fill="#e2e8f0" font-size="13" text-anchor="middle">02 意图入口</text>
+  <rect x="345" y="84" width="150" height="34" rx="6" fill="#164e63" stroke="#22d3ee"/>
+  <text x="420" y="106" fill="#e2e8f0" font-size="13" text-anchor="middle">08 AgentCore 主控</text>
+  <rect x="525" y="84" width="120" height="34" rx="6" fill="#164e63" stroke="#22d3ee"/>
+  <text x="585" y="106" fill="#e2e8f0" font-size="13" text-anchor="middle">03 工具链</text>
+  <rect x="675" y="84" width="120" height="34" rx="6" fill="#164e63" stroke="#22d3ee"/>
+  <text x="735" y="106" fill="#e2e8f0" font-size="13" text-anchor="middle">05 RAG</text>
+  <rect x="825" y="84" width="150" height="34" rx="6" fill="#78350f" stroke="#fbbf24"/>
+  <text x="900" y="106" fill="#e2e8f0" font-size="13" text-anchor="middle">dashscope 模型网关</text>
+
+  <!-- 生命线 -->
+  <line x1="95" y1="118" x2="95" y2="640" stroke="#475569" stroke-dasharray="4 4"/>
+  <line x1="250" y1="118" x2="250" y2="640" stroke="#475569" stroke-dasharray="4 4"/>
+  <line x1="420" y1="118" x2="420" y2="640" stroke="#22d3ee" stroke-dasharray="4 4"/>
+  <line x1="585" y1="118" x2="585" y2="640" stroke="#475569" stroke-dasharray="4 4"/>
+  <line x1="735" y1="118" x2="735" y2="640" stroke="#475569" stroke-dasharray="4 4"/>
+  <line x1="900" y1="118" x2="900" y2="640" stroke="#fbbf24" stroke-dasharray="4 4"/>
+
+  <!-- 1. 用户 -> 意图 -->
+  <line x1="95" y1="146" x2="250" y2="146" stroke="#22d3ee" marker-end="url(#a1)"/>
+  <text x="172" y="140" fill="#e2e8f0" font-size="12" text-anchor="middle">1. 提问（自然语言）</text>
+
+  <!-- 2. 意图自环清洗 -->
+  <path d="M250 168 C 300 168 300 200 250 200" fill="none" stroke="#22d3ee" marker-end="url(#a1)"/>
+  <text x="312" y="188" fill="#94a3b8" font-size="11">2. 三步安全清洗 + 白名单校验</text>
+
+  <!-- 3. 意图 -> 主控 -->
+  <line x1="250" y1="224" x2="420" y2="224" stroke="#22d3ee" marker-end="url(#a1)"/>
+  <text x="335" y="218" fill="#e2e8f0" font-size="12" text-anchor="middle">3. 结构化意图</text>
+
+  <!-- 4. 主控 -> dashscope -->
+  <line x1="420" y1="252" x2="900" y2="252" stroke="#fbbf24" marker-end="url(#a2)"/>
+  <text x="660" y="246" fill="#e2e8f0" font-size="12" text-anchor="middle">4. LLM 调用（primary → 失败则 backup，每轮受保护）</text>
+
+  <!-- 5. dashscope -> 主控 tool_calls -->
+  <line x1="900" y1="284" x2="420" y2="284" stroke="#fbbf24" marker-end="url(#a2)"/>
+  <text x="660" y="278" fill="#e2e8f0" font-size="12" text-anchor="middle">5. 返回 tool_calls（工具决策）</text>
+
+  <!-- 6. 主控 -> 工具 -->
+  <line x1="420" y1="316" x2="585" y2="316" stroke="#22d3ee" marker-end="url(#a1)"/>
+  <text x="502" y="310" fill="#e2e8f0" font-size="12" text-anchor="middle">6. execute_tool 执行</text>
+
+  <!-- 7. 工具自环异常回填 -->
+  <path d="M585 338 C 630 338 630 370 585 370" fill="none" stroke="#f87171" marker-end="url(#a3)"/>
+  <text x="640" y="358" fill="#f87171" font-size="11">7. 异常 → 结构化回填「错误是数据」</text>
+
+  <!-- 8. 工具 -> 主控 -->
+  <line x1="585" y1="396" x2="420" y2="396" stroke="#22d3ee" marker-end="url(#a1)"/>
+  <text x="502" y="390" fill="#e2e8f0" font-size="12" text-anchor="middle">8. 工具结果（role=tool 回填）</text>
+
+  <!-- 9. 主控 -> RAG（可选支路） -->
+  <line x1="420" y1="424" x2="735" y2="424" stroke="#22d3ee" stroke-dasharray="6 3" marker-end="url(#a1)"/>
+  <text x="577" y="418" fill="#94a3b8" font-size="12" text-anchor="middle">9. 知识类意图 → 向量检索（可选支路，cache.json 命中零计费）</text>
+
+  <!-- 10. RAG -> 主控 -->
+  <line x1="735" y1="452" x2="420" y2="452" stroke="#22d3ee" stroke-dasharray="6 3" marker-end="url(#a1)"/>
+  <text x="577" y="446" fill="#94a3b8" font-size="12" text-anchor="middle">10. 检索片段</text>
+
+  <!-- 11. 主控 -> dashscope 终答 -->
+  <line x1="420" y1="482" x2="900" y2="482" stroke="#fbbf24" marker-end="url(#a2)"/>
+  <text x="660" y="476" fill="#e2e8f0" font-size="12" text-anchor="middle">11. 携带工具/知识结果再生成（终答轮）</text>
+
+  <!-- 12. 主控自环写记忆 -->
+  <path d="M420 504 C 370 504 370 536 420 536" fill="none" stroke="#22d3ee" marker-end="url(#a1)"/>
+  <text x="290" y="524" fill="#94a3b8" font-size="11">12. 终答写入多轮记忆 + steps 留痕</text>
+
+  <!-- 13. 主控 -> 用户 -->
+  <line x1="420" y1="562" x2="95" y2="562" stroke="#22d3ee" marker-end="url(#a1)"/>
+  <text x="258" y="556" fill="#e2e8f0" font-size="12" text-anchor="middle">13. 终答 {"success", "reply", "steps"}</text>
+
+  <!-- 测试层观测框 -->
+  <rect x="160" y="600" width="700" height="52" rx="8" fill="#312e81" stroke="#818cf8" stroke-dasharray="6 3"/>
+  <text x="510" y="622" fill="#818cf8" font-size="12" font-weight="bold" text-anchor="middle">测试层横切观测（消费 steps / metrics 契约）</text>
+  <text x="510" y="642" fill="#c7d2fe" font-size="11" text-anchor="middle">09 校验工具调用契约 ｜ 10 并发压测验证会话隔离与 P95 ｜ 11 LLM-as-a-Judge 评估回答事实一致性</text>
+
+  <text x="500" y="690" fill="#64748b" font-size="12" text-anchor="middle">关键不变式：模型级失败在调用层回退（4/11 步）；工具异常回填不炸链路（6-8 步）；每次落盘可观测（12 步）</text>
+  <text x="500" y="714" fill="#475569" font-size="11" text-anchor="middle">协议链路备选：知识类意图可经 06 MCP 路由到 tools/call；跨 Agent 协作经 07 A2A message/send（时序同构）</text>
+
+  <defs>
+    <marker id="a1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#22d3ee"/>
+    </marker>
+    <marker id="a2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#fbbf24"/>
+    </marker>
+    <marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#f87171"/>
+    </marker>
+  </defs>
+</svg>

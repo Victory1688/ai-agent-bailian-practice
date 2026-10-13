@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>例13-2 用户意图识别与入口解析 —— 讲解文档</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; color: #1e293b; line-height: 1.75; }
+  h1 { color: #0f172a; border-bottom: 3px solid #22d3ee; padding-bottom: 10px; font-size: 26px; }
+  h2 { color: #0f172a; border-left: 5px solid #22d3ee; padding-left: 12px; margin-top: 40px; font-size: 21px; }
+  h3 { color: #334155; margin-top: 26px; font-size: 17px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px 18px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  code { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-size: 90%; }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { border: 1px solid #cbd5e1; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f1f5f9; }
+  .highlight { background: #ecfeff; border-left: 5px solid #22d3ee; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .warn { background: #fef2f2; border-left: 5px solid #ef4444; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .ok { background: #f0fdf4; border-left: 5px solid #22c55e; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .flow { background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; padding: 14px 18px; margin: 14px 0; text-align: center; font-size: 14px; }
+  .flow b { color: #0e7490; }
+  .tag { display: inline-block; background: #164e63; color: #fff; border-radius: 4px; padding: 1px 8px; font-size: 12px; margin-right: 6px; }
+  .small { font-size: 13px; color: #64748b; }
+</style>
+</head>
+<body>
+
+<h1>例13-2 用户意图识别与入口解析（char13-02）</h1>
+<p class="small">第13章 项目案例：从零实现一个复合智能体系统 ｜ 改写基准：dashscope 原生协议 ｜ 状态：已实测验证（5 项 self-test 全部通过）</p>
+
+<p>本篇是复合智能体系统的<b>入口闸门</b>：用户一句话进来，系统要先判断"用户想干什么"（查询 / 执行 / 对话 / 工具调用），抽取关键参数（城市、脚本名……），再交给下游调度。教材把这一步写成了一段 <code>eval(LLM输出)</code>——恰恰是整个项目里最危险的一行代码。本篇讲解围绕三个问题展开：<b>为什么 eval 是安全洞、安全解析怎么做、意图识别的"兜底链"如何保证永不崩溃</b>。</p>
+
+<h2>一、教材原版问题</h2>
+<table>
+  <tr><th style="width:60px">编号</th><th style="width:220px">问题</th><th>后果</th></tr>
+  <tr><td>①</td><td>虚构类 + 过时 import<br><code>Qwen2Chat / DeepSeekChat</code><br><code>from langchain.schema import ...</code></td><td>同例 13-1：类在 LangChain 社区库中不存在，import 直接 ImportError，教材代码一行都跑不起来</td></tr>
+  <tr><td>②</td><td><b><code>eval(response.content)</code> 执行 LLM 输出</b></td><td>本篇最严重问题。LLM 输出的是"外部数据"，eval 却把它当 Python 代码执行——提示注入可以让模型输出任意语句，<code>__import__('os').system(...)</code> 会被原样运行。把"解析"写成了"远程代码执行"</td></tr>
+  <tr><td>③</td><td>eval 的实用性也是假的</td><td>LLM 输出常带 <code>```json</code> 围栏和前后说明文字，eval 直接语法错误 → 主备模型全部失败 → 教材 5 条查询实际全输出"未知"（第 7 节的"预期输出"跑不出来）</td></tr>
+  <tr><td>④</td><td>JSON 与 Python 字面量不等价</td><td><code>true/false/null</code> vs <code>True/False/None</code>、单引号 vs 双引号——eval 能"吞掉"这些差异，但代价是第 ② 条的安全洞</td></tr>
+  <tr><td>⑤</td><td>解析结果零校验</td><td>intent 拼错、parameters 不是字典，坏数据直接透传给下游调度，在整条链路里传播</td></tr>
+  <tr><td>⑥</td><td>兜底用 print、traceback 外泄</td><td>失败原因不可追踪；堆栈原样返回给调用方属于信息泄露（同 13-01）</td></tr>
+  <tr><td>⑦</td><td>无 self-test</td><td>解析器正确性全靠肉眼，围栏清洗这类边界场景根本覆盖不到</td></tr>
+</table>
+
+<div class="warn"><b>核心安全洞一句话：</b>LLM 输出 = 不可信的外部输入。<code>eval()</code> 把字符串当代码执行，等于把系统控制权交给一个可能被提示注入操纵的远端模型。<b>数据永远不能当代码执行</b>——这是本篇改写的第一原则。</div>
+
+<h2>二、改写后总览：一条安全的意图识别流水线</h2>
+<div class="flow">
+  用户请求 → <b>INTENT_TEMPLATE</b>（强化输出约束）<br>
+  → <b>ModelInvoker</b>（主模型 qwen-plus → 失败则备用 qwen-turbo）<br>
+  → <b>extract_json</b>（三步安全清洗，绝不执行）<br>
+  → <b>validate_intent</b>（白名单 + 类型校验，坏数据归"未知"）<br>
+  → <b>IntentParser.parse</b>（兜底链：主模型 → 备用模型 → 结构化"未知"）<br>
+  → 下游调度拿到的一定是 <code>{"intent", "domain", "parameters"}</code> 合法结构
+</div>
+<p>改写保留教材的全部业务语义：意图四分类、parameters 键值抽取、主备双模型、失败归"未知"。变化全部集中在<b>安全性</b>（eval → json.loads）与<b>健壮性</b>（校验 + 日志 + self-test）上。</p>
+
+<h2>三、核心组件 1：extract_json —— 三步安全清洗</h2>
+<p>这是替代 eval 的关键函数。思路不是"想办法让 eval 跑通"，而是彻底换路线：<b>把 JSON 从文本里"定位"出来，再用严格解析器读</b>。</p>
+<pre><code>def extract_json(text: str):
+    if not text:
+        return None
+    cleaned = text.strip()
+    # 第一步：剥 ```json ... ``` 围栏（LLM 最常见的输出习惯）
+    fence = re.search(r"```(?:json)?\s*(.*?)```", cleaned, re.S)
+    if fence:
+        cleaned = fence.group(1).strip()
+    # 第二步：定位首个 { 并做括号配对（容忍 JSON 前后的说明文字）
+    start = cleaned.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    for i in range(start, len(cleaned)):
+        if cleaned[i] == "{":
+            depth += 1
+        elif cleaned[i] == "}":
+            depth -= 1
+            if depth == 0:
+                # 第三步：json.loads 严格解析——数据就是数据，永远不当代码执行
+                try:
+                    return json.loads(cleaned[start:i + 1])
+                except json.JSONDecodeError:
+                    return None
+    return None</code></pre>
+<table>
+  <tr><th>步骤</th><th>处理</th><th>对抗的真实场景</th></tr>
+  <tr><td>1 剥围栏</td><td>正则提取 <code>```json ... ```</code> 内部内容</td><td>模型无视指令，习惯性用 markdown 围栏包裹输出</td></tr>
+  <tr><td>2 括号配对</td><td>从首个 <code>{</code> 起，按深度计数找到配对 <code>}</code></td><td>"好的，结果如下：{...} 请查收" 这类前后噪声</td></tr>
+  <tr><td>3 严格解析</td><td><code>json.loads</code>，失败返回 None</td><td>单引号、<code>True/None</code> 等非 JSON 写法一律拒绝（这正是安全性的来源）</td></tr>
+</table>
+<div class="highlight"><b>为什么第三步"严格"反而更安全：</b>eval 宽松，所以 Python 代码能混进去执行；json.loads 严格，函数调用、<code>__import__</code> 之类的字面量根本解析不合法，最多返回 None。宽松性就是攻击面。<b>任何失败都返回 None</b>，由上层走兜底——解析器本身永不抛异常穿透。</div>
+
+<h2>四、核心组件 2：validate_intent —— 坏数据止步于此</h2>
+<p>解析成功不等于数据合法。模型可能输出 <code>{"intent": "查寻"}</code>（错别字）、<code>{"parameters": "上海"}</code>（类型错）。校验函数做三件事：</p>
+<pre><code>def validate_intent(data) -> dict:
+    if not isinstance(data, dict):
+        return {"intent": "未知", "domain": "未知", "parameters": {}}
+    raw_intent = str(data.get("intent", ""))
+    # 白名单精确匹配 → 模糊包含归一化（容忍"天气查询"这类变体）→ 兜底"未知"
+    intent = raw_intent if raw_intent in VALID_INTENTS else "未知"
+    if intent == "未知":
+        for it in VALID_INTENTS:
+            if it != "未知" and it in raw_intent:
+                intent = it
+                break
+    domain = data.get("domain")
+    params = data.get("parameters")
+    return {
+        "intent": intent,
+        "domain": domain if isinstance(domain, str) else "未知",
+        "parameters": params if isinstance(params, dict) else {},
+    }</code></pre>
+<ul>
+  <li><b>白名单精确匹配</b>：intent 必须在 <code>VALID_INTENTS = ("查询", "执行", "对话", "工具调用", "未知")</code> 里；</li>
+  <li><b>模糊包含归一化</b>：模型输出"查询天气"这类变体时，包含"查询"即归一化，减少误杀；</li>
+  <li><b>类型校验</b>：domain 必须是字符串、parameters 必须是字典，否则给默认值——<b>坏数据在入口就被拦下，不会传播到下游调度</b>。</li>
+</ul>
+<div class="ok"><b>设计要点：</b>校验失败的归宿是"未知"而不是抛异常。"未知"是教材原有的兜底语义，结构化之后下游可以程序化判断（重试 / 转人工 / 提示用户换说法），这正是"入口解析"作为闸门的意义。</div>
+
+<h2>五、核心组件 3：ModelInvoker + IntentParser —— 主备兜底链</h2>
+<p>ModelInvoker 是例 13-1 适配器模式的内联简化版（注册表 + native/openai 双协议），本篇给它增加了一层职责：<b>调模型 → 安全解析 → schema 校验</b> 三步串成一条结构化返回。</p>
+<pre><code>def run_intent_recognition(self, user_query: str) -> dict:
+    try:
+        # 用 replace 而非 format：模板内嵌 JSON 示例的花括号会被
+        # format 误解析为占位符（KeyError: '"intent"'）——实测踩坑
+        raw = self._invoke(INTENT_TEMPLATE.replace("{query}", user_query))
+        data = extract_json(raw)
+        if data is None:
+            raise ValueError(f"模型输出不是合法 JSON: {raw[:80]}")
+        return {"success": True, "data": validate_intent(data)}
+    except Exception as e:
+        logger.warning(f"[意图] {self.model_type} 解析失败: {e}")
+        return {"success": False, "error": str(e)}</code></pre>
+<p>IntentParser 在其上组装兜底链：</p>
+<div class="flow">
+  <b>主模型 qwen-plus</b>（native 协议）→ 成功即返回<br>
+  ↓ 失败（网络 / 输出不合法）<br>
+  <b>备用模型</b>（openai 兼容协议）→ 成功即返回<br>
+  ↓ 再失败<br>
+  <b>结构化"未知"</b>：<code>{"intent": "未知", "domain": "未知", "parameters": {}}</code>
+</div>
+<ul>
+  <li><b>永不抛异常</b>：<code>parse()</code> 的返回值一定是合法结构，下游调度不需要防御性 try/except；</li>
+  <li><b>失败原因全部落日志</b>：哪个模型、什么原因失败，logging 可查（替代教材的 print）；</li>
+  <li><b>traceback 不外泄</b>：错误信息止于日志，对调用方只暴露结构化结果。</li>
+</ul>
+<div class="warn"><b>实测踩坑：str.format 的花括号陷阱。</b>改写时模板里内嵌了 JSON 示例 <code>{"intent": ...}</code>，若用 <code>INTENT_TEMPLATE.format(query=...)</code> 填充，format 会把 <code>{"intent"}</code> 当占位符解析，直接 KeyError: '"intent"'，主备模型全部失败。教材原版用的 <code>str.replace("{query}", ...)</code> 其实是对的——<b>模板含花括号字面量时必须用 replace</b>。此坑已写入代码注释。</div>
+
+<h2>六、实测验证（5 项 self-test 全部通过）</h2>
+<table>
+  <tr><th style="width:70px">Test</th><th style="width:200px">场景</th><th>结果</th></tr>
+  <tr><td>1</td><td>干净 JSON 直解</td><td><code>{"intent": "查询", "domain": "天气", ...}</code> 原样解析通过</td></tr>
+  <tr><td>2</td><td>围栏 + 前后噪声清洗</td><td>"好的，以下是识别结果：```json ...``` 请查收" → 正确提取 <code>intent=执行</code></td></tr>
+  <tr><td>3</td><td><b>恶意输出拒绝</b></td><td><code>{'intent': '查询', 'cmd': __import__('os').system('echo hacked')}</code> —— eval 会真的执行系统命令，extract_json 返回 None 拒绝；未闭合括号、空输出同样拒绝。<b>安全洞已封</b></td></tr>
+  <tr><td>4</td><td>真实 LLM 意图识别</td><td>"请帮我查一下今天上海的天气" → <code>{'intent': '查询', 'domain': '天气', 'parameters': {'location': '上海', 'date': '今天'}}</code>，参数抽取正确</td></tr>
+  <tr><td>5</td><td>教材 5 条批量识别</td><td>"执行数据库清理脚本" → <code>执行/数据库运维</code>；"陪我聊聊天" → <code>对话/闲聊</code>，语义清晰样本精确命中；模糊样本（"生成短文"）只验白名单契约，合法</td></tr>
+</table>
+<div class="highlight"><b>测试方法论：意图分类的断言策略。</b>意图类别边界天然模糊——"生成一篇短文"判"执行"或"工具调用"都说得通。测试若对所有样本都断言具体值，就会把模型合理的分类差异当 bug。<b>正确做法：语义边界清晰的样本（执行脚本、聊聊天）精确断言；模糊样本只验证契约（intent 必须落在白名单内）</b>。Test 5 正是按此策略设计的。</div>
+
+<h2>七、改写前后对照总表</h2>
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td>模型调用</td><td>虚构 Qwen2Chat / DeepSeekChat（import 即崩）</td><td>dashscope 原生 qwen-plus（native）+ qwen-turbo（openai 兼容），注册表驱动</td></tr>
+  <tr><td>输出解析</td><td><code>eval()</code> 执行 LLM 输出（远程代码执行洞）</td><td><code>extract_json</code> 三步清洗 + <code>json.loads</code> 严格解析，失败返回 None</td></tr>
+  <tr><td>结果校验</td><td>无，坏数据直通下游</td><td><code>validate_intent</code> 白名单 + 类型校验，不合法归"未知"</td></tr>
+  <tr><td>提示词</td><td>只描述格式，无强约束</td><td>强化"仅输出 JSON、双引号、无围栏"，从源头降低解析失败率</td></tr>
+  <tr><td>模板填充</td><td><code>str.replace</code>（歪打正着避开 format 坑）</td><td>保留 replace，并注释记录 format 花括号陷阱的实测证据</td></tr>
+  <tr><td>兜底链</td><td>主备模型 + "未知"，但 print 输出、堆栈外泄</td><td>同语义，logging 记录原因、结构化返回、堆栈不外泄</td></tr>
+  <tr><td>可验证性</td><td>无测试，教材"预期输出"实际跑不出</td><td>5 项 self-test 覆盖安全 / 清洗 / 识别 / 契约，实测全通过</td></tr>
+</table>
+
+<h2>八、与前后章节的衔接</h2>
+<table>
+  <tr><th>关联</th><th>说明</th></tr>
+  <tr><td>承接 例13-01 接口层</td><td>ModelInvoker 是 13-01 ModelAdapter 适配器模式的内联简化版（注册表 + 双协议 + 结构化返回）。生产中应直接 <code>from 01_先定义标准的Agent接口层和数据结构 import ModelAdapter</code> 复用，本篇内联只为单文件自包含可运行</td></tr>
+  <tr><td>复合智能体的"入口闸门"</td><td>意图识别结果 <code>{"intent", "domain", "parameters"}</code> 就是后续篇章（路由、编排、工具调度）的输入契约——validate_intent 保证的"结构永远合法"，正是下游敢于直接取值的底气</td></tr>
+  <tr><td>呼应 char12-07 安全主题</td><td>char12 的 MCP 层做的是"协议边界"防护，本篇的 extract_json 做的是"数据边界"防护：两者共同构成 LLM 应用的输入信任链——模型输出在任何位置都不被当作可信代码</td></tr>
+  <tr><td>呼应 char08 异常处理</td><td>"永不抛异常、永远返回合法结构"的兜底链设计与 08 章异常处理一脉相承，本篇将其落到意图识别场景</td></tr>
+</table>
+
+<h2>九、动手练习与延伸阅读</h2>
+<h3>练习 1：围栏变体清洗</h3>
+<p>LLM 有时输出 <code>```
+
+{"intent": "查询"}
+```</code>（围栏语言标注缺失或前后有空格），有时 JSON 数组 <code>[{...}, {...}]</code>。修改 extract_json，让它也能处理"围栏内是 JSON 数组取首个对象"的情况，并为新行为补一条 self-test。</p>
+<h3>练习 2：意图扩展</h3>
+<p>给 VALID_INTENTS 增加"翻译"类别，同步扩充 INTENT_TEMPLATE 的枚举提示，然后测试"将这段文字翻译成英文：你好世界"能否稳定归到新类别——观察白名单扩列对模糊包含匹配的影响。</p>
+<h3>练习 3：复用 13-01 适配器</h3>
+<p>把本篇 ModelInvoker 删除，改为导入例 13-01 的 ModelAdapter + get_adapter，体会"接口层复用"后本篇代码量的缩减，以及两文件注册表统一管理的必要性。</p>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li><b>OWASP LLM Top 10</b> —— Prompt Injection（LLM01）与 Insecure Output Handling（LLM05）正是本篇 eval 问题的官方归类，值得通读建立安全直觉；</li>
+  <li><b>Python json 模块文档</b> —— json.loads 的严格语法规则（双引号、true/false/null），理解"严格即安全"；</li>
+  <li><b>结构化输出实践</b> —— 生产系统中更进一步的方案是模型原生 JSON mode / function calling（百炼已支持），让"输出即合法 JSON"，本篇的清洗层可作为最后一道防线的兜底；</li>
+  <li><b>例13-01 讲解文档</b> —— 接口层三件套（Message / ConversationContext / ModelAdapter）的完整设计说明，本篇是其第一个消费方。</li>
+</ul>
+
+<p class="small">—— char13-02 完 ｜ 上一节：例13-01 Agent 接口层 ｜ 下一篇：例13-03（待续）——</p>
+</body>
+</html>

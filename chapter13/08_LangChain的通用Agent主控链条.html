@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char13-08 LangChain 的通用 Agent 主控链条 · 改写讲解</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; line-height: 1.75; color: #1e293b; }
+  h1 { color: #0f172a; border-bottom: 3px solid #22d3ee; padding-bottom: 10px; font-size: 26px; }
+  h2 { color: #0f172a; border-left: 5px solid #22d3ee; padding-left: 12px; margin-top: 40px; font-size: 21px; }
+  h3 { color: #1e3a5f; margin-top: 28px; font-size: 17px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  code { background: #eef2f7; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #0f172a; }
+  pre code { background: transparent; padding: 0; color: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { border: 1px solid #d7e0ea; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f5f8fb; }
+  .highlight { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .warn { background: #fff7ed; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .danger { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .info { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .flow { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px 20px; margin: 14px 0; font-size: 14px; }
+  .flow div { padding: 3px 0; }
+  .arrow { color: #0284c7; font-weight: bold; }
+  .tag { display: inline-block; background: #22d3ee; color: #0f172a; font-size: 12px; font-weight: bold; padding: 1px 8px; border-radius: 10px; margin-right: 6px; }
+  .footer { margin-top: 50px; padding-top: 16px; border-top: 2px solid #e2e8f0; color: #64748b; text-align: center; font-size: 13px; }
+  .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 20px; font-size: 14px; }
+  .toc a { color: #0f172a; text-decoration: none; }
+  .toc a:hover { color: #0284c7; }
+</style>
+</head>
+<body>
+
+<h1>【例13-8】LangChain 的通用 Agent 主控链条 —— 改写讲解</h1>
+<p><span class="tag">章节</span>第13章 项目案例：从零实现一个复合智能体系统（主控总集篇）
+&nbsp;&nbsp;<span class="tag">改写日期</span>2026-10-13
+&nbsp;&nbsp;<span class="tag">状态</span>已实测验证通过（5 项 self-test）</p>
+
+<div class="info">
+<b>一句话定位：</b>这是全章的「主控总集篇」——把 13-03 的工具调用循环、13-04 的任务调度思想、13-05 的多轮记忆、
+主备模型回退整合成一个<b>通用的 Agent 主控链条</b>：用户说一句话，主控自动决定「要不要调工具、调哪个工具、
+带着工具结果继续思考还是直接回答」，并对模型级故障做真实生效的主备回退。
+</div>
+
+<div class="toc">
+<b>目录</b>：
+<a href="#s1">一、教材原版问题诊断</a> ｜
+<a href="#s2">二、改写后总览</a> ｜
+<a href="#s3">三、核心组件详解（1）工具层</a> ｜
+<a href="#s4">四、核心组件详解（2）主控与回退</a> ｜
+<a href="#s5">五、核心组件详解（3）run 主循环</a> ｜
+<a href="#s6">六、实测验证结果</a> ｜
+<a href="#s7">七、改写前后对照总表</a> ｜
+<a href="#s8">八、与前后章节的衔接</a> ｜
+<a href="#s9">九、动手练习与延伸阅读</a>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s1">一、教材原版问题诊断</h2>
+
+<p>教材原代码声称实现了「Qwen3.0 + DeepSeek + 多工具 + 记忆链 + 异常回退」，但逐行核查后发现八个问题（原代码已全部注释保留在 py 文件头部，编号对应）：</p>
+
+<table>
+<tr><th style="width:6%">编号</th><th style="width:26%">问题</th><th>后果与辨析</th></tr>
+<tr><td>①</td><td>标题写 Qwen3.0，代码却是 Qwen/Qwen1.5-7B-Chat</td><td>标题与内容不符，教材叙述性错误（13-01 同款）。</td></tr>
+<tr><td>②</td><td><code>Qwen2Chat</code> / <code>DeepSeekChat</code> 虚构类</td><td><code>langchain_community.chat_models</code> 里不存在这两个类，<code>langchain.schema</code> 也是过时 import——<b>原代码 import 阶段就崩，从未真正跑通过</b>。</td></tr>
+<tr><td>③</td><td><code>Tool.from_function</code> 双重包装</td><td><code>@tool</code> 装饰器已经返回 StructuredTool 实例，再包一层 <code>Tool.from_function(...)</code> 是重复包装（13-03 同款教材通病），参数 schema 丢失。</td></tr>
+<tr><td>④</td><td>legacy 全线废弃</td><td><code>initialize_agent</code> / <code>AgentType.OPENAI_FUNCTIONS</code> / <code>AgentExecutor</code> / <code>ConversationBufferMemory</code> 均为 LangChain legacy API，1.x 已移除，官方推荐 LangGraph 或原生 function calling。</td></tr>
+<tr><td>⑤</td><td><b>【最严重】回退形同虚设</b></td><td><code>initialize_agent(llm=self.model.qwen, ...)</code> 把<b>裸 qwen 实例</b>交给 executor——AgentExecutor 内部调模型根本不经过 <code>ModelWithFallback.invoke</code>，注释自曝「切换在外部处理」但外部什么都没实现。<b>回退代码写了等于没写</b>；全败时还返回「系统暂时无法响应」字符串混流，调用方无法程序化区分成功与失败。</td></tr>
+<tr><td>⑥</td><td>「月球」用例异常炸穿</td><td>工具 <code>raise ValueError</code> 且未配置 handle_tool_error → 异常炸穿 executor → 进 except 返回「调用失败，请稍后重试」。<b>教材的预期输出实际跑不出来</b>；正确做法是把工具错误作为数据回填给模型（13-03 已确立的双层语义）。</td></tr>
+<tr><td>⑦</td><td><code>traceback.format_exc()</code> print 外泄</td><td>完整堆栈直接打到用户界面，既泄露内部实现又不专业（13-01 同款）。</td></tr>
+<tr><td>⑧</td><td>无 self-test</td><td>零验证，问题①到⑦全部无人发现。</td></tr>
+</table>
+
+<div class="danger">
+<b>本篇核心教学点——「假回退」：</b>教材把回退写在一个类（ModelWithFallback）里，却把另一个裸实例（self.model.qwen）交给执行框架。
+两段代码各写各的，<b>回退逻辑与真正的模型调用路径完全脱节</b>。这是工程上最常见的「自欺式防御」：
+防御代码存在 ≠ 防御生效。判断标准只有一条——<b>回退必须包在每一轮真实的模型调用外面</b>。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2">二、改写后总览</h2>
+
+<p>改写思路：彻底摆脱 legacy LangChain，用 dashscope 原生 function calling 手写一个<b>最小工具循环</b>（13-03 已验证的模式），
+把「主控」三件套做实——<b>回退内嵌调用层、工具错误回填、原生 messages 记忆</b>。</p>
+
+<h3>整体执行流程</h3>
+<div class="flow">
+<div>用户输入 <span class="arrow">──→</span> <b>记忆注入</b>（self.history + 本轮 user 消息）</div>
+<div>&nbsp;&nbsp;<span class="arrow">──→</span> <b>LLM 调用</b>（_chat_with_fallback：primary → 失败则 backup，每轮循环都受保护）</div>
+<div>&nbsp;&nbsp;<span class="arrow">──→</span> 分支判断：</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;├─ 无 tool_calls <span class="arrow">──→</span> <b>终答</b>：user 原话 + assistant 终答写入记忆，返回 {"success", "reply", "steps"}</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;└─ 有 tool_calls <span class="arrow">──→</span> assistant 消息原样回传 + 逐个<b>执行工具</b>（execute_tool 捕获一切异常）</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">──→</span> 工具结果以 role=tool <b>回填</b>给同一模型 <span class="arrow">──→</span> 回到 LLM 调用（最多 MAX_TOOL_ROUNDS=5 轮）</div>
+<div>任何模型级故障兜底：全败 <span class="arrow">──→</span> 返回 {"success": False, "error"}（结构化，不混流）</div>
+</div>
+
+<h3>文件结构（改写后）</h3>
+<table>
+<tr><th style="width:28%">部分</th><th>职责</th></tr>
+<tr><td>常量区</td><td>MAX_TOKENS / MAX_TOOL_ROUNDS / MODEL_REGISTRY（主备槽位）/ TOOLS_SPEC（dashscope 规范格式）</td></tr>
+<tr><td>组件 1：工具层</td><td>get_temperature / multiply（教材逻辑原样）+ TOOL_IMPLS 注册表 + execute_tool（错误结构化回填）</td></tr>
+<tr><td>组件 2：AgentCore</td><td>_extract_tool_calls（兼容两种形态）/ _invoke（单模型调用）/ _chat_with_fallback（主备回退）/ run（主控循环）</td></tr>
+<tr><td>self-test</td><td>5 项测试：工具单测 / 温度链路 / 乘法与多轮记忆 / 月球错误回填 / 主备回退实测</td></tr>
+<tr><td>run_demo</td><td>手动体验入口（--demo 参数进入，教材同款 4 条输入）</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s3">三、核心组件详解（1）工具层</h2>
+
+<h3>3.1 TOOLS_SPEC：dashscope 原生 function calling 格式</h3>
+
+<p>这是<b>本次改写实测中发现的最有价值的坑</b>（详见第六节）。dashscope 原生 Generation API 的 tools 参数要求
+<b>外层 {"type": "function", "function": {...}} 包装</b>，与 OpenAI 风格的裸 function 列表不同：</p>
+
+<pre><code>TOOLS_SPEC = [
+    {"type": "function", "function": {
+        "name": "get_temperature",
+        # 描述刻意强化"必须调用"指引：避免模型对"月球天气"直接拒答不调工具
+        "description": "查询指定城市的天气情况与当前温度。"
+                       "涉及任何城市、地点的天气或温度问题时，必须调用本工具获取，"
+                       "不要凭记忆回答；未收录的城市会由工具返回错误。",
+        "parameters": {"type": "object",
+                       "properties": {"city": {"type": "string", "description": "城市名称"}},
+                       "required": ["city"]}}},
+    {"type": "function", "function": {
+        "name": "multiply",
+        "description": "将两个数字相乘",
+        "parameters": {"type": "object",
+                       "properties": {"a": {"type": "string", "description": "数字a"},
+                                      "b": {"type": "string", "description": "数字b"}},
+                       "required": ["a", "b"]}}},
+]</code></pre>
+
+<div class="danger">
+<b>静默失败警告：</b>实测传 OpenAI 风格的裸 function 列表（<code>[{"name": ..., "parameters": ...}]</code>，无外层包装）
+时 dashscope <b>不报任何错误</b>，但模型完全看不到工具定义，只能凭先验知识自造工具名（实测自造了不存在的
+<code>get_weather</code>）。这与「LangGraph State 用裸 dict 导致字段静默裁剪」是同一家族的坑——
+<b>接口不报错 + 行为诡异 = 优先怀疑数据格式不合协议</b>。
+</div>
+
+<h3>3.2 工具实现与注册表</h3>
+
+<p>两个工具的<b>教材业务逻辑原样保留</b>，只修两处：裸 <code>except</code> 收敛为 <code>except Exception</code>（不再吞 KeyboardInterrupt）；
+用 <code>TOOL_IMPLS</code> 字典注册表替代 <code>Tool.from_function</code> 双重包装：</p>
+
+<pre><code>def get_temperature(city: str) -> str:
+    """根据城市名称获取当前温度（模拟）——教材原逻辑：月球抛错"""
+    if city.lower() == "月球":
+        raise ValueError("未找到对应城市")
+    return f"{city}当前温度为26°C"
+
+def multiply(a: str, b: str) -> str:
+    """将两个数字相乘——教材原逻辑（裸 except 收敛为 except Exception）"""
+    try:
+        return str(float(a) * float(b))
+    except Exception:
+        return "输入格式不正确，请输入数字"
+
+TOOL_IMPLS = {
+    "get_temperature": get_temperature,
+    "multiply": multiply,
+}
+
+def execute_tool(name: str, arguments: dict) -> str:
+    """执行工具并结构化回填错误（13-03 确立：错误是数据，链路不断）"""
+    if name not in TOOL_IMPLS:
+        return f"工具执行失败：未知工具 {name}"
+    try:
+        return str(TOOL_IMPLS[name](**arguments))
+    except Exception as e:
+        return f"工具执行失败：{e}"</code></pre>
+
+<div class="highlight">
+<b>错误回填语义（双层失败模型，13-03 确立）：</b>
+<ul>
+<li><b>工具级失败</b>（如月球未收录）：execute_tool 捕获后返回「工具执行失败：未找到对应城市」<b>文本</b>，
+以 role=tool 消息回填给同一个模型——<b>错误是数据，链路不断</b>，模型收到后会自行生成致歉说明；</li>
+<li><b>模型级失败</b>（网络/限流/坏模型名）：才触发主备回退（下一节的 _chat_with_fallback）。</li>
+</ul>
+两类失败走两条通道，互不误伤。
+</div>
+
+<h3>3.3 _extract_tool_calls：兼容两种实测形态</h3>
+
+<pre><code>def _extract_tool_calls(message) -> list:
+    """提取模型响应中的工具调用（13-03 实测兼容两种形态）"""
+    calls = getattr(message, "tool_calls", None)
+    if not calls:
+        return []
+    out = []
+    for tc in calls:
+        if isinstance(tc, dict):
+            out.append(tc)
+        else:
+            out.append({"id": tc.id, "type": "function",
+                        "function": {"name": tc.function.name,
+                                     "arguments": tc.function.arguments}})
+    return out</code></pre>
+
+<p>实测细节：模型<b>未调工具</b>时，返回的 message 对象<b>没有 tool_calls 属性</b>（用 getattr 兜住而非直接访问）；
+<b>调了工具</b>时，元素可能是 dict 或对象两种形态——统一化成 <code>[{"id", "type", "function": {"name", "arguments"}}]</code>，
+主循环无需再分支判断。</p>
+
+<!-- ============================================================ -->
+<h2 id="s4">四、核心组件详解（2）主控与回退</h2>
+
+<h3>4.1 模型注册表：主备槽位</h3>
+
+<pre><code>MODEL_REGISTRY = {
+    "primary": {"model": "qwen-plus"},
+    "backup": {"model": "qwen-turbo"},
+}</code></pre>
+
+<p>延续 13-04/13-05 的注册表模式。注：实测当前百炼账号未开通 DeepSeek 托管（deepseek-* 模型名返回 404），
+备用槽位用 qwen-turbo 演示回退语义。</p>
+
+<h3>4.2 _chat_with_fallback：回退内嵌在调用层（修复假回退）</h3>
+
+<pre><code>def _chat_with_fallback(self, messages: list):
+    """主备回退执行一轮 LLM 调用（回退在调用层真实生效）"""
+    last_err = None
+    for slot in ("primary", "backup"):
+        self.attempted_slots.append(slot)          # 留痕：供 self-test 验证回退真实发生
+        try:
+            model = MODEL_REGISTRY[slot]["model"]
+            logger.info(f"[模型] 使用 {slot}({model})")
+            msg = self._invoke(model, messages)
+            return msg.content, _extract_tool_calls(msg)
+        except Exception as e:
+            last_err = e
+            logger.warning(f"[回退] {slot} 模型级失败: {e}")
+    raise RuntimeError(f"所有模型均执行失败，最后错误：{last_err}") from last_err</code></pre>
+
+<div class="highlight">
+<b>对比教材假回退，关键差异有三：</b>
+<ol>
+<li><b>位置对了</b>：回退循环包在「每一轮真实的模型调用」外面——工具循环有几轮 LLM 调用，回退就保护几轮；
+教材的回退写在与 executor 无关的另一个类里，executor 持有裸实例，永远走不到回退分支；</li>
+<li><b>留痕了</b>：attempted_slots 记录每次槽位尝试，self-test 可以断言「回退确实发生」而不是靠肉眼 print；</li>
+<li><b>失败语义对了</b>：全败抛 RuntimeError 并用 <code>raise ... from last_err</code> 保留异常链（13-04 确立），
+由 run 转成结构化的 {"success": False}——不再返回「系统暂时无法响应」错误字符串混流。</li>
+</ol>
+</div>
+
+<h3>4.3 attempted_slots 的多轮语义（测试断言的坑）</h3>
+
+<p>工具循环中<b>每一轮 LLM 调用都会独立走一遍主备流程</b>。例如「查询北京温度」实际包含 2 轮 LLM 调用
+（第 1 轮决定调工具、第 2 轮拿到工具结果生成终答），每轮各产生一条记录，所以一次 run 可能留下
+<code>["primary", "primary"]</code> 这样的序列。<b>断言时不能只看首元素或长度</b>——回退场景用「分对校验」：
+<code>zip(slots[::2], slots[1::2])</code> 切成 (primary, backup) 对逐对验证（见第六节 Test 5）。</p>
+
+<!-- ============================================================ -->
+<h2 id="s5">五、核心组件详解（3）run 主循环</h2>
+
+<pre><code>def run(self, input_text: str) -> dict:
+    """主控入口：记忆注入 → 工具循环（含错误回填）→ 终答写记忆"""
+    steps: list = []
+    self.attempted_slots = []
+    try:
+        # 多轮记忆注入（13-05 同款：历史 + 本轮 user 消息）
+        messages = self.history + [{"role": "user", "content": input_text}]
+        for round_no in range(1, MAX_TOOL_ROUNDS + 1):
+            content, tool_calls = self._chat_with_fallback(messages)
+            if not tool_calls:
+                # 终答：本轮 user 与 assistant 终答写入记忆
+                self.history.append({"role": "user", "content": input_text})
+                self.history.append({"role": "assistant", "content": content})
+                return {"success": True, "reply": content, "steps": steps}
+            # 工具轮：assistant 消息（含 tool_calls）原样回传，再逐个回填结果
+            messages.append({"role": "assistant", "content": content,
+                             "tool_calls": tool_calls})
+            for tc in tool_calls:
+                name = tc["function"]["name"]
+                try:
+                    args = json.loads(tc["function"]["arguments"] or "{}")
+                except json.JSONDecodeError:
+                    args = {}
+                result = execute_tool(name, args)
+                steps.append({"round": round_no, "tool": name,
+                              "args": args, "result": result[:120]})
+                messages.append({"role": "tool", "tool_call_id": tc["id"],
+                                 "content": result})
+        return {"success": False, "steps": steps,
+                "error": f"超过最大工具轮次（{MAX_TOOL_ROUNDS}）"}
+    except Exception as e:
+        return {"success": False, "steps": steps, "error": str(e)}</code></pre>
+
+<h3>五个设计点</h3>
+<table>
+<tr><th style="width:22%">设计点</th><th>说明</th></tr>
+<tr><td>多轮记忆</td><td>self.history 存「user 原话 + assistant 终答」两组消息，每轮 run 拼在 messages 前部注入——替代废弃的 ConversationBufferMemory（13-05 同款模式）。实测「再帮我乘一下12和13」的「再」字能正确接续上一轮的 7×8。</td></tr>
+<tr><td>协议消息顺序</td><td>function calling 的规范要求：assistant 消息（含 tool_calls）必须<b>原样回传</b>，随后逐个以 role=tool、tool_call_id 对应回填结果——顺序错了接口直接报错。</td></tr>
+<tr><td>参数解析防御</td><td>模型生成的 arguments 是 JSON 字符串，用 json.loads 解析并兜住 JSONDecodeError（空参给 {}），避免脏参数直接炸循环。</td></tr>
+<tr><td>轮次上限</td><td>MAX_TOOL_ROUNDS=5 防模型陷入「调工具 → 回填 → 再调工具」的无限循环（13-03 同款），超限返回结构化失败。</td></tr>
+<tr><td>可观测性 steps</td><td>每次工具调用记录 {round, tool, args, result截断120}——替代教材 verbose=True 的布尔开关：<b>调用方拿到的是结构化轨迹数据，而不是一屏 print 日志</b>。</td></tr>
+</table>
+
+<div class="warn">
+<b>关于「教材标题写 LangChain，改写后不用 LangChain」的说明：</b>本例的教学意图是「主控链条」的<b>机制</b>——
+工具循环、回退、记忆、可观测性。教材用的 initialize_agent/AgentExecutor 在 LangChain 1.x 已全部移除，
+官方推荐路线是 LangGraph 或原生 function calling。本改写选择 dashscope 原生 function calling 手写最小循环：
+一是与全章「dashscope 统一」的硬约束一致，二是让新人能看清主控的每一步 mechanics（框架封装后恰恰看不见）。
+记忆部分如需框架级方案，参考 char08-04 的 ConversationBufferWindowMemory（非 legacy 版本）。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s6">六、实测验证结果</h2>
+
+<p>运行环境：<code>d:/MyCode/.venv</code>，模型 qwen-plus（主）/ qwen-turbo（备）。<b>5 项 self-test 全部通过</b>：</p>
+
+<table>
+<tr><th style="width:8%">用例</th><th style="width:30%">场景</th><th>实测结果</th></tr>
+<tr><td>Test 1</td><td>工具单测与错误回填</td><td>北京 →「北京当前温度为26°C」；7×8 → 56.0（<code>str(float*float)</code> 结果带小数点，<b>教材原样保留</b>，断言按数值比较）；月球异常 →「工具执行失败：未找到对应城市」被回填；未知工具被拦截。</td></tr>
+<tr><td>Test 2</td><td>温度查询真实链路</td><td>模型真实调用 <code>get_temperature({'city': '北京'})</code> → 终答含 26；steps 留痕；<code>set(attempted_slots) == {"primary"}</code>——2 轮 LLM 调用全部命中主模型未触发回退。</td></tr>
+<tr><td>Test 3</td><td>乘法与多轮记忆</td><td>第一轮 7×8=56；第二轮同一实例问「<b>再</b>帮我乘一下12和13」→ 156。「再」字接续证明记忆真实生效（教材的 ConversationBufferMemory 版本 import 即崩，从未验证过这一点）。</td></tr>
+<tr><td>Test 4</td><td>月球场景（错误回填）</td><td>本次运行走<b>路径B</b>：模型用自身知识直答「月球没有大气层」。LLM 行为非确定：可能调工具走路径A（错误回填后致歉），也可能直答——<b>两种均为合理行为</b>，测试只验契约（success=True 且有回复）；回填机制本身由 Test 1 的 execute_tool 单测确定性覆盖。</td></tr>
+<tr><td>Test 5</td><td>主备回退实测</td><td>向 primary 注入坏模型名 → <b>循环内每轮 LLM 调用均 primary失败→backup接管</b>（共 2 轮回退对），分对断言 <code>zip(slots[::2], slots[1::2]) == ("primary","backup")</code> 全过，终答 7×8=56 正确——<b>回退真实生效（对比教材假回退）</b>。</td></tr>
+</table>
+
+<div class="info">
+<b>Test 4 的测试方法论沉淀：</b>LLM 是否调工具属于<b>非确定行为</b>，测试不应锁定某条路径，而应<b>分路径验契约</b>：
+路径A（调工具 → 错误回填 → 致歉）与路径B（模型直答）都算通过。确定性契约（错误回填的格式）交给 Test 1 的纯函数单测覆盖。
+这是本系列「13-02 确立」以来沿用的策略。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s7">七、改写前后对照总表</h2>
+
+<table>
+<tr><th style="width:16%">维度</th><th style="width:40%">教材原版</th><th>改写后</th></tr>
+<tr><td>Agent 构建</td><td>initialize_agent + AgentType.OPENAI_FUNCTIONS（legacy 全线废弃）</td><td>dashscope 原生 function calling 手写最小工具循环</td></tr>
+<tr><td>工具注册</td><td>@tool 再套 Tool.from_function（双重包装）</td><td>TOOL_IMPLS 字典注册表 + TOOLS_SPEC 规范 schema（dashscope 外层包装格式）</td></tr>
+<tr><td>模型</td><td>Qwen2Chat / DeepSeekChat 虚构类，import 即崩</td><td>MODEL_REGISTRY 主备槽位：qwen-plus / qwen-turbo（实测可用）</td></tr>
+<tr><td><b>回退</b></td><td><b>假回退</b>：executor 持有裸 qwen 实例，回退代码与执行路径脱节；全败返回错误字符串混流</td><td><b>真回退</b>：_chat_with_fallback 内嵌调用层，每轮 LLM 调用受保护；attempted_slots 留痕；全败返回结构化 {"success": False}</td></tr>
+<tr><td>工具错误</td><td>月球场景异常炸穿 executor →「调用失败，请稍后重试」，教材预期输出跑不出来</td><td>execute_tool 捕获一切异常，错误文本回填给模型（错误是数据，链路不断）</td></tr>
+<tr><td>记忆</td><td>ConversationBufferMemory（已废弃）</td><td>self.history 原生 messages 注入（user 原话 + assistant 终答）</td></tr>
+<tr><td>可观测性</td><td>verbose=True 布尔开关 + traceback print 外泄</td><td>run 返回 {"success", "reply", "steps"} 结构化轨迹 + logging 分级输出</td></tr>
+<tr><td>self-test</td><td>无</td><td>5 项：工具单测 / 温度链路 / 多轮记忆 / 错误回填 / 主备回退实测</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s8">八、与前后章节的衔接</h2>
+
+<table>
+<tr><th style="width:28%">关联篇章</th><th>衔接点</th></tr>
+<tr><td>13-03 工具调用链与异常回退</td><td><b>同源关系</b>：本篇的 execute_tool / _extract_tool_calls / 双层失败语义 / MAX_TOOL_ROUNDS 全部复用 13-03 已验证模式。13-03 讲「工具链」本身，本篇讲「主控」如何把工具链、记忆、回退整合成通用 Agent。</td></tr>
+<tr><td>13-02 意图识别入口</td><td>全章链路起点：意图识别（02）→ 工具链（03）→ 调度（04）→ RAG（05）→ MCP（06）→ A2A（07）→ <b>主控总集（08）</b>。本篇的 run() 就是前面所有能力的「总指挥」形态。</td></tr>
+<tr><td>13-05 RAG 检索问答</td><td>history 注入模式同款：多轮记忆用「原生 messages 拼 history」而非框架 Memory 类。</td></tr>
+<tr><td>13-04 子状态管理与任务调度</td><td>注册表模式同源（MODEL_REGISTRY / TOOL_IMPLS vs TASK_REGISTRY）；<code>raise ... from last_err</code> 异常链保留。</td></tr>
+<tr><td>char12-06 模型限流回退</td><td>主备回退的最初出处：限流触发回退 → 本篇扩展为「任何模型级故障」回退，且内嵌到调用层修复假回退。</td></tr>
+<tr><td>char08-04 记忆窗口</td><td>ConversationBufferMemory 的正确打开方式（窗口截断经 load_memory_variables 获取）——如需框架级记忆方案参考该篇；本篇为摆脱 legacy 采用原生实现。</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s9">九、动手练习与延伸阅读</h2>
+
+<h3>动手练习（由浅入深）</h3>
+<ol>
+<li><b>热身</b>：给 get_temperature 增加城市-温度映射表（如上海 28°C、广州 30°C），观察模型对多城市问题是否拆成多次工具调用。</li>
+<li><b>观察协议</b>：在 run 主循环里加一行 <code>print(json.dumps(messages[-1], ensure_ascii=False))</code>，完整观察 function calling 的消息顺序（user → assistant+tool_calls → tool → assistant 终答）。</li>
+<li><b>改回退</b>：把 backup 槽位临时改成不存在的模型名，观察全败时 run 返回的结构化失败（对照教材「系统暂时无法响应」字符串混流）。</li>
+<li><b>扩展记忆</b>：给 self.history 加窗口截断（保留最近 k 组对话），对比 char08-04 的窗口记忆语义。</li>
+<li><b>进阶</b>：把 steps 轨迹导出为 JSON 文件，作为后续 13-09+ 章节多智能体协同的「执行日志」数据源。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+<li>dashscope 原生 function calling 文档：tools 参数的 <code>{"type": "function", "function": {...}}</code> 规范格式（本篇实测的核心坑）。</li>
+<li>LangChain 1.x 迁移指南：initialize_agent / AgentExecutor / ConversationBufferMemory 的官方替代方案。</li>
+<li>系列内参照：<a href="03_工具调用链与异常回退机制.html">03_工具调用链与异常回退机制.html</a>（工具循环与双层失败语义的完整推导）。</li>
+</ul>
+
+<div class="footer">
+—— char13-08 完 ｜ 上一节：<a href="07_A2A消息协议的模块注入.html">07_A2A消息协议的模块注入</a> ｜ 下一篇：（待续）——
+</div>
+
+</body>
+</html>

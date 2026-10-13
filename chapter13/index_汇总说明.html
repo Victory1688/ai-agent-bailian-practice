@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>char13 章节汇总 · 从零实现一个复合智能体系统</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 1000px; margin: 0 auto; padding: 24px; line-height: 1.75; color: #1e293b; }
+  h1 { color: #0f172a; border-bottom: 3px solid #22d3ee; padding-bottom: 10px; font-size: 26px; }
+  h2 { color: #0f172a; border-left: 5px solid #22d3ee; padding-left: 12px; margin-top: 40px; font-size: 21px; }
+  h3 { color: #1e3a5f; margin-top: 28px; font-size: 17px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  code { background: #eef2f7; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #0f172a; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { border: 1px solid #d7e0ea; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f5f8fb; }
+  .highlight { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .warn { background: #fff7ed; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .info { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .svg-card { display: flex; flex-wrap: wrap; gap: 14px; margin: 16px 0; }
+  .svg-item { flex: 1 1 45%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; }
+  .svg-item a { color: #0f172a; font-weight: bold; text-decoration: none; }
+  .svg-item a:hover { color: #0284c7; }
+  .svg-item p { margin: 6px 0 0; font-size: 13px; color: #64748b; }
+  .tag { display: inline-block; background: #22d3ee; color: #0f172a; font-size: 12px; font-weight: bold; padding: 1px 8px; border-radius: 10px; margin-right: 6px; }
+  .footer { margin-top: 50px; padding-top: 16px; border-top: 2px solid #e2e8f0; color: #64748b; text-align: center; font-size: 13px; }
+  .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 20px; font-size: 14px; }
+  .toc a { color: #0f172a; text-decoration: none; }
+  .toc a:hover { color: #0284c7; }
+  .phase { font-weight: bold; }
+  .p1 { color: #0891b2; } .p2 { color: #b45309; } .p3 { color: #4f46e5; }
+</style>
+</head>
+<body>
+
+<h1>char13 章节汇总说明 · 从零实现一个复合智能体系统</h1>
+<p><span class="tag">章节</span>第13章 项目案例（11 篇示例，01-11 全部完成生产级改写）
+&nbsp;&nbsp;<span class="tag">适用对象</span>新人开发者
+&nbsp;&nbsp;<span class="tag">汇总日期</span>2026-10-13</p>
+
+<!-- SVG 架构图速查（惯例位置：meta 之后） -->
+<div class="svg-card">
+  <div class="svg-item">
+    <a href="svg/01_分层总图.svg">SVG-1 分层总图</a>
+    <p>入口层 → 主控层 → 能力层 → 协议层 → 模型层的完整分层架构 + 01 接口地基纵贯 + 测试层横切。先看这张建立全局感。</p>
+  </div>
+  <div class="svg-item">
+    <a href="svg/02_演进线全景.svg">SVG-2 演进线全景</a>
+    <p>11 篇的构建顺序与每篇角色：先地基，再能力，再协议，总控整合，最后三步质量闭环。</p>
+  </div>
+  <div class="svg-item">
+    <a href="svg/03_生命线时序.svg">SVG-3 生命线时序</a>
+    <p>一次用户请求的完整旅程：意图清洗 → 主控调度 → 工具/知识执行 → 主备回退 → 终答留痕 → 测试观测。</p>
+  </div>
+  <div class="svg-item">
+    <a href="svg/04_不变式规律.svg">SVG-4 不变式规律</a>
+    <p>贯穿 11 篇的六条横切红线：dashscope 统一 / LLM 输出不执行 / 结构化契约 / 注册表 / 可观测 / self-test。</p>
+  </div>
+</div>
+
+<div class="toc">
+<b>目录</b>：
+<a href="#s1">一、这 11 个 py 文件想表达什么</a> ｜
+<a href="#s2">二、11 篇清单与角色地图</a> ｜
+<a href="#s3">三、三条架构主线</a> ｜
+<a href="#s4">四、贯穿全章的不变式</a> ｜
+<a href="#s5">五、教材通病与改写范式</a> ｜
+<a href="#s6">六、新人学习路径建议</a> ｜
+<a href="#s7">七、资源索引</a>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s1">一、这 11 个 py 文件想表达什么</h2>
+
+<div class="info">
+<b>一句话回答：</b>这 11 篇代码<b>合起来是一个可以真实运行的复合智能体系统</b>——从 AI 大模型开发架构的角度看，
+它们完整覆盖了「<b>接口层 → 入口层 → 能力层 → 协议层 → 主控层 → 测试层</b>」六层骨架，
+每篇补齐一块拼图；同时每篇都经历「教材简化版 → 生产级改写 → 5 项 self-test 实测通过」的完整工程化过程，
+因此它们同时表达了两件事：<b>一个智能体系统长什么样</b>，以及<b>把玩具代码变成生产代码要修哪些东西</b>。
+</div>
+
+<p>从大模型开发的技术演进视角，11 篇实际上回答了智能体开发的五个核心问题：</p>
+
+<table>
+<tr><th style="width:24%">核心问题</th><th style="width:20%">对应篇章</th><th>给出的答案</th></tr>
+<tr><td>系统的骨架是什么？</td><td>01 接口层</td><td>Message（构造时白名单校验）/ ConversationContext / ModelAdapter（适配器注册表 + 池化复用）——统一数据结构是所有后续篇章的地基</td></tr>
+<tr><td>模型如何安全地接入？</td><td>01 / 02 / 03 / 11</td><td>dashscope 统一网关屏蔽协议差异；LLM 输出永远当数据（三步 JSON 清洗 / AST 白名单求值），不当代码执行</td></tr>
+<tr><td>模型如何使用工具与知识？</td><td>03 / 05 / 06</td><td>dashscope 原生 function calling 最小工具循环；RAG 向量检索（cache.json 缓存零重复计费）；真实 MCP 2025-06-18 规范的工具总线</td></tr>
+<tr><td>多个 Agent 如何协作？</td><td>04 / 06 / 07 / 08</td><td>状态机白名单的任务调度；真实 A2A（Google 2025）规范的 AgentCard 能力发现与 Task 生命周期；主控链条整合一切</td></tr>
+<tr><td>如何证明系统可靠？</td><td>09 / 10 / 11</td><td>能力可信（工具调用三项指标）→ 负载可靠（P95/QPS/串话检测）→ 内容可信（LLM-as-a-Judge 幻觉率）——三步质量闭环</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s2">二、11 篇清单与角色地图</h2>
+
+<table>
+<tr><th style="width:6%">篇号</th><th style="width:24%">文件</th><th style="width:14%">系统角色</th><th style="width:30%">核心改写要点</th><th>新人应掌握的技能</th></tr>
+<tr><td class="phase p1">01</td><td>先定义标准的Agent接口层和数据结构</td><td>接口层地基</td><td>Message 构造时校验（fail fast）；适配器注册表 + 池化复用（不再每轮重建模型）</td><td>数据结构先行 / 适配器模式 / 注册表驱动</td></tr>
+<tr><td class="phase p1">02</td><td>用户意图识别与入口解析</td><td>系统大门</td><td>替换 eval(LLM输出) 为三步安全清洗；意图白名单 + 兜底链；修复 str.format 花括号坑</td><td>LLM 输出安全处理 / 意图路由 / 兜底设计</td></tr>
+<tr><td class="phase p1">03</td><td>工具调用链与异常回退机制</td><td>系统双手</td><td>safe_eval AST 白名单替代 eval；dashscope 原生 function calling；确立双层失败语义</td><td>function calling 循环 / 错误回填 / 主备回退</td></tr>
+<tr><td class="phase p1">04</td><td>子状态管理与任务调度</td><td>系统秩序</td><td>STATUS_TRANSITIONS 状态机白名单；TASK_REGISTRY 单一注册表消灭 if/elif；raise...from 异常链</td><td>状态机设计 / 注册表模式 / 异常链保留</td></tr>
+<tr><td class="phase p1">05</td><td>RAG检索问答子系统</td><td>系统知识</td><td>DashScopeEmbeddings（2025 端点）；cache.json 向量缓存（实测零二次计费）；纯 Python 余弦检索</td><td>向量化 / 语义检索 / 缓存成本控制</td></tr>
+<tr><td class="phase p2">06</td><td>MCP协议的上下文路由器</td><td>工具总线</td><td>按真实 MCP 2025-06-18 重构：JSON-RPC 2.0 + initialize 握手 + tools 原语 + 标准错误码；修复意图劫持 bug</td><td>MCP 真实规范 / 协议错误码 / 路由表化</td></tr>
+<tr><td class="phase p2">07</td><td>A2A消息协议的模块注入</td><td>跨 Agent 标准</td><td>按真实 A2A（Google 2025）重构：AgentCard 自描述 + message/send + Task 生命周期 + skill 能力发现</td><td>A2A 真实规范 / 能力发现 / 任务生命周期</td></tr>
+<tr><td class="phase p2">08</td><td>LangChain的通用Agent主控链条</td><td>系统大脑（总集）</td><td>摆脱 legacy 全家桶；主备回退内嵌调用层（修复教材假回退）；工具错误回填；多轮记忆 + steps 可观测</td><td>主控循环设计 / 回退真实生效 / 可观测留痕</td></tr>
+<tr><td class="phase p3">09</td><td>Test工具调用正确率测试框架</td><td>能力测试</td><td>从 steps 轨迹结构化比对（修复教材「工具名匹配回复文本」永远 0%）；三项指标独立可测</td><td>测试框架设计 / 指标纯函数化 / 轨迹消费</td></tr>
+<tr><td class="phase p3">10</td><td>Test多用户并发测试与系统压测</td><td>负载测试</td><td>每请求独立会话（修复共享实例串话）；串话检测；P50/P95/QPS/错误率；可复现 seed</td><td>并发模型 / 分位数指标 / LLM 压测差异</td></tr>
+<tr><td class="phase p3">11</td><td>Test模型幻觉率与用户满意度评估</td><td>质量测试</td><td>LLM-as-a-Judge 替代 difflib 字符相似度（实测教材算法双向失灵）；裁判输出三步清洗；满意度内容化</td><td>LLM-as-a-Judge / 评估口径设计 / None≠False</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s3">三条架构主线</h2>
+
+<h3>主线一：实现层的分层构建（01 → 08）</h3>
+<div class="info">
+01 接口地基（数据结构）→ 02 入口（安全）→ 03 能力（工具）→ 04 秩序（状态）→ 05 知识（RAG）→
+06/07 协议（MCP/A2A 真实标准）→ 08 总控（把 03 的工具循环、05 的知识、01 的结构整合成 AgentCore）。
+<b>阅读顺序必须自底向上</b>：08 的一切机制（工具循环、回退、记忆、steps）都在 03/04/05 里先以最小形态出现过。
+</div>
+
+<h3>主线二：协议标准的「借壳 → 真规范」（06 / 07）</h3>
+<div class="warn">
+教材的「MCPMessage」「A2AMessage」只是给自造结构起了行业协议的名字（借壳），与真实协议毫无关系。
+改写按<b>真实 MCP 2025-06-18</b>（JSON-RPC 2.0 信封 + initialize 生命周期 + tools 原语）与
+<b>真实 A2A Google 2025</b>（AgentCard + message/send + Task 生命周期）重构，并在每篇文档中给出
+「教材简化版 vs 真实规范」的维度对照——<b>新人必须知道：叫 MCP 的代码不一定是 MCP</b>。
+</div>
+
+<h3>主线三：测试层的三步质量闭环（09 → 10 → 11）</h3>
+<div class="highlight">
+09 测<b>能力</b>（工具调对了吗——消费 08 的 steps 轨迹）→ 10 测<b>负载</b>（并发下稳不稳、会话隔离吗）→
+11 测<b>内容</b>（回答符合事实吗——LLM-as-a-Judge）。三者构成「功能正确 → 能力可信 → 负载可靠 → 内容可信」的完整质量链，
+且 09/10/11 全部消费 08 建立的结构化契约——<b>可观测性设计是测试框架的前提</b>。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s4">四、贯穿全章的不变式</h2>
+
+<p>以下六条在 11 篇中全部成立（详见 <a href="svg/04_不变式规律.svg">SVG-4 不变式规律</a>），是本章真正的「架构资产」：</p>
+
+<table>
+<tr><th style="width:6%">#</th><th style="width:26%">不变式</th><th>内容与依据</th></tr>
+<tr><td>1</td><td>dashscope 统一调用</td><td>Generation.call + result_format="message"，全章零 LangChain 中转；tools 参数必须 {"type":"function","function":{...}} 外层包装（裸列表被静默忽略——实测教训）</td></tr>
+<tr><td>2</td><td>LLM 输出永不执行</td><td>三步 JSON 清洗（02/11）+ AST 白名单 safe_eval（03）；LLM 输出永远是数据不是代码</td></tr>
+<tr><td>3</td><td>错误与状态都是数据</td><td>双层失败语义（工具错误回填 / 模型级回退）；布尔 success；None≠False；杜绝 "[ERROR]" 字符串混流</td></tr>
+<tr><td>4</td><td>注册表消灭 if/elif</td><td>MODEL_REGISTRY / TOOL_IMPLS / TASK_REGISTRY / INTENT_ROUTES / STATUS_TRANSITIONS——新增能力 = 注册一行，不改控制流</td></tr>
+<tr><td>5</td><td>可观测性内建</td><td>run 返回 {"success","reply","steps"}；attempted_slots 回退留痕；metrics 结构化——verbose 布尔开关出局</td></tr>
+<tr><td>6</td><td>self-test 分层验证</td><td>确定性单测 + 真实链路冒烟 + LLM 非确定行为分路径验契约；11 篇 × 5 项全部实测通过</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s5">五、教材通病与改写范式</h2>
+
+<p>11 篇教材原代码呈现出高度一致的通病模式，识别它们本身就是重要的学习内容：</p>
+
+<table>
+<tr><th style="width:24%">教材通病</th><th style="width:14%">出现篇目</th><th>改写范式</th></tr>
+<tr><td>虚构类 + 过时 import（Qwen2Chat / DeepSeekChat / langchain.schema）</td><td>全部 11 篇（import 即崩）</td><td>dashscope 原生协议统一替换</td></tr>
+<tr><td>legacy 全家桶（initialize_agent / AgentExecutor / Tool.from_function 双重包装）</td><td>03 / 08 / 09 / 10</td><td>手写最小工具循环（看得见 mechanics）</td></tr>
+<tr><td>协议借壳（MCP / A2A 徒有其名）</td><td>06 / 07</td><td>按真实官方规范重构 + 对照表辨析</td></tr>
+<tr><td>错误字符串混流（"[ERROR] ..." 返回值）</td><td>02 / 03 / 08 / 09 / 10 / 11</td><td>结构化契约（布尔 success / None 语义 / 字段化错误）</td></tr>
+<tr><td>回退形同虚设（裸实例传 executor，回退代码与执行路径脱节）</td><td>08 / 10 教材版</td><td>回退内嵌在每一轮模型调用层 + attempted_slots 留痕验证</td></tr>
+<tr><td>测试逻辑本身是坏的（用内部工具名匹配自然语言回复；用字符相似度冒充事实校验；用随机数冒充用户评分）</td><td>09 / 11</td><td>结构化轨迹比对 + LLM-as-a-Judge + 实测对照证明教材算法方向相反</td></tr>
+<tr><td>无 self-test + import 即执行</td><td>全部 11 篇</td><td>5 项 self-test + main 入口保护（--demo 演示）</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s6">六、新人学习路径建议</h2>
+
+<h3>第一周：读懂骨架（按依赖顺序，不按编号跳读）</h3>
+<ol>
+<li>先看 <a href="svg/01_分层总图.svg">SVG-1 分层总图</a> 与 <a href="svg/02_演进线全景.svg">SVG-2 演进线</a> 建立全局；</li>
+<li>读 01（数据结构）→ 03（工具循环与双层失败语义，全章最核心的机制篇）→ 08（主控如何整合）；</li>
+<li>每篇先读 py 文件头部注释（教材问题清单 + 改写说明），再读代码，最后跑一遍看 self-test 输出。</li>
+</ol>
+
+<h3>第二周：横向扫描不变式与协议</h3>
+<ol>
+<li>对照 <a href="svg/04_不变式规律.svg">SVG-4</a>，在 11 篇里各找出不变式的代码落点（如 TOOL_IMPLS 在 03/08、_clean_json 在 02/11）；</li>
+<li>精读 06/07 的「教材简化版 vs 真实规范」对照——理解 MCP 与 A2A 的真实分工：MCP 管「Agent 接工具」，A2A 管「Agent 接 Agent」；</li>
+<li>读 05 理解 RAG 三段流水线与 cache.json 缓存的成本意义。</li>
+</ol>
+
+<h3>第三周：测试视角与动手改造</h3>
+<ol>
+<li>从 09/10/11 反过来看 08：为什么 steps / 结构化契约是测试的前提；</li>
+<li>动手练习：给 03 加一个新工具并注册（体验注册表扩展）、给 09 加测试用例、复现 10 练习 2 的并发串话；</li>
+<li>每篇 HTML 讲解文档末尾都有「动手练习」区，按由浅入深完成。</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="s7">七、资源索引</h2>
+
+<h3>架构图（SVG，独立文件可直接浏览器打开）</h3>
+<ul>
+<li><a href="svg/01_分层总图.svg">svg/01_分层总图.svg</a> —— 六层骨架 + 测试横切</li>
+<li><a href="svg/02_演进线全景.svg">svg/02_演进线全景.svg</a> —— 11 篇构建顺序与角色</li>
+<li><a href="svg/03_生命线时序.svg">svg/03_生命线时序.svg</a> —— 一次请求的完整时序</li>
+<li><a href="svg/04_不变式规律.svg">svg/04_不变式规律.svg</a> —— 六条横切红线</li>
+</ul>
+
+<h3>架构文档（Mermaid 源）</h3>
+<ul>
+<li><a href="arch_汇总说明.md">arch_汇总说明.md</a> —— 含 Mermaid 关联图（分层图 / 演进图 / 时序图 / 质量闭环图）</li>
+</ul>
+
+<h3>11 篇讲解文档（HTML）</h3>
+<ul>
+<li><a href="01_先定义标准的Agent接口层和数据结构.html">01_先定义标准的Agent接口层和数据结构.html</a></li>
+<li><a href="02_用户意图识别与入口解析.html">02_用户意图识别与入口解析.html</a></li>
+<li><a href="03_工具调用链与异常回退机制.html">03_工具调用链与异常回退机制.html</a></li>
+<li><a href="04_子状态管理与任务调度.html">04_子状态管理与任务调度.html</a></li>
+<li><a href="05_RAG检索问答子系统.html">05_RAG检索问答子系统.html</a></li>
+<li><a href="06_MCP协议的上下文路由器.html">06_MCP协议的上下文路由器.html</a></li>
+<li><a href="07_A2A消息协议的模块注入.html">07_A2A消息协议的模块注入.html</a></li>
+<li><a href="08_LangChain的通用Agent主控链条.html">08_LangChain的通用Agent主控链条.html</a></li>
+<li><a href="09_Test工具调用正确率测试框架.html">09_Test工具调用正确率测试框架.html</a></li>
+<li><a href="10_Test多用户并发测试与系统压测.html">10_Test多用户并发测试与系统压测.html</a></li>
+<li><a href="11_Test模型幻觉率与用户满意度评估.html">11_Test模型幻觉率与用户满意度评估.html</a></li>
+</ul>
+
+<h3>运行说明</h3>
+<pre><code># 环境：d:/MyCode/.venv（需设置环境变量 DASHSCOPE_API_KEY）
+# 每篇默认跑 5 项 self-test；加 --demo 进入手动体验/演示模式
+d:/MyCode/.venv/Scripts/python.exe "08_LangChain的通用Agent主控链条.py"
+d:/MyCode/.venv/Scripts/python.exe "10_Test多用户并发测试与系统压测.py" --demo</code></pre>
+
+<div class="footer">
+—— char13 章节汇总完 ｜ 11 篇示例 · 4 张 SVG · 双格式架构文档 ｜ 新人从 svg/01_分层总图.svg 开始 ——
+</div>
+
+</body>
+</html>

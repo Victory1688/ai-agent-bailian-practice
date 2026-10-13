@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>例 13-1 讲解：先定义标准的 Agent 接口层和数据结构</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:40px auto;padding:0 24px;line-height:1.8;color:#222;background:#fafafa}
+h1{color:#0f172a;border-bottom:3px solid #22d3ee;padding-bottom:10px;font-size:26px}
+h2{color:#0e7490;margin-top:48px;border-left:4px solid #22d3ee;padding-left:12px;font-size:20px}
+h3{color:#334155;margin-top:28px;font-size:17px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Consolas,monospace;color:#7c3aed}
+pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre .c{color:#94a3b8}pre .cm{color:#67e8f9}pre .k{color:#f472b6}pre .s{color:#86efac}pre .r{color:#fbbf24}pre .e{color:#fca5a5}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;font-size:14px}
+th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left}
+th{background:#0f172a;color:#fff;font-weight:600}
+tr:nth-child(even){background:#f8fafc}
+.highlight{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.warn{background:#fee2e2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.ok{background:#dcfce7;border-left:4px solid #22c55e;padding:12px 16px;margin:20px 0;border-radius:0 8px 8px 0}
+.flow{background:#fff;border:1px solid #22d3ee;border-radius:8px;padding:16px;margin:16px 0;font-family:Consolas,monospace;font-size:13px;color:#0e7490;line-height:2}
+</style>
+</head>
+<body>
+
+<h1>例 13-1 讲解：先定义标准的 Agent 接口层和数据结构</h1>
+
+<div class="highlight">
+  <strong>本节核心目标：给整个第 13 章打地基。</strong>char13 要"从零实现一个复合智能体系统"，而复合系统的第一课不是写功能，是<strong>定契约</strong>——消息长什么样、上下文怎么流转、模型怎么换。本篇定义三个组件：<code>Message</code>（最小消息单元）、<code>ConversationContext</code>（上下文容器）、<code>ModelAdapter</code>（模型适配器），让上层代码只依赖 <code>call(context)</code> 一个接口，底层 qwen 原生协议还是 OpenAI 兼容协议随意切换——这就是<strong>适配器模式 + 依赖倒置</strong>在 Agent 系统里的落地。
+</div>
+
+<!-- ========== Section 1 ========== -->
+<h2>一、教材原版问题</h2>
+
+<table>
+  <tr><th>#</th><th>问题</th><th>说明</th></tr>
+  <tr><td>1</td><td><code>Qwen2Chat</code> / <code>DeepSeekChat</code></td><td>LangChain 社区库虚构类——import 直接 ImportError（char12 已多次验证不存在）</td></tr>
+  <tr><td>2</td><td><code>from langchain.schema import ...</code></td><td>import 路径已迁移（新版在 <code>langchain_core.messages</code>）；且本项目统一 dashscope 原生协议，无需 LangChain 中转</td></tr>
+  <tr><td>3</td><td>本地 GPU 模型</td><td><code>Qwen1.5-7B-Chat</code> / <code>deepseek-llm-chat</code> 非云端托管格式，"无 API Key 可运行"是假的</td></tr>
+  <tr><td>4</td><td>每轮 new 适配器</td><td><code>ModelAdapter(model_type=...)</code> 构造即"加载模型"——每轮对话重复构造（char12-05 踩过的同款坑）</td></tr>
+  <tr><td>5</td><td>校验延迟</td><td>非法 role 先入列、到 <code>to_langchain()</code> 才报错——违反 fail fast，坏数据已污染上下文</td></tr>
+  <tr><td>6</td><td>堆栈外泄</td><td><code>traceback.format_exc()</code> 原样放进返回值——生产环境等于把服务器 internals 送给调用方</td></tr>
+  <tr><td>7</td><td>无 self-test</td><td>接口层契约是否可靠全靠肉眼</td></tr>
+</table>
+
+<!-- ========== Section 2 ========== -->
+<h2>二、三层数据流总览：接口层的契约设计</h2>
+
+<div class="flow">
+  业务层（后续篇章的工具调用 / 编排 / 复合 Agent）
+      │  只依赖 call(context) 契约，不知道底层是什么模型
+      ▼
+  ConversationContext（上下文容器）
+      │  add_message() 追加 · as_dict() 导出原生格式
+      ▼
+  ModelAdapter（适配器，注册表驱动）
+      │  protocol = native ──▶ dashscope.Generation.call（qwen-plus）
+      │  protocol = openai ──▶ OpenAI SDK + compatible-mode（qwen-turbo / deepseek-v3）
+      ▼
+  结构化返回 {"success", "model", "response"} / {"success", "error"}
+</div>
+
+<h3>为什么"先定义接口"是复合智能体的第一步？</h3>
+<p>复合系统 = 多个 Agent + 多个模型 + 多种工具协作。如果每个组件各自调模型，协议差异（消息格式、返回结构、错误类型）会渗透到每个角落；一旦要换模型，等于全项目重写。接口层的价值：<strong>协议差异被压扁在 ModelAdapter 一层里</strong>，上层只看见统一的 <code>call(context) → {"success", "response"}</code> 契约。char13 后续篇章的工具路由、多 Agent 协作都建立在这份契约上。</p>
+
+<!-- ========== Section 3 ========== -->
+<h2>三、核心组件 1：Message（fail fast 的最小消息单元）</h2>
+
+<pre><code><span class="k">class</span> <span class="k">Message</span>:
+    <span class="s">"""标准消息单元：role 白名单校验 + 序列化"""</span>
+
+    <span class="k">def</span> __init__(self, role: str, content: str):
+        <span class="k">if</span> role <span class="k">not in</span> VALID_ROLES:               <span class="c"># ← 构造时即校验（fail fast）</span>
+            <span class="k">raise</span> <span class="k">ValueError</span>(f<span class="s">"不支持的角色类型：{role}（合法值 {VALID_ROLES}）"</span>)
+        self.role = role
+        self.content = content
+
+    <span class="k">def</span> to_dict(self) -&gt; dict:
+        <span class="s">"""序列化为 dashscope 原生 messages 格式的一条"""</span>
+        <span class="k">return</span> {<span class="s">"role"</span>: self.role, <span class="s">"content"</span>: self.content}</code></pre>
+
+<div class="ok">
+  <strong>校验前置的价值：</strong>教材在 <code>to_langchain()</code> 里才校验 role——此时坏消息已经在 <code>messages</code> 列表里了，报错时机晚于污染时机，排查时看到的上下文已经不干净。改写版把校验放进构造器：<strong>不合法的消息根本无法诞生</strong>，<code>ConversationContext.messages</code> 从此恒定干净。这是"让非法状态不可表示"的经典设计。
+</div>
+
+<!-- ========== Section 4 ========== -->
+<h2>四、核心组件 2：ConversationContext（上下文容器）</h2>
+
+<pre><code><span class="k">def</span> as_dict(self) -&gt; list:
+    <span class="s">"""导出为 dashscope / OpenAI 双兼容的 messages 列表"""</span>
+    <span class="k">return</span> [msg.to_dict() <span class="k">for</span> msg <span class="k">in</span> self.messages]</code></pre>
+
+<p>教材的 <code>get_langchain_messages()</code> 需要把每条 Message 翻译成 <code>HumanMessage/AIMessage/SystemMessage</code> 三种对象——而 dashscope 原生协议与 OpenAI 兼容协议恰好<strong>共用同一份字典格式</strong> <code>{"role", "content"}</code>。所以改写版删掉了整个翻译层：一份 <code>as_dict()</code> 同时喂两种协议，适配器里不再需要任何格式转换。<strong>选对了数据格式，转换层就消失了</strong>——这本身就是一个架构决策的示范。</p>
+
+<table>
+  <tr><th>角色</th><th>语义</th><th>谁在用</th></tr>
+  <tr><td><code>system</code></td><td>设定人格与规则</td><td>业务层注入（如"你是专业 AI 助手"）</td></tr>
+  <tr><td><code>user</code></td><td>用户输入</td><td>对话入口追加</td></tr>
+  <tr><td><code>assistant</code></td><td>模型回复</td><td>调用成功后回写（下一轮的历史记忆）</td></tr>
+</table>
+
+<!-- ========== Section 5 ========== -->
+<h2>五、核心组件 3：ModelAdapter + 注册表 + 适配器池</h2>
+
+<pre><code><span class="c"># 模型注册表：类型 → (模型名, 协议)——新增模型只改这里，不动任何调用方</span>
+MODEL_REGISTRY = {
+    <span class="s">"qwen"</span>:     {<span class="s">"model"</span>: <span class="s">"qwen-plus"</span>,  <span class="s">"protocol"</span>: <span class="s">"native"</span>},
+    <span class="s">"deepseek"</span>: {<span class="s">"model"</span>: <span class="s">"qwen-turbo"</span>, <span class="s">"protocol"</span>: <span class="s">"openai"</span>},  <span class="c"># 账号未开通 DeepSeek 托管</span>
+}
+
+<span class="k">def</span> <span class="k">call</span>(self, context) -&gt; dict:
+    <span class="s">"""统一调用入口：错误止于日志，堆栈不外泄"""</span>
+    <span class="k">try</span>:
+        answer = self._invoke(context.as_dict())
+        <span class="k">return</span> {<span class="s">"success"</span>: <span class="k">True</span>, <span class="s">"model"</span>: self.model_name, <span class="s">"response"</span>: answer}
+    <span class="k">except</span> Exception <span class="k">as</span> e:
+        logger.error(f<span class="s">"[模型] {self.model_type} 调用失败: {e}"</span>)
+        <span class="k">return</span> {<span class="s">"success"</span>: <span class="k">False</span>, <span class="s">"error"</span>: str(e)}</code></pre>
+
+<h3>三个设计决策</h3>
+<table>
+  <tr><th>决策</th><th>教材做法</th><th>改写做法</th><th>理由</th></tr>
+  <tr><td>模型配置</td><td>if/elif 硬编码在 <code>_load_model</code></td><td>注册表字典驱动</td><td>新增模型 = 加一行注册，开闭原则</td></tr>
+  <tr><td>实例管理</td><td>每轮 <code>ModelAdapter(...)</code> 重新构造</td><td><code>get_adapter()</code> 池化复用</td><td>构造函数可能含重活（加载配置/建连），复用是惯例</td></tr>
+  <tr><td>错误处理</td><td><code>traceback</code> 放进返回值</td><td>堆栈只进日志，返回值只带 <code>str(e)</code></td><td>堆栈外泄 = 信息泄露</td></tr>
+</table>
+
+<div class="highlight">
+  <strong>关于 deepseek 槽位的说明：</strong>实测当前百炼账号未开通 DeepSeek 托管（<code>deepseek-*</code> 模型 404），故注册表里 deepseek 槽位暂用 <strong>qwen-turbo + OpenAI 兼容协议</strong>演示"跨模型 + 跨协议"切换——协议差异演示价值不变；若账号开通 deepseek-v3，把注册表里的 model 改回即可，<strong>其余代码零改动</strong>（这正是注册表设计的意义）。
+</div>
+
+<!-- ========== Section 6 ========== -->
+<h2>六、实测验证（5 项 self-test 全部通过）</h2>
+
+<div class="ok">
+  <strong>Test 1 - role 校验：</strong><code>Message("robot", "hi") 构造时抛 ValueError——坏消息无法诞生</code><br>
+  <strong>Test 2 - 上下文结构：</strong><code>as_dict() 输出原生格式，session_id 自动生成 uuid</code><br>
+  <strong>Test 3 - 注册表拒绝：</strong><code>ModelAdapter("gpt-5") 抛 ValueError，提示已注册类型</code><br>
+  <strong>Test 4 - qwen 真实调用：</strong><code>qwen-plus 原生协议回答注意力机制，返回值无 traceback 字段</code><br>
+  <strong>Test 5 - 跨模型共享上下文：</strong><code>qwen-turbo（OpenAI 兼容协议）回复承接"多头注意力是注..."——第二问的'它'正确指代第一问的注意力机制</code>
+</div>
+
+<h3>Test 5 的意义：上下文跨适配器共享</h3>
+<p>同一个 <code>ConversationContext</code> 先后喂给两个<strong>不同模型 + 不同协议</strong>的适配器：qwen-plus（dashscope 原生）回答第一问，qwen-turbo（OpenAI 兼容）回答第二问——第二问里的"它"被正确理解为第一问的"注意力机制"。这证明：<strong>上下文容器的数据契约足够通用，记忆在模型切换时无缝延续</strong>。char12-04 在服务端做过同样的验证（cache.json 落盘形态），本篇是它的内存形态、也是 char13 复合系统的地基。</p>
+
+<!-- ========== Section 7 ========== -->
+<h2>七、改写前后对照总表</h2>
+
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td><strong>模型接入</strong></td><td>虚构 Qwen2Chat/DeepSeekChat + 本地 GPU</td><td>注册表驱动：qwen-plus（原生）+ qwen-turbo（OpenAI 兼容），开通 DeepSeek 后一行改回</td></tr>
+  <tr><td><strong>格式转换</strong></td><td>Message → LangChain 三种对象（翻译层）</td><td>as_dict() 直出字典格式（两协议通用，翻译层消失）</td></tr>
+  <tr><td><strong>校验时机</strong></td><td>to_langchain() 时才报错</td><td>Message 构造器 fail fast</td></tr>
+  <tr><td><strong>实例管理</strong></td><td>每轮 new 适配器</td><td>get_adapter() 池化复用</td></tr>
+  <tr><td><strong>错误处理</strong></td><td>traceback 外泄给调用方</td><td>堆栈只进日志，返回值只带错误摘要</td></tr>
+  <tr><td><strong>验证</strong></td><td>无</td><td>5 项 self-test（含跨模型共享上下文的"它"指代验证）</td></tr>
+</table>
+
+<!-- ========== Section 8 ========== -->
+<h2>八、与前后章节的衔接</h2>
+
+<table>
+  <tr><th>章节</th><th>衔接</th></tr>
+  <tr><td>char12-04（多层级缓存记忆）</td><td>同样的"跨模型共享上下文"验证：12-04 是服务端 cache.json 落盘形态，本篇是内存形态的接口层地基</td></tr>
+  <tr><td>char12-05/06（容错/降级）</td><td>本篇 ModelAdapter 的结构化返回 {"success", "error"} 正是为上层做重试/切换/降级预留的判断依据</td></tr>
+  <tr><td>char13 后续篇章</td><td>复合智能体的工具调用、Agent 路由、任务编排全部构建在 <code>call(context) → dict</code> 这份契约之上——接口层越稳，上层越敢盖楼</td></tr>
+</table>
+
+<div class="flow">
+  适配器模式在 Agent 栈的位置：
+  业务编排层 ──依赖──▶ call(context) 契约 ◀──实现── ModelAdapter(qwen/native)
+                                    ◀──实现── ModelAdapter(deepseek/openai)
+                                    ◀──实现── （未来任意模型，注册即用）
+</div>
+
+<!-- ========== Section 9 ========== -->
+<h2>九、动手练习</h2>
+
+<ol>
+  <li><strong>加一个新模型</strong>：在 MODEL_REGISTRY 注册 <code>"turbo": {"model": "qwen-turbo", "protocol": "native"}</code>，验证上层代码零改动即可切换——体会注册表的开闭原则。</li>
+  <li><strong>上下文截断</strong>：给 ConversationContext 加 <code>trim(max_messages)</code> 方法，保留 system 消息 + 最近 N 条——为长对话控成本（对照 char08-05 的窗口裁剪）。</li>
+  <li><strong>落盘恢复</strong>：把 <code>as_dict()</code> 输出写入 cache.json，重启后从文件恢复 ConversationContext（char12-04 模式的本篇落地方）。</li>
+  <li><strong>令牌估算</strong>：加 <code>estimate_tokens()</code> 方法（按字符数 / 1.6 粗估），在 call 前打印本次上下文规模——建立成本意识。</li>
+  <li><strong>协议对照实验</strong>：分别用 native 与 openai 协议问同一个问题，对比两种返回结构取内容的路径差异（<code>resp.output.choices[0].message.content</code> vs <code>resp.choices[0].message.content</code>）——这就是适配器替你抹平的细节。</li>
+</ol>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li>DashScope 原生 API 与 OpenAI 兼容模式对照：<a href="https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope">阿里云百炼文档</a></li>
+  <li>适配器模式与依赖倒置原则（GoF 经典）：《设计模式：可复用面向对象软件的基础》</li>
+  <li>fail fast 与"让非法状态不可表示"：Rust / TypeScript 社区的类型驱动设计讨论</li>
+</ul>
+
+</body>
+</html>

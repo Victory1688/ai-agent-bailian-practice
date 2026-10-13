@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>例13-3 工具调用链与异常回退机制 —— 讲解文档</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; color: #1e293b; line-height: 1.75; }
+  h1 { color: #0f172a; border-bottom: 3px solid #22d3ee; padding-bottom: 10px; font-size: 26px; }
+  h2 { color: #0f172a; border-left: 5px solid #22d3ee; padding-left: 12px; margin-top: 40px; font-size: 21px; }
+  h3 { color: #334155; margin-top: 26px; font-size: 17px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px 18px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  code { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-size: 90%; }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { border: 1px solid #cbd5e1; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f1f5f9; }
+  .highlight { background: #ecfeff; border-left: 5px solid #22d3ee; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .warn { background: #fef2f2; border-left: 5px solid #ef4444; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .ok { background: #f0fdf4; border-left: 5px solid #22c55e; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .flow { background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; padding: 14px 18px; margin: 14px 0; text-align: center; font-size: 14px; }
+  .flow b { color: #0e7490; }
+  .small { font-size: 13px; color: #64748b; }
+</style>
+</head>
+<body>
+
+<h1>例13-3 工具调用链与异常回退机制（char13-03）</h1>
+<p class="small">第13章 项目案例：从零实现一个复合智能体系统 ｜ 改写基准：dashscope 原生 function calling ｜ 状态：已实测验证（6 项 self-test 全部通过）</p>
+
+<p>本篇给复合智能体装上<b>手和脚</b>：模型不再只会说话，而是能发起工具调用（查天气、算算式），系统替它执行工具、把结果喂回去，直到模型给出最终回答。同时建立<b>回退机制</b>。教材版有两条致命伤：工具内部又藏了一个 <code>eval</code>，以及把"工具查不到数据"当成"模型坏了"去触发回退——<b>本篇的题眼就是把这两层失败拆开</b>。</p>
+
+<h2>一、教材原版问题</h2>
+<table>
+  <tr><th style="width:60px">编号</th><th style="width:230px">问题</th><th>后果</th></tr>
+  <tr><td>①</td><td>标题与内容自相矛盾</td><td>标题写"Qwen3.0 + Deepseek"，代码里却是 <code>Qwen/Qwen1.5-7B-Chat</code>——教材标题不可信的又一例</td></tr>
+  <tr><td>②</td><td>虚构类 <code>Qwen2Chat / DeepSeekChat</code></td><td>同例 13-1：类不存在，import 即崩（char13-01 已实测验证）</td></tr>
+  <tr><td>③</td><td><code>initialize_agent + AgentType.OPENAI_FUNCTIONS</code></td><td>LangChain 0.3+ 已废弃的 Agent 构建方式（官方推荐 LangGraph / LCEL），教材版本实际跑不通</td></tr>
+  <tr><td>④</td><td><code>Tool.from_function(query_weather)</code> 重复包装</td><td><code>@tool</code> 装饰器已经返回 StructuredTool 实例，再 from_function 包装一次——概念错误叠错误</td></tr>
+  <tr><td>⑤</td><td><b><code>eval(expr)</code> 计算表达式</b></td><td>expr 由 LLM 决定，与例 13-2 同款远程代码执行洞，只是洞开在工具内部——LLM 说算什么就 eval 什么</td></tr>
+  <tr><td>⑥</td><td><code>except:</code> 裸吞一切</td><td>连 KeyboardInterrupt 都吞掉，且无日志，出了问题无从排查</td></tr>
+  <tr><td>⑦</td><td><b>工具级失败与模型级失败混淆</b></td><td>"未知城市" raise 后被 except 捕获 → 触发 DeepSeek 回退——查不到数据是<b>业务结果</b>不是<b>系统故障</b>，换模型重试只会得到同样的"查不到"</td></tr>
+  <tr><td>⑧</td><td>每轮 <code>initialize_agent</code> 重建 Agent</td><td>同 13-01 的重复构造坑：每次请求都重新装配一遍</td></tr>
+  <tr><td>⑨</td><td>traceback 打到 stdout、无 self-test</td><td>堆栈外泄给调用方；回退逻辑是否真的生效全靠猜</td></tr>
+</table>
+
+<h2>二、改写后总览：双层回退语义</h2>
+<p>改写最核心的设计决策是<b>把"失败"分成两类，走不同的处理路径</b>：</p>
+<table>
+  <tr><th style="width:160px">失败类型</th><th>例子</th><th>正确处理（本篇实现）</th></tr>
+  <tr><td><b>工具级失败</b><br>（业务数据问题）</td><td>未知城市查不到天气、表达式语法错误、工具名不存在</td><td>返回结构化错误 <code>{"success": false, "error": ...}</code> 以 <code>role=tool</code> 回填给<b>同一个模型</b>——错误是数据，模型可见、可向用户改述，<b>链路不中断、不回退</b></td></tr>
+  <tr><td><b>模型级失败</b><br>（系统故障）</td><td>网络超时、限流、模型名不存在（InvalidParameter）</td><td>抛异常 → 上层捕获 → <b>主备回退</b> qwen-plus → qwen-turbo → 全败返回兜底文案</td></tr>
+</table>
+<div class="flow">
+  用户请求 → <b>ToolAgentManager.run_with_tools</b><br>
+  ↓ 主模型 qwen-plus（dashscope 原生 function calling）<br>
+  模型请求工具？ → <b>execute_tool</b> 执行 → 结果（或结构化错误）回填 → 再调模型（循环 ≤ 4 轮）<br>
+  ↓ 模型给出最终回答，返回<br>
+  <b>仅当模型级失败</b> → 备用模型 qwen-turbo 重跑同一条工具链 → 全败 → 兜底文案
+</div>
+<div class="warn"><b>为什么教材的回退是错的：</b>教材里"未知城市"触发 DeepSeek 回退后，DeepSeek 调的还是同一个工具、查的还是同一个城市——结果注定还是失败。回退解决的是"<b>谁来想</b>"的问题（模型坏了换模型），解决不了"<b>数据有没有</b>"的问题。混淆两类失败，回退机制就退化成"把同一个错误再犯一遍"。</div>
+
+<h2>三、核心组件 1：safe_eval —— AST 白名单求值</h2>
+<p>工具内部的 eval 洞怎么封？不是给 eval 加过滤（黑名单永远漏），而是彻底换引擎：<b>把表达式解析成 AST 树，只允许白名单内的节点参与计算</b>。</p>
+<pre><code>_ALLOWED_BINOPS = {
+    ast.Add: operator.add, ast.Sub: operator.sub,
+    ast.Mult: operator.mul, ast.Div: operator.truediv,
+    ast.Mod: operator.mod,
+}
+_ALLOWED_UNARYOPS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+
+def _eval_node(node):
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    if isinstance(node, ast.BinOp) and type(node.op) in _ALLOWED_BINOPS:
+        return _ALLOWED_BINOPS[type(node.op)](_eval_node(node.left), _eval_node(node.right))
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _ALLOWED_UNARYOPS:
+        return _ALLOWED_UNARYOPS[type(node.op)](_eval_node(node.operand))
+    # 幂运算（ast.Pow）刻意不进白名单：9**9**9... 可在毫秒内打爆内存（DoS）
+    raise ValueError(f"表达式包含不允许的语法：{type(node).__name__}")
+
+def safe_eval(expr: str):
+    tree = ast.parse(expr, mode="eval")
+    return _eval_node(tree.body)</code></pre>
+<table>
+  <tr><th>表达式</th><th>eval（教材）</th><th>safe_eval（改写）</th></tr>
+  <tr><td><code>7 * (8 + 3)</code></td><td>77</td><td>77（Constant + BinOp 白名单内）</td></tr>
+  <tr><td><code>__import__('os').system('echo hacked')</code></td><td><b>真的执行系统命令</b></td><td>拒绝（Call 节点不在白名单）</td></tr>
+  <tr><td><code>(lambda: 1)()</code></td><td>执行并返回 1</td><td>拒绝</td></tr>
+  <tr><td><code>9 ** 9 ** 9</code></td><td>试图计算，内存爆炸（DoS）</td><td>拒绝（幂运算刻意不入白名单）</td></tr>
+</table>
+<div class="highlight"><b>设计思想：白名单 &gt; 黑名单。</b>教材式修法是正则过滤 <code>__import__</code> 等危险词——但编码变体、嵌套属性等绕法无穷无尽。AST 白名单反其道行之：<b>默认一切拒绝，只放行明确列出的语法</b>。功能上少一个幂运算符，换来的确定性是"这个引擎只能算数，干不了别的"。</div>
+
+<h2>四、核心组件 2：工具注册表 + execute_tool 统一入口</h2>
+<p>教材用 <code>@tool</code> 装饰器 + <code>Tool.from_function</code>（重复包装）。改写回归 function calling 的本质三件套：<b>真实函数、JSON Schema 声明、统一执行入口</b>。</p>
+<pre><code>def execute_tool(name: str, arguments: str) -> str:
+    if name not in TOOL_FUNCS:                      # 白名单：不在表内一律拒绝
+        return json.dumps({"success": False, "error": f"未知工具：{name}"}, ...)
+    try:
+        args = json.loads(arguments)                # 模型给的参数是 JSON 字符串
+    except json.JSONDecodeError as e:
+        return json.dumps({"success": False, "error": f"参数不是合法 JSON：{e}"}, ...)
+    try:
+        return TOOL_FUNCS[name](**args)
+    except Exception as e:
+        logger.warning(f"[工具] {name} 执行异常: {e}")
+        return json.dumps({"success": False, "error": str(e)}, ...)</code></pre>
+<ul>
+  <li><b>永不抛出</b>：任何失败都变成结构化 JSON 返回给模型——这是"工具错误是数据"原则的落地点；</li>
+  <li><b>工具名白名单</b>：模型幻觉出不存在的工具名时，返回"未知工具"错误而不是 KeyError 崩溃；</li>
+  <li><b>错误带原因</b>：执行异常进日志（logger.warning），对模型只暴露干净的错误信息。</li>
+</ul>
+<div class="ok"><b>工具函数内部的语义修正：</b>教材 query_weather 对"未知城市" raise Exception；改写后返回 <code>{"success": false, "error": "无法获取指定城市天气信息"}</code>。查询没查到是<b>正常的业务结果</b>，模型拿到后可以回答用户"该城市暂无数据"——而不是让整条链路当成故障。</div>
+
+<h2>五、核心组件 3：ToolAgentManager —— 工具循环与主备回退</h2>
+<p>不用 LangChain 废弃的 <code>initialize_agent</code>，直接用 dashscope 原生 function calling 手写最小 Agent 循环（约 25 行）：</p>
+<pre><code>def _run_tool_loop(self, input_text: str, slot: str) -> str:
+    messages = [{"role": "user", "content": input_text}]
+    for _ in range(MAX_TOOL_ROUNDS):                # 轮数上限防无限循环
+        resp = dashscope.Generation.call(
+            model=MODEL_REGISTRY[slot]["model"],
+            messages=messages, tools=TOOLS_SCHEMA,
+            max_tokens=MAX_TOKENS, result_format="message")
+        if resp.status_code != 200:
+            raise RuntimeError(f"{resp.code} {resp.message}")   # 模型级失败 → 触发回退
+        msg = resp.output.choices[0].message
+        calls = _extract_tool_calls(msg)
+        if not calls:                               # 模型不再要工具 → 最终回答
+            content = getattr(msg, "content", None)
+            return content if isinstance(content, str) else ""
+        messages.append({"role": "assistant",
+                         "content": getattr(msg, "content", "") or "",
+                         "tool_calls": getattr(msg, "tool_calls", []) or []})
+        for call in calls:
+            result = execute_tool(call["name"], call["arguments"])
+            messages.append({"role": "tool", "content": result})   # 结果回填
+    raise RuntimeError(f"工具调用轮数超过上限 {MAX_TOOL_ROUNDS}")</code></pre>
+<p>上层 <code>run_with_tools</code> 只做一件事：<b>遍历主备槽位，模型级异常时切下一个</b>，全败返回教材同款兜底文案。每次尝试都记入 <code>attempted_slots</code>——这个记录让 self-test 能断言"回退真的发生了"。</p>
+<div class="warn"><b>实测踩坑：dashscope Message 的响应形态。</b>首版代码按官方示例写 <code>msg.tool_calls</code> / <code>call.function.name</code>，实测暴露两个形态差异：<b>模型未请求工具时</b>，Message 对象上根本没有 <code>tool_calls</code> 属性（直接 AttributeError）；<b>模型请求工具时</b>，<code>tool_calls</code> 是元素为 dict 的列表而非 ToolCall 对象。因此抽出 <code>_extract_tool_calls</code> 统一兼容两种形态，assistant 消息也以原生 dict 回传（避免 SDK 对象二次序列化的不确定性）——这套兼容逻辑已写入代码注释，是"官方示例 ≠ 实际行为"的又一实证。</div>
+<div class="highlight"><b>为何统一 dashscope 原生协议：</b>例 13-1 已演示 native / openai 双协议适配，本篇主题是工具链与回退。而两种协议的 tool_calls 回填格式不同（openai 要求 tool_call_id），若再叠双协议会把代码撑爆且模糊焦点——故主备模型统一走原生协议，协议差异的复用职责交还 13-01 的 ModelAdapter（见第八节衔接）。</div>
+
+<h2>六、实测验证（6 项 self-test 全部通过）</h2>
+<table>
+  <tr><th style="width:70px">Test</th><th style="width:210px">场景</th><th>结果</th></tr>
+  <tr><td>1</td><td>safe_eval 白名单</td><td><code>7 * (8 + 3)</code> → 77；<code>-3 + 5 * 2</code> → 7；<code>__import__('os').system(...)</code> / <code>(lambda: 1)()</code> / <code>9 ** 9</code> 全部拒绝（eval 会执行前三者）</td></tr>
+  <tr><td>2</td><td>工具级错误结构化</td><td>未知城市 / 未知工具名 / 恶意表达式三条路径均返回 <code>{"success": false, "error": ...}</code>，无异常抛出</td></tr>
+  <tr><td>3</td><td>真实天气工具链</td><td>"帮我查一下北京的天气" → 模型发起 query_weather 调用 → 结果回填 → "北京当前天气：晴，气温26°C"；<code>attempted_slots == ["primary"]</code>，<b>未触发回退</b></td></tr>
+  <tr><td>4</td><td>真实计算工具链</td><td>"计算 7 * (8 + 3)" → calculate_expression（safe_eval）→ "结果是 77"，未触发回退</td></tr>
+  <tr><td>5</td><td><b>模型级回退实测</b></td><td>向注册表注入坏模型名 <code>nonexistent-model-for-test</code> → primary 报 InvalidParameter Model not exist → <b>backup(qwen-turbo) 接管</b>并成功回答；<code>attempted_slots == ["primary", "backup"]</code>，测试后注册表还原</td></tr>
+  <tr><td>6</td><td>非工具问题直答</td><td>"将这段话翻译为英文：你好" → 模型不调工具直接回答 "Hello"，验证模型不会强行用工具</td></tr>
+</table>
+<div class="ok"><b>测试方法论亮点：</b>Test 5 不是 mock——它真实注入坏模型名，让 primary 在真实 API 上失败（InvalidParameter），从而验证<b>整条回退链路</b>（异常捕获 → 槽位切换 → 备用模型接管 → 注册表还原）。配合 attempted_slots 记录，"回退机制存在"变成了"回退机制可证明"。</div>
+
+<h2>七、改写前后对照总表</h2>
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td>模型与协议</td><td>虚构 Qwen2Chat/DeepSeekChat + 废弃的 initialize_agent</td><td>dashscope 原生 function calling（qwen-plus 主 / qwen-turbo 备），手写最小工具循环</td></tr>
+  <tr><td>工具定义</td><td>@tool + Tool.from_function 重复包装</td><td>真实函数 + JSON Schema + TOOL_FUNCS 白名单注册表</td></tr>
+  <tr><td>计算引擎</td><td><code>eval(expr)</code>（LLM 决定执行什么代码）</td><td>safe_eval AST 白名单（只放行数字与 + - * / %，幂运算防 DoS 一并拒绝）</td></tr>
+  <tr><td>工具错误</td><td>raise Exception / 裸 except 吞掉</td><td>结构化 <code>{"success", "error"}</code> 回填模型，链路不中断</td></tr>
+  <tr><td>回退语义</td><td>任何异常都触发换模型（工具失败也换）</td><td><b>双层语义</b>：工具级失败回填数据；仅模型级失败触发主备回退</td></tr>
+  <tr><td>循环保护</td><td>无（依赖框架内部行为）</td><td>MAX_TOOL_ROUNDS=4 轮数上限，超限按模型级失败处理</td></tr>
+  <tr><td>可验证性</td><td>无测试，回退是否生效不可知</td><td>6 项 self-test，含注入坏模型名的真实回退实测</td></tr>
+</table>
+
+<h2>八、与前后章节的衔接</h2>
+<table>
+  <tr><th>关联</th><th>说明</th></tr>
+  <tr><td>承接 例13-01 接口层</td><td>本篇 MODEL_REGISTRY 沿用注册表模式；生产中工具循环的模型调用应复用 13-01 的 ModelAdapter（统一双协议），本篇统一原生协议是为聚焦工具链主题</td></tr>
+  <tr><td>承接 例13-02 意图识别</td><td>复合智能体的完整链路：意图识别（13-02 判断"要不要用工具"）→ 工具调用链（本篇执行）。本篇的模型自主决定是否调工具（function calling），两种模式可组合</td></tr>
+  <tr><td>呼应 char12-07 MCP</td><td>本篇工具是进程内函数；char12-07 已实现真实 MCP 规范（JSON-RPC 2.0 + tools 原语）。本篇 execute_tool 的"结构化错误返回"与 MCP 工具级 isError 语义一致——工具错误永远以数据形态上浮</td></tr>
+  <tr><td>呼应 char09/char12 容错</td><td>char09 的异常兜底、char12 的限流降级与本篇主备回退同属容错家族：char12 降级应对"压力"，本篇回退应对"故障"，层次不同</td></tr>
+  <tr><td>eval 洞三部曲</td><td>char13-02（解析层 eval）与本篇（工具层 eval）共同确认一条铁律：<b>LLM 输出流经的每一层都不能有 eval</b>——安全不是某个组件的事，是整条数据流的事</td></tr>
+</table>
+
+<h2>九、动手练习与延伸阅读</h2>
+<h3>练习 1：给 safe_eval 加幂运算</h3>
+<p>把 <code>ast.Pow</code> 加入白名单，但增加防护：指数绝对值 ≤ 100 且底数绝对值 ≤ 1000 时才放行。思考为什么"直接放行 Pow"不行，而"有限制的放行"可以——体会白名单的粒度设计。</p>
+<h3>练习 2：并行工具调用</h3>
+<p>问模型"北京和上海的天气怎么样"，观察 qwen-plus 是否一次返回多个 tool_calls（列表长度 &gt; 1）。当前的循环已按顺序逐个执行并回填——试着用 concurrent.futures 并行执行无依赖的工具调用（参考 char09 的线程池）。</p>
+<h3>练习 3：把工具搬上 MCP</h3>
+<p>参照 char12-07 的 McServer 实现，把 query_weather / calculate_expression 包装成 MCP 工具（JSON-RPC 2.0 tools/call），体会"进程内函数"与"标准化工具服务"的边界差异——以及为什么生产系统选后者。</p>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li><b>阿里云百炼 Function Calling 官方文档</b> —— tools 参数格式、assistant/tool 消息回填的官方定义（注意：官方示例的 message 属性访问方式与实测存在差异，以 self-test 实测为准）；</li>
+  <li><b>Python ast 模块文档</b> —— ast.parse / 节点类型体系，理解"代码 = 语法树"是安全求值的根基；</li>
+  <li><b>OpenAI Function Calling 指南</b> —— tool_call_id 回填协议（dashscope 原生与 OpenAI 兼容模式的差异点），跨协议开发必读；</li>
+  <li><b>例13-02 讲解文档</b> —— 解析层 eval 洞与本篇工具层 eval 洞的对照阅读，理解"数据不当代码"在不同层的落地形态。</li>
+</ul>
+
+<p class="small">—— char13-03 完 ｜ 上一节：例13-02 意图识别 ｜ 下一篇：例13-04（待续）——</p>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>例13-5 RAG检索问答子系统 —— 讲解文档</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; color: #1e293b; line-height: 1.75; }
+  h1 { color: #0f172a; border-bottom: 3px solid #22d3ee; padding-bottom: 10px; font-size: 26px; }
+  h2 { color: #0f172a; border-left: 5px solid #22d3ee; padding-left: 12px; margin-top: 40px; font-size: 21px; }
+  h3 { color: #334155; margin-top: 26px; font-size: 17px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px 18px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  code { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-size: 90%; }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { border: 1px solid #cbd5e1; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f1f5f9; }
+  .highlight { background: #ecfeff; border-left: 5px solid #22d3ee; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .warn { background: #fef2f2; border-left: 5px solid #ef4444; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .ok { background: #f0fdf4; border-left: 5px solid #22c55e; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .flow { background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; padding: 14px 18px; margin: 14px 0; text-align: center; font-size: 14px; }
+  .flow b { color: #0e7490; }
+  .small { font-size: 13px; color: #64748b; }
+</style>
+</head>
+<body>
+
+<h1>例13-5 RAG 检索问答子系统（char13-05）</h1>
+<p class="small">第13章 项目案例：从零实现一个复合智能体系统 ｜ 改写基准：dashscope text-embedding-v3 + 轻量 RAG 流水线 ｜ 状态：已实测验证（5 项 self-test 全部通过）</p>
+
+<p>复合智能体需要"开卷考试"的能力：模型参数里没有的企业知识、实时信息，要靠<b>检索增强生成（RAG）</b>——先从知识库检索相关片段，再让模型基于片段回答。教材版用一串已废弃的 LangChain 组件（ConversationalRetrievalChain + ConversationBufferMemory + Chroma + 本地 HuggingFace 模型）搭了一个跑不起来的黑盒；改写版把手拆开，<b>检索 → 增强 → 生成三段流水线全部显式化</b>，顺便解决了重复计费、错误混流、多轮记忆三个实际问题。</p>
+
+<h2>一、教材原版问题</h2>
+<table>
+  <tr><th style="width:60px">编号</th><th style="width:250px">问题</th><th>后果</th></tr>
+  <tr><td>①</td><td>标题又写"Qwen3.0"，代码是 Qwen1.5-7B</td><td>标题内容不符（教材标题谱系问题第 5 次出现）</td></tr>
+  <tr><td>②</td><td>虚构类 + 一揽子过时 import</td><td>Qwen2Chat/DeepSeekChat 虚构；<code>ConversationalRetrievalChain</code> / <code>ConversationBufferMemory</code> 官方已废弃；<code>vectorstore.persist()</code> 新版 Chroma 已移除——三重过期叠加，一行都跑不通</td></tr>
+  <tr><td>③</td><td><code>data/ai_knowledge.txt</code> 凭空出现</td><td>TextLoader 打开不存在的文件直接崩（char12-04 同款：知识库文件没有随代码提供）</td></tr>
+  <tr><td>④</td><td>HuggingFaceEmbeddings 本地模型</td><td>首次运行要下载约 90MB 的 sentence-transformers 模型，离线/弱网环境不可用，且与云端大模型的语义空间不一致</td></tr>
+  <tr><td>⑤</td><td>每次 ask() 重建 Chain</td><td><code>ConversationalRetrievalChain.from_llm</code> 在循环里反复装配——同 13-01/13-03 的重复构造坑</td></tr>
+  <tr><td>⑥</td><td><b>错误字符串混流</b></td><td>失败时返回 <code>"[ERROR] 回答失败：..."</code> 字符串——调用方拿到的是"回答"还是"故障"无法程序化判断，只能靠字符串前缀猜测</td></tr>
+  <tr><td>⑦</td><td>无检索来源暴露</td><td>回答不带引用片段，用户无法验证"依据是什么"——RAG 的可溯源性优势被丢掉</td></tr>
+  <tr><td>⑧</td><td>无 self-test</td><td>检索命中率、缓存是否生效、多轮记忆是否接上，全都不可验证</td></tr>
+</table>
+
+<h2>二、改写后总览：显式化的三段流水线</h2>
+<div class="flow">
+  <b>构建期（一次）</b>：KNOWLEDGE_TEXT → split_text 分块（6 片段）→ EmbeddingClient 向量化<br>
+  ｜　　（向量落盘 cache.json，md5 键——重复运行零二次计费）<br>
+  <b>问答期（每次）</b>：用户问题 → KnowledgeBase.search（余弦相似度 top-2）<br>
+  ↓ 片段拼装进 RAG_PROMPT_TEMPLATE（增强）<br>
+  ↓ 对话历史 self.history 注入 messages（多轮记忆）<br>
+  ↓ 主模型 qwen-plus → 失败备用 qwen-turbo（生成）<br>
+  ↓ 返回结构化契约 <code>{"success", "answer", "sources"}</code>
+</div>
+<p>教材的业务语义全部保留：k=2 检索、多轮对话、qwen/deepseek 双模型切换、三个测试问题。变化在于<b>每个环节都显式、可测、可溯源</b>。</p>
+
+<h2>三、核心组件 1：EmbeddingClient —— 云端嵌入 + 可证明的缓存</h2>
+<p>用 dashscope text-embedding-v3 替代本地 HuggingFace 模型，核心设计是<b>缓存命中直接返回，未命中才调 API 并落盘</b>：</p>
+<pre><code>def embed(self, texts: list) -> list:
+    result = [None] * len(texts)
+    misses = []   # [(索引, 文本)] 缓存未命中的条目
+    for i, t in enumerate(texts):
+        cached = self.cache.get(self._key(t))   # md5(text) → 向量
+        if cached is not None:
+            result[i] = cached
+        else:
+            misses.append((i, t))
+    for start in range(0, len(misses), EMBED_BATCH):   # 每批不超过 10 条
+        batch = misses[start:start + EMBED_BATCH]
+        resp = dashscope.TextEmbedding.call(
+            model=EMBEDDING_MODEL, input=[t for _, t in batch], dimension=1024)
+        if resp.status_code != 200:
+            raise RuntimeError(f"{resp.code} {resp.message}")
+        self.api_calls += 1                            # 调用计数（测试用）
+        for (idx, t), item in zip(batch, resp.output["embeddings"]):
+            result[idx] = item["embedding"]
+            self.cache.set(self._key(t), result[idx])   # 落盘，下次零计费
+    return result</code></pre>
+<div class="highlight"><b>为什么缓存值得做，且值得"可证明"：</b>嵌入 API 按量计费，知识库不变时向量永不变化——重复运行、重复构建、重复提问都在白花钱。更有意思的是 <code>api_calls</code> 计数器：self-test 里二次构建断言 <code>api_calls == 0</code>，把"缓存生效"从一句口头承诺变成<b>可运行的证明</b>（Test 2 实测通过）。这与 attempted_slots 验证回退是同一个方法论：关键机制要留下可断言的痕迹。</div>
+
+<h2>四、核心组件 2：KnowledgeBase —— 分块与检索（替代 Chroma）</h2>
+<pre><code>def split_text(text, chunk_size=200, overlap=20):
+    chunks = []
+    for para in [p.strip() for p in text.split("\n") if p.strip()]:
+        if len(para) <= chunk_size:
+            chunks.append(para)
+            continue
+        step = chunk_size - overlap          # 超长段落滑窗切分
+        for i in range(0, len(para), step):
+            part = para[i:i + chunk_size].strip()
+            ...
+    return chunks
+
+class KnowledgeBase:
+    def search(self, query: str, k: int = TOP_K) -> list:
+        q_vec = self.embedder.embed([query])[0]
+        scored = [(self.embedder.cosine(q_vec, v), chunk)
+                  for chunk, v in zip(self.chunks, self.vectors)]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [chunk for _, chunk in scored[:k]]</code></pre>
+<ul>
+  <li><b>分块</b>：内置知识库段落短，按段落切即可；超长段落才滑窗兜底——保留教材 CharacterTextSplitter 的切分语义，粒度更合理；</li>
+  <li><b>检索</b>：问题的向量与全部块向量算余弦相似度，取 top-k——这就是向量检索的全部数学本质，40 行替代一个向量数据库依赖；</li>
+  <li><b>语义命中实测</b>："什么是Transformer架构？"的 top-1 精确命中 Transformer 段落（问题里没有一个词与片段完全相同，靠的是<b>语义</b>而非关键词）。</li>
+</ul>
+<div class="ok"><b>教学取舍说明：</b>纯 Python 余弦检索在万级片段内完全够用；生产到十万/百万级才需要 FAISS/Milvus 等专用索引。先理解数学本质，再上工程工具——这是本课程一贯的学习路径。</div>
+
+<h2>五、核心组件 3：RAGAgent —— 多轮记忆与结构化返回</h2>
+<pre><code>def ask(self, query: str) -> dict:
+    try:
+        sources = self.kb.search(query)                       # ① 检索
+        context = "\n".join(f"- {s}" for s in sources)
+        prompt = (RAG_PROMPT_TEMPLATE
+                  .replace("{context}", context)
+                  .replace("{query}", query))                 # ② 增强
+        messages = self.history + [{"role": "user", "content": prompt}]
+        answer = None
+        for slot in ("primary", "backup"):                    # ③ 生成（主备回退）
+            self.attempted_slots.append(slot)
+            try:
+                answer = self._invoke(MODEL_REGISTRY[slot]["model"], messages)
+                break
+            except Exception as e:
+                logger.warning(f"[回退] {slot} 模型级失败: {e}")
+        ...
+        self.history.append({"role": "user", "content": prompt})
+        self.history.append({"role": "assistant", "content": answer})
+        return {"success": True, "answer": answer, "sources": sources}
+    except Exception as e:
+        return {"success": False, "answer": "", "sources": [], "error": str(e)}</code></pre>
+<table>
+  <tr><th>教材问题</th><th>改写方案</th></tr>
+  <tr><td>每次 ask 重建 ConversationalRetrievalChain</td><td>RAGAgent 装配一次全程复用，ask 只做流水线三步</td></tr>
+  <tr><td>ConversationBufferMemory（已废弃）管记忆</td><td><code>self.history</code> 原生 messages 列表，每轮问答后追加——多轮记忆就是"把历史放进 messages"这么直接</td></tr>
+  <tr><td>错误字符串混在回答里</td><td>结构化契约 <code>{"success", "answer", "sources"}</code>，失败走 success=False + error 字段，调用方可程序化分支</td></tr>
+  <tr><td>回答不带检索来源</td><td>sources 字段返回引用片段，回答可溯源</td></tr>
+  <tr><td>模板填充</td><td>replace 填充（13-02 format 花括号坑的系列惯例）</td></tr>
+</table>
+<div class="warn"><b>一个值得注意的细节：</b>历史里存的是<b>增强后的完整 prompt</b>（含检索片段），不只是用户原话。这样模型下一轮能看到"上一轮我依据哪些片段回答的"，指代消解更稳——实测第二轮"那<b>它</b>和机器学习是什么关系？"正确接上"深度学习"（Test 4 验证）。代价是历史增长更快，生产中需配合窗口截断（char08-05 的裁剪策略）。</div>
+
+<h2>六、实测验证（5 项 self-test 全部通过）</h2>
+<table>
+  <tr><th style="width:70px">Test</th><th style="width:220px">场景</th><th>结果</th></tr>
+  <tr><td>1</td><td>分块 + 检索命中</td><td>知识库 6 片段；"什么是Transformer架构？" top-1 语义命中 Transformer 段落（非关键词匹配）</td></tr>
+  <tr><td>2</td><td><b>向量缓存复用</b></td><td>同一文本二次构建知识库，<code>api_calls == 0</code>（cache.json 命中），检索结果与首次一致——<b>零二次计费被实测证明</b></td></tr>
+  <tr><td>3</td><td>真实 RAG 问答</td><td>"请简要介绍什么是人工智能？" → qwen-plus 基于检索片段生成准确回答，sources 返回 2 个片段（k=2 教材语义保留）</td></tr>
+  <tr><td>4</td><td>多轮对话记忆</td><td>"深度学习属于人工智能吗？" → "那<b>它</b>和机器学习是什么关系？" → 回答"深度学习是机器学习的一个重要分支"——指代正确接上（char12-04/13-01 同款验证法）</td></tr>
+  <tr><td>5</td><td>主备回退实测</td><td>注入坏模型名 → primary 报 InvalidParameter → <b>backup(qwen-turbo) 接管</b>，回答含正确 RAG 定义；<code>attempted_slots == ["primary", "backup"]</code>，注册表测试后还原</td></tr>
+</table>
+<div class="ok"><b>本篇测试方法论：</b>两个"机制留痕"设计让测试有了牙齿——api_calls 计数证明缓存（Test 2）、attempted_slots 证明回退（Test 5）。它们成本只有几行代码，换来的却是"机制存在"到"机制可证明"的质变，值得在每个子系统里推广。</div>
+
+<h2>七、改写前后对照总表</h2>
+<table>
+  <tr><th>维度</th><th>教材原版</th><th>改写后</th></tr>
+  <tr><td>知识库来源</td><td>data/ai_knowledge.txt（不存在，直接崩）</td><td>内置 KNOWLEDGE_TEXT（覆盖教材三问知识域）</td></tr>
+  <tr><td>嵌入模型</td><td>本地 HuggingFace（90MB 下载 + 重依赖）</td><td>dashscope text-embedding-v3（1024 维，云端即用）</td></tr>
+  <tr><td>向量存储</td><td>Chroma + persist()（方法已移除）</td><td>cache.json 落盘 + 内存列表（md5 键，重复运行零计费）</td></tr>
+  <tr><td>检索</td><td>as_retriever(k=2) 黑盒</td><td>余弦相似度 top-2 显式实现（教材 k=2 语义保留）</td></tr>
+  <tr><td>问答链</td><td>ConversationalRetrievalChain 每次 ask 重建</td><td>装配一次的三段流水线（检索→增强→生成）</td></tr>
+  <tr><td>多轮记忆</td><td>废弃的 ConversationBufferMemory</td><td>self.history 原生 messages 注入（含增强 prompt）</td></tr>
+  <tr><td>返回契约</td><td>回答字符串（错误混流）</td><td>{"success", "answer", "sources"} 结构化 + 可溯源</td></tr>
+  <tr><td>容错</td><td>except 返回错误字符串</td><td>主备回退（qwen-plus → qwen-turbo）+ 结构化失败</td></tr>
+  <tr><td>可验证性</td><td>无测试</td><td>5 项 self-test（含缓存与回退的机制留痕验证）</td></tr>
+</table>
+
+<h2>八、与前后章节的衔接</h2>
+<table>
+  <tr><th>关联</th><th>说明</th></tr>
+  <tr><td>承接 char12-04 多层级缓存</td><td>本篇的 JSONCache 向量缓存与 char12-04 同源（cache.json + md5 键），并新增 api_calls 计数验证——同一模式第三次落地，已成系列惯例</td></tr>
+  <tr><td>承接 例13-04 子系统调度</td><td>RAGAgent 就是一个可被 AgentController 派发的"知识问答子系统"——13-04 的 TASK_REGISTRY 加一项即接入，复合智能体的"知识面"由此补齐</td></tr>
+  <tr><td>呼应 char06 检索双通道</td><td>char06 已覆盖 FAISS 向量检索 + 结构化数据查询的混合检索；本篇是纯向量检索的最小实现，两篇对照可见"检索器可插拔"</td></tr>
+  <tr><td>呼应 char08-05 上下文裁剪</td><td>本篇历史存完整增强 prompt，增长较快——生产中应接 char08-05 的窗口截断策略，防止历史撑爆上下文</td></tr>
+  <tr><td>RAG 与幻觉治理</td><td>内置知识库刻意写入 RAG 的定义（"显著降低幻觉并让回答可溯源"）——本篇实测中模型回答严格基于检索片段，正是这一机制的现场演示</td></tr>
+</table>
+
+<h2>九、动手练习与延伸阅读</h2>
+<h3>练习 1：相似度阈值过滤</h3>
+<p>给 search() 加 <code>min_score</code> 参数：低于阈值的片段不返回。然后问一个知识库里没有的问题（如"量子计算机的原理"），观察模型在"片段不足"时的表现——对比有无阈值时回答质量的变化。</p>
+<h3>练习 2：接入 13-04 调度器</h3>
+<p>把 RAGAgent 包装成 TASK_REGISTRY 里的 <code>knowledge</code> 子 Agent（提示词模板直接透传问题），验证"加一行注册、零改动控制器"的扩展方式——让复合智能体具备知识问答能力。</p>
+<h3>练习 3：历史窗口裁剪</h3>
+<p>self.history 目前无限增长。参照 char08-05，给 RAGAgent 加 <code>max_history_rounds</code>，超过时裁掉最早的轮次——思考为什么历史裁剪不会影响检索质量（提示：检索上下文每轮重新获取）。</p>
+
+<h3>延伸阅读</h3>
+<ul>
+  <li><b>阿里云百炼 TextEmbedding 文档</b> —— text-embedding-v3 的维度、批量上限（10 条/批）与计费规则，理解缓存设计的经济动机；</li>
+  <li><b>余弦相似度 vs 点积 vs 欧氏距离</b> —— 三种相似度度量的适用场景（归一化向量下余弦与点积等价），检索质量的数学基础；</li>
+  <li><b>char12-04 讲解文档</b> —— 三层记忆架构（短期缓存 / 长期知识库 / 跨模型记忆）的完整版，本篇是其"长期知识库"层的子系统化落地；</li>
+  <li><b>char06 讲解文档</b> —— 混合检索（向量 + 结构化）的进阶形态，RAG 子系统的下一步扩展方向。</li>
+</ul>
+
+<p class="small">—— char13-05 完 ｜ 上一节：例13-04 子状态管理 ｜ 下一篇：例13-06（待续）——</p>
+</body>
+</html>

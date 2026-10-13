@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="880" viewBox="0 0 1000 880" font-family="Microsoft YaHei">
+  <rect width="1000" height="880" fill="#0f172a"/>
+  <text x="500" y="40" fill="#22d3ee" font-size="24" font-weight="bold" text-anchor="middle">char13 演进线全景 · 11 篇构建顺序与角色</text>
+  <text x="500" y="64" fill="#94a3b8" font-size="13" text-anchor="middle">先地基，再能力，再协议，总控整合，最后三步质量闭环 —— 每篇补齐系统的一块拼图</text>
+
+  <!-- 阶段一 -->
+  <rect x="30" y="92" width="940" height="330" rx="10" fill="#1e293b" opacity="0.45" stroke="#334155"/>
+  <text x="50" y="118" fill="#22d3ee" font-size="15" font-weight="bold">阶段一（01-05）地基与核心能力</text>
+
+  <line x1="70" y1="140" x2="70" y2="410" stroke="#334155" stroke-width="2"/>
+
+  <circle cx="70" cy="158" r="16" fill="#164e63" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="70" y="163" fill="#22d3ee" font-size="12" font-weight="bold" text-anchor="middle">01</text>
+  <text x="105" y="155" fill="#e2e8f0" font-size="13" font-weight="bold">先定义标准的 Agent 接口层和数据结构 —— 系统地基</text>
+  <text x="105" y="174" fill="#94a3b8" font-size="12">Message 构造校验 · ConversationContext · ModelAdapter 注册表与池化复用（后续所有篇章复用）</text>
+
+  <circle cx="70" cy="222" r="16" fill="#164e63" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="70" y="227" fill="#22d3ee" font-size="12" font-weight="bold" text-anchor="middle">02</text>
+  <text x="105" y="219" fill="#e2e8f0" font-size="13" font-weight="bold">用户意图识别与入口解析 —— 系统大门</text>
+  <text x="105" y="238" fill="#94a3b8" font-size="12">三步安全清洗（剥围栏/括号定位/严格JSON）· 意图白名单 · 兜底链 —— 确立「LLM 输出永不执行」红线</text>
+
+  <circle cx="70" cy="286" r="16" fill="#164e63" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="70" y="291" fill="#22d3ee" font-size="12" font-weight="bold" text-anchor="middle">03</text>
+  <text x="105" y="283" fill="#e2e8f0" font-size="13" font-weight="bold">工具调用链与异常回退机制 —— 系统双手</text>
+  <text x="105" y="302" fill="#94a3b8" font-size="12">safe_eval AST 白名单 · dashscope 原生 function calling 最小循环 · 双层失败语义（工具错误回填 / 模型级回退）</text>
+
+  <circle cx="70" cy="350" r="16" fill="#164e63" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="70" y="355" fill="#22d3ee" font-size="12" font-weight="bold" text-anchor="middle">04</text>
+  <text x="105" y="347" fill="#e2e8f0" font-size="13" font-weight="bold">子状态管理与任务调度 —— 系统秩序</text>
+  <text x="105" y="366" fill="#94a3b8" font-size="12">STATUS_TRANSITIONS 状态机白名单 · TASK_REGISTRY 单一注册表 · raise...from 异常链 · 完整快照</text>
+
+  <circle cx="70" cy="414" r="16" fill="#164e63" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="70" y="419" fill="#22d3ee" font-size="12" font-weight="bold" text-anchor="middle">05</text>
+  <text x="105" y="411" fill="#e2e8f0" font-size="13" font-weight="bold">RAG 检索问答子系统 —— 系统知识</text>
+  <text x="105" y="430" fill="#94a3b8" font-size="12">dashscope text-embedding-v3 · cache.json 向量缓存（零二次计费）· 纯 Python 余弦检索 · 三段流水线</text>
+
+  <!-- 阶段二 -->
+  <rect x="30" y="440" width="940" height="240" rx="10" fill="#1e293b" opacity="0.45" stroke="#334155"/>
+  <text x="50" y="466" fill="#22d3ee" font-size="15" font-weight="bold">阶段二（06-08）协议标准与主控整合</text>
+
+  <line x1="70" y1="488" x2="70" y2="668" stroke="#334155" stroke-width="2"/>
+
+  <circle cx="70" cy="506" r="16" fill="#78350f" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="70" y="511" fill="#fbbf24" font-size="12" font-weight="bold" text-anchor="middle">06</text>
+  <text x="105" y="503" fill="#e2e8f0" font-size="13" font-weight="bold">MCP 协议的上下文路由器 —— 工具总线（按真实规范重构）</text>
+  <text x="105" y="522" fill="#94a3b8" font-size="12">JSON-RPC 2.0 信封 · initialize 生命周期 · tools/list + tools/call · 标准错误码（真实 MCP 2025-06-18）· 意图劫持修正</text>
+
+  <circle cx="70" cy="570" r="16" fill="#78350f" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="70" y="575" fill="#fbbf24" font-size="12" font-weight="bold" text-anchor="middle">07</text>
+  <text x="105" y="567" fill="#e2e8f0" font-size="13" font-weight="bold">A2A 消息协议的模块注入 —— 跨 Agent 标准（按真实规范重构）</text>
+  <text x="105" y="586" fill="#94a3b8" font-size="12">AgentCard 自描述（/.well-known/agent.json）· message/send · Task 生命周期 · 能力发现（真实 A2A，Google 2025）</text>
+
+  <circle cx="70" cy="634" r="16" fill="#164e63" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="70" y="639" fill="#22d3ee" font-size="12" font-weight="bold" text-anchor="middle">08</text>
+  <text x="105" y="631" fill="#e2e8f0" font-size="13" font-weight="bold">LangChain 的通用 Agent 主控链条 —— 系统大脑（总集）</text>
+  <text x="105" y="650" fill="#94a3b8" font-size="12">整合 03 工具循环 + 主备回退内嵌调用层 + 多轮记忆 + steps 可观测 —— 修复教材「假回退」（回退与 executor 脱节）</text>
+
+  <!-- 阶段三 -->
+  <rect x="30" y="700" width="940" height="160" rx="10" fill="#312e81" opacity="0.5" stroke="#818cf8"/>
+  <text x="50" y="726" fill="#818cf8" font-size="15" font-weight="bold">阶段三（09-11）质量闭环 —— 对 08 主控的三层验证</text>
+
+  <circle cx="70" cy="752" r="16" fill="#3730a3" stroke="#818cf8" stroke-width="1.5"/>
+  <text x="70" y="757" fill="#c7d2fe" font-size="12" font-weight="bold" text-anchor="middle">09</text>
+  <text x="105" y="749" fill="#e2e8f0" font-size="13" font-weight="bold">工具调用正确率测试框架 —— 能力可信</text>
+  <text x="105" y="768" fill="#94a3b8" font-size="12">从 steps 轨迹结构化比对（修复教材「工具名匹配自然语言回复」永远 0% 的死逻辑）· 实测 plus 94.4% vs turbo 61.1%</text>
+
+  <circle cx="70" cy="800" r="16" fill="#3730a3" stroke="#818cf8" stroke-width="1.5"/>
+  <text x="70" y="805" fill="#c7d2fe" font-size="12" font-weight="bold" text-anchor="middle">10</text>
+  <text x="105" y="797" fill="#e2e8f0" font-size="13" font-weight="bold">多用户并发测试与系统压测 —— 负载可靠</text>
+  <text x="105" y="816" fill="#94a3b8" font-size="12">每请求独立会话（修复教材共享实例串话）· 串话检测 · P50/P95/QPS/错误率 · 可复现 seed</text>
+
+  <circle cx="70" cy="848" r="16" fill="#3730a3" stroke="#818cf8" stroke-width="1.5"/>
+  <text x="70" y="853" fill="#c7d2fe" font-size="12" font-weight="bold" text-anchor="middle">11</text>
+  <text x="105" y="845" fill="#e2e8f0" font-size="13" font-weight="bold">模型幻觉率与用户满意度评估 —— 内容可信</text>
+  <text x="105" y="864" fill="#94a3b8" font-size="12">LLM-as-a-Judge 裁判模式（实测教材 difflib 相似度双向失灵：正确回答 0.089 被误判 / 编造回答 0.72 被漏判）</text>
+</svg>
