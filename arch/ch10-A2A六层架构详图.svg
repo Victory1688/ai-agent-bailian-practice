@@ -1,0 +1,193 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1070" width="1240" height="1070" role="img" aria-label="chapter10 A2A v1.0 协议六层架构详图（含 SpringBoot 微服务平移对照）">
+  <title>chapter10 · A2A v1.0 协议六层架构详图 —— 多 Agent 通信的完整栈（附微服务平移对照）</title>
+  <defs>
+    <marker id="c10Solid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7a8699"/>
+    </marker>
+    <marker id="c10Up" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#98a2b3"/>
+    </marker>
+  </defs>
+
+  <style>
+    text { font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif; }
+    .t-title { font-size: 23px; font-weight: 700; fill: #101828; }
+    .t-sub   { font-size: 13.5px; fill: #667085; }
+    .t-cap   { font-size: 12px; fill: #98a2b3; }
+    .t-head  { font-size: 13.5px; font-weight: 700; }
+    .t-chip  { font-size: 12px; }
+    .t-small { font-size: 10.5px; }
+    .t-leg   { font-size: 11.5px; fill: #667085; }
+    .t-map   { font-size: 10.5px; fill: #0f766e; }
+    .t-maph  { font-size: 11px; font-weight: 700; fill: #0d9488; }
+    .t-state { font-size: 11.5px; font-weight: 700; }
+    .chip { fill: #ffffff; stroke-width: 1; }
+    .c-l6 { fill: #eff5ff; stroke: #b9cffb; }
+    .c-l5 { fill: #ecfaf3; stroke: #a8e0c6; }
+    .c-l4 { fill: #fff5e9; stroke: #f0bd85; }
+    .c-l3 { fill: #fdeeee; stroke: #f0b4b4; }
+    .c-l2 { fill: #f6f1ff; stroke: #c9b6f2; }
+    .c-l1 { fill: #f6f7f9; stroke: #d5d9e0; }
+  </style>
+
+  <rect x="0" y="0" width="1240" height="1070" fill="#ffffff"/>
+
+  <text class="t-title" x="48" y="42">ch10 · A2A v1.0 协议六层架构（多 Agent 通信完整栈）</text>
+  <text class="t-sub" x="48" y="67">全书第一次直面真实协议规范：Google A2A v1.0（Agent↔Agent）＋ MCP（Agent↔Tool）　·　两者共用 JSON-RPC 2.0 信封</text>
+  <text class="t-cap" x="48" y="88">右侧青色栏 = 微服务 / SpringBoot 概念平移对照（注册中心、Nacos、Gateway、Feign、消息队列等）</text>
+
+  <!-- ============ 两个 Agent ============ -->
+  <rect class="chip" x="48" y="102" width="270" height="46" rx="9" stroke="#c9dbfd" fill="#eff5ff"/>
+  <text class="t-chip" x="183" y="122" text-anchor="middle" fill="#1d4ed8" font-weight="700">Agent A（客户端 / 发起方）</text>
+  <text class="t-small" x="183" y="140" text-anchor="middle" fill="#5b7fc7">持有 Agent Card 目录，发起调用</text>
+  <rect class="chip" x="352" y="102" width="270" height="46" rx="9" stroke="#c9dbfd" fill="#eff5ff"/>
+  <text class="t-chip" x="487" y="122" text-anchor="middle" fill="#1d4ed8" font-weight="700">Agent B（服务端 / 被调方）</text>
+  <text class="t-small" x="487" y="140" text-anchor="middle" fill="#5b7fc7">暴露 skills，接受 Task 并产出 Artifact</text>
+  <rect class="chip" x="646" y="102" width="302" height="46" rx="9" stroke="#b6e3cd" fill="#ecfaf3"/>
+  <text class="t-chip" x="797" y="122" text-anchor="middle" fill="#0f7b52" font-weight="700">Tool / Resource Server（MCP）</text>
+  <text class="t-small" x="797" y="140" text-anchor="middle" fill="#3f9c74">外部工具与数据，通过 MCP 接入</text>
+
+  <line x1="183" y1="148" x2="183" y2="170" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c10Solid)"/>
+  <line x1="487" y1="148" x2="487" y2="170" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c10Solid)"/>
+  <line x1="797" y1="148" x2="797" y2="170" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c10Solid)"/>
+
+  <!-- ============ L6 编排组合层 ============ -->
+  <rect class="c-l6" x="48" y="172" width="900" height="90" rx="10"/>
+  <text class="t-head" x="64" y="194" fill="#1d4ed8">L6　编排组合层（06 协商与竞标）</text>
+  <rect class="chip" x="64" y="204" width="576" height="46" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="352" y="224" text-anchor="middle" fill="#1e40af">A2ANegotiationOrchestrator — 组合 Pub/Sub + message.send + Agent Card skills 匹配评分</text>
+  <text class="t-small" x="352" y="241" text-anchor="middle" fill="#5b7fc7">广播投标 → 按 skills 匹配度评分 → 选择中标 Agent</text>
+  <rect class="chip" x="652" y="204" width="280" height="46" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="792" y="224" text-anchor="middle" fill="#1e40af">教学简化：random.uniform 评分 + for 循环拉</text>
+  <text class="t-small" x="792" y="241" text-anchor="middle" fill="#c96a6a">🔴 真实规范：skills 匹配 + Pub/Sub 广播</text>
+
+  <rect x="964" y="172" width="228" height="90" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="194">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="216">服务编排 / 编排层</text>
+  <text class="t-map" x="978" y="234">≈ 你需要写 SAGA、</text>
+  <text class="t-map" x="978" y="252">或 Camunda 流程编排</text>
+
+  <line x1="498" y1="262" x2="498" y2="282" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c10Solid)"/>
+  <text class="t-chip" x="508" y="278" fill="#98a2b3">调用下沉</text>
+
+  <!-- ============ L5 通信模式层 ============ -->
+  <rect class="c-l5" x="48" y="284" width="900" height="110" rx="10"/>
+  <text class="t-head" x="64" y="306" fill="#0f7b52">L5　通信模式层（04 Request-Response　|　05 Pub/Sub）</text>
+  <rect class="chip" x="64" y="316" width="428" height="66" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="278" y="338" text-anchor="middle" fill="#0f7b52">04 Request-Response（一对一）</text>
+  <text class="t-small" x="278" y="356" text-anchor="middle" fill="#3f9c74">JSON-RPC Request(id) → Response(result)</text>
+  <text class="t-small" x="278" y="374" text-anchor="middle" fill="#3f9c74">三层：JSON-RPC 信封 → A2A Task → dashscope LLM</text>
+  <rect class="chip" x="504" y="316" width="428" height="66" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="718" y="338" text-anchor="middle" fill="#0f7b52">05 Pub/Sub（一对多）</text>
+  <text class="t-small" x="718" y="356" text-anchor="middle" fill="#3f9c74">JSON-RPC Notification（无 id）→ 不期待响应</text>
+  <text class="t-small" x="718" y="374" text-anchor="middle" fill="#3f9c74">subscribeToTask + SSE 流式推送</text>
+
+  <rect x="964" y="284" width="228" height="110" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="306">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="328">同步 Feign vs 异步 MQ</text>
+  <text class="t-map" x="978" y="346">Request-Response ≈ 同步 RPC</text>
+  <text class="t-map" x="978" y="364">Pub/Sub ≈ <b>Kafka/RocketMQ</b></text>
+  <text class="t-map" x="978" y="382">SSE ≈ WebSocket 长连接推送</text>
+
+  <line x1="498" y1="394" x2="498" y2="414" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c10Solid)"/>
+  <text class="t-chip" x="508" y="410" fill="#98a2b3">能力校验</text>
+
+  <!-- ============ L4 核心能力层 ============ -->
+  <rect class="c-l4" x="48" y="416" width="900" height="112" rx="10"/>
+  <text class="t-head" x="64" y="438" fill="#b25a08">L4　核心能力层（02 认证 + 能力声明　|　03 A2A + MCP 集成）</text>
+  <rect class="chip" x="64" y="448" width="428" height="68" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="278" y="470" text-anchor="middle" fill="#b25a08">02 Agent Card + Bearer Token</text>
+  <text class="t-small" x="278" y="488" text-anchor="middle" fill="#b25a08">/.well-known/agent.json · skills · verify_auth()</text>
+  <text class="t-small" x="278" y="506" text-anchor="middle" fill="#c96a6a">错误码 -32001(认证失败) / -32002(能力不匹配)</text>
+  <rect class="chip" x="504" y="448" width="428" height="68" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="718" y="470" text-anchor="middle" fill="#b25a08">03 MCPServer + A2AServer 绑定</text>
+  <text class="t-small" x="718" y="488" text-anchor="middle" fill="#b25a08">Tools / Resources 三原语 · tools/list · tools/call</text>
+  <text class="t-small" x="718" y="506" text-anchor="middle" fill="#c96a6a">教材"MCP 格式=三段 prompt"是概念误解</text>
+
+  <rect x="964" y="416" width="228" height="112" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="438">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="460">注册中心 + 鉴权</text>
+  <text class="t-map" x="978" y="478">Agent Card ≈ <b>Nacos/Eureka</b></text>
+  <text class="t-map" x="978" y="496">里的服务元数据 + 能力清单</text>
+  <text class="t-map" x="978" y="514">Bearer Token ≈ 网关 JWT 鉴权</text>
+
+  <line x1="498" y1="528" x2="498" y2="548" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c10Solid)"/>
+  <text class="t-chip" x="508" y="544" fill="#98a2b3">业务对象</text>
+
+  <!-- ============ L3 业务对象层 ============ -->
+  <rect class="c-l3" x="48" y="550" width="900" height="82" rx="10"/>
+  <text class="t-head" x="64" y="572" fill="#b42318">L3　业务对象层（01 消息格式）</text>
+  <rect class="chip" x="64" y="580" width="868" height="40" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="498" y="605" text-anchor="middle" fill="#b42318">Message + Part + <b>Task</b> + Artifact + Agent Card　·　contextId 由 SERVER 生成，多轮必须复用</text>
+
+  <rect x="964" y="550" width="228" height="82" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="572">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="594">DTO / 领域对象</text>
+  <text class="t-map" x="978" y="612">Task ≈ 你的业务单据实体</text>
+
+  <line x1="498" y1="632" x2="498" y2="652" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c10Solid)"/>
+  <text class="t-chip" x="508" y="648" fill="#98a2b3">封装信封</text>
+
+  <!-- ============ L2 协议信封层 ============ -->
+  <rect class="c-l2" x="48" y="654" width="900" height="76" rx="10"/>
+  <text class="t-head" x="64" y="676" fill="#6b3fd4">L2　协议信封层（01 共用构建器）</text>
+  <rect class="chip" x="64" y="684" width="868" height="36" rx="8" stroke="#d8cdf7"/>
+  <text class="t-chip" x="498" y="707" text-anchor="middle" fill="#6b3fd4">JSON-RPC 2.0 三种信封：Request（有 id）· Notification（无 id）· Response · build_error_response</text>
+
+  <rect x="964" y="654" width="228" height="76" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="676">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="698">HTTP Header + Body 约定</text>
+  <text class="t-map" x="978" y="716">≈ 你的统一响应体 R&lt;T&gt;</text>
+
+  <line x1="498" y1="730" x2="498" y2="750" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c10Solid)"/>
+  <text class="t-chip" x="508" y="746" fill="#98a2b3">上线</text>
+
+  <!-- ============ L1 传输层 ============ -->
+  <rect class="c-l1" x="48" y="752" width="900" height="76" rx="10"/>
+  <text class="t-head" x="64" y="774" fill="#475467">L1　传输层</text>
+  <rect class="chip" x="64" y="782" width="868" height="36" rx="8" stroke="#dcdfe5"/>
+  <text class="t-chip" x="498" y="805" text-anchor="middle" fill="#475467">HTTP / SSE / gRPC / REST / STDIO　·　<b>协议与传输解耦</b>：handle(dict) 进程内，生产换 stdio/HTTP 零改动</text>
+
+  <rect x="964" y="752" width="228" height="76" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="774">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="796">TCP / HTTP / gRPC 传输</text>
+  <text class="t-map" x="978" y="814">你早已熟悉的一层</text>
+
+  <!-- ============ Task 七态生命周期 ============ -->
+  <rect x="48" y="846" width="900" height="112" rx="10" fill="#fafbfc" stroke="#e4e7ec"/>
+  <text class="t-head" x="64" y="868" fill="#101828">Task 七态生命周期（A2A 规范 § Task States）</text>
+
+  <rect class="chip" x="64" y="880" width="118" height="40" rx="8" stroke="#b9cffb" fill="#eff5ff"/>
+  <text class="t-state" x="123" y="905" text-anchor="middle" fill="#1d4ed8">submitted</text>
+  <line x1="182" y1="900" x2="206" y2="900" stroke="#7a8699" stroke-width="1.3" marker-end="url(#c10Solid)"/>
+  <rect class="chip" x="208" y="880" width="110" height="40" rx="8" stroke="#b9cffb" fill="#eff5ff"/>
+  <text class="t-state" x="263" y="905" text-anchor="middle" fill="#1d4ed8">working</text>
+  <line x1="318" y1="900" x2="342" y2="900" stroke="#7a8699" stroke-width="1.3" marker-end="url(#c10Solid)"/>
+  <rect class="chip" x="344" y="880" width="150" height="40" rx="8" stroke="#f0bd85" fill="#fff5e9"/>
+  <text class="t-state" x="419" y="905" text-anchor="middle" fill="#b25a08">input_required</text>
+  <path d="M 419 880 V 872 H 263 V 880" fill="none" stroke="#98a2b3" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text class="t-small" x="341" y="868" text-anchor="middle" fill="#98a2b3">补充输入后继续</text>
+  <line x1="494" y1="900" x2="518" y2="900" stroke="#7a8699" stroke-width="1.3" marker-end="url(#c10Solid)"/>
+  <rect class="chip" x="520" y="880" width="120" height="40" rx="8" stroke="#a8e0c6" fill="#ecfaf3"/>
+  <text class="t-state" x="580" y="905" text-anchor="middle" fill="#0f7b52">completed ✓</text>
+  <rect class="chip" x="656" y="880" width="120" height="40" rx="8" stroke="#f0b4b4" fill="#fdeeee"/>
+  <text class="t-state" x="716" y="905" text-anchor="middle" fill="#b42318">failed ✗</text>
+  <rect class="chip" x="792" y="880" width="140" height="40" rx="8" stroke="#dcdfe5" fill="#f6f7f9"/>
+  <text class="t-state" x="862" y="905" text-anchor="middle" fill="#475467">canceled ⊘</text>
+  <text class="t-small" x="580" y="940" text-anchor="middle" fill="#3f9c74">Artifact = 最终产出（text/file/data）</text>
+  <text class="t-small" x="716" y="940" text-anchor="middle" fill="#c96a6a">替代教材的 payload.answer</text>
+
+  <rect x="964" y="846" width="228" height="112" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="868">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="890">订单状态机 / 工单流转</text>
+  <text class="t-map" x="978" y="908">你写过的 status 枚举</text>
+  <text class="t-map" x="978" y="926">七态 ≈ 你的 CREATED →</text>
+  <text class="t-map" x="978" y="944">PROCESSING → DONE/FAILED</text>
+
+  <!-- ============ 底部说明 ============ -->
+  <line x1="48" y1="978" x2="1192" y2="978" stroke="#d5d9e0" stroke-width="1"/>
+  <text class="t-leg" x="48" y="1000">六层自底向上：传输（怎么传）→ 信封（消息长啥样）→ 业务对象（传什么）→ 核心能力（认证+声明+工具）→ 通信模式（一对一/一对多）→ 编排组合（多 Agent 组合）。</text>
+  <text class="t-leg" x="48" y="1020">A2A vs MCP 互补不竞争：A2A 管 Agent↔Agent（谁在哪、能干什么），MCP 管 Agent↔Tool/Resource（有什么工具、怎么调），两者共用 JSON-RPC 2.0 信封。</text>
+  <text class="t-leg" x="48" y="1040">平移要点：<b>Agent Card≈Nacos 服务元数据　Bearer Token≈网关 JWT　Request-Response≈同步 Feign　Pub/Sub+SSE≈MQ+长连接　Task 七态≈订单状态机</b>。</text>
+  <text class="t-leg" x="48" y="1060">四张配套详图之二 · 对应全书总图 L5/L6 —— 本图把 ch10 摊开成"多 Agent 之间的通信协议栈"，是全书的"跨进程互联层"。</text>
+</svg>

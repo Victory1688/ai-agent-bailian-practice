@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1090" width="1240" height="1090" role="img" aria-label="chapter12 上线部署七层组件栈详图（含 SpringBoot 微服务平移对照）">
+  <title>chapter12 · 上线部署七层组件栈详图 —— 从单脚本 Agent 到生产化 Web 服务（附微服务平移对照）</title>
+  <defs>
+    <marker id="c12Solid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7a8699"/>
+    </marker>
+    <marker id="c12Dash" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#98a2b3"/>
+    </marker>
+    <marker id="c12Red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#e57373"/>
+    </marker>
+  </defs>
+
+  <style>
+    text { font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif; }
+    .t-title { font-size: 23px; font-weight: 700; fill: #101828; }
+    .t-sub   { font-size: 13.5px; fill: #667085; }
+    .t-cap   { font-size: 12px; fill: #98a2b3; }
+    .t-head  { font-size: 13px; font-weight: 700; }
+    .t-chip  { font-size: 11.5px; }
+    .t-small { font-size: 10.5px; }
+    .t-code  { font-size: 11px; font-weight: 700; fill: #b42318; }
+    .t-leg   { font-size: 11.5px; fill: #667085; }
+    .t-map   { font-size: 10.5px; fill: #0f766e; }
+    .t-maph  { font-size: 11px; font-weight: 700; fill: #0d9488; }
+    .chip { fill: #ffffff; stroke-width: 1; }
+    .c1 { fill: #eff5ff; stroke: #b9cffb; }
+    .c2 { fill: #fff5e9; stroke: #f0bd85; }
+    .c3 { fill: #ecfaf3; stroke: #a8e0c6; }
+    .c4 { fill: #fdeeee; stroke: #f0b4b4; }
+    .c5 { fill: #f6f1ff; stroke: #c9b6f2; }
+    .c6 { fill: #f0fdfa; stroke: #99f6e4; }
+    .c7 { fill: #f6f7f9; stroke: #d5d9e0; }
+  </style>
+
+  <rect x="0" y="0" width="1240" height="1090" fill="#ffffff"/>
+
+  <text class="t-title" x="48" y="42">ch12 · 上线部署七层组件栈（生产化 Web 服务）</text>
+  <text class="t-sub" x="48" y="67">ch01–ch11 解决"Agent 怎么建"，ch12 解决"Agent 怎么上线"　·　补齐生产化五块拼图：可观测 / 安全 / 吞吐 / 容错 / 开放互联</text>
+  <text class="t-cap" x="48" y="88">右侧青色栏 = 微服务 / SpringBoot 概念平移对照　·　底部红色 429/503/504 = 请求在各层被提前拒绝的位置</text>
+
+  <!-- 起点 -->
+  <rect class="chip" x="48" y="102" width="900" height="38" rx="9" stroke="#d5d9e0" fill="#f7f8fa"/>
+  <text class="t-chip" x="498" y="126" text-anchor="middle" fill="#344054">调用方：curl / 压测线程 / Coze Bot　（ch01–ch11 的一切能力，在此被暴露为公网 HTTP 服务）</text>
+
+  <!-- ============ ① 客户端层 ============ -->
+  <line x1="498" y1="140" x2="498" y2="156" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c12Solid)"/>
+  <rect class="c1" x="48" y="158" width="900" height="72" rx="10"/>
+  <text class="t-head" x="64" y="180" fill="#1d4ed8">① 客户端层（ch12-01 起）</text>
+  <rect class="chip" x="64" y="188" width="270" height="34" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="199" y="210" text-anchor="middle" fill="#1e40af">curl / Postman</text>
+  <rect class="chip" x="346" y="188" width="270" height="34" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="481" y="210" text-anchor="middle" fill="#1e40af">压测线程池</text>
+  <rect class="chip" x="628" y="188" width="304" height="34" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="780" y="210" text-anchor="middle" fill="#1e40af">Coze Bot（07 篇开放互联方）</text>
+
+  <rect x="964" y="158" width="228" height="72" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="180">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="202">前端 / 调用方</text>
+  <text class="t-map" x="978" y="220">（浏览器、App、上游服务）</text>
+
+  <!-- ============ ② 接入防御层 ============ -->
+  <line x1="498" y1="230" x2="498" y2="246" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c12Solid)"/>
+  <rect class="c2" x="48" y="248" width="900" height="92" rx="10"/>
+  <text class="t-head" x="64" y="270" fill="#b25a08">② 接入防御层（02 篇 —— 生产化拼图：安全）</text>
+  <rect class="chip" x="64" y="280" width="200" height="50" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="164" y="300" text-anchor="middle" fill="#b25a08">HTTPS adhoc</text>
+  <text class="t-small" x="164" y="317" text-anchor="middle" fill="#c96a6a">传输加密</text>
+  <rect class="chip" x="276" y="280" width="200" height="50" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="376" y="300" text-anchor="middle" fill="#b25a08">API Key 恒时比较</text>
+  <text class="t-small" x="376" y="317" text-anchor="middle" fill="#c96a6a">防时序攻击 → 401</text>
+  <rect class="chip" x="488" y="280" width="200" height="50" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="588" y="300" text-anchor="middle" fill="#b25a08">flask-limiter</text>
+  <text class="t-small" x="588" y="317" text-anchor="middle" fill="#c96a6a">限流 → 429</text>
+  <rect class="chip" x="700" y="280" width="232" height="50" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="816" y="300" text-anchor="middle" fill="#b25a08">安全响应头</text>
+  <text class="t-small" x="816" y="317" text-anchor="middle" fill="#c96a6a">CSP / X-Frame-Options 等</text>
+
+  <rect x="964" y="248" width="228" height="92" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="270">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="292"><b>Spring Cloud Gateway</b></text>
+  <text class="t-map" x="978" y="310">+ Sentinel 限流</text>
+  <text class="t-map" x="978" y="328">你用过的网关那一层</text>
+
+  <!-- ============ ③ Web 服务层 ============ -->
+  <line x1="498" y1="340" x2="498" y2="356" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c12Solid)"/>
+  <rect class="c3" x="48" y="358" width="900" height="92" rx="10"/>
+  <text class="t-head" x="64" y="380" fill="#0f7b52">③ Web 服务层（01 / 06 篇 —— 拼图：可观测 + 吞吐）</text>
+  <rect class="chip" x="64" y="390" width="270" height="50" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="199" y="410" text-anchor="middle" fill="#0f7b52">Flask threaded</text>
+  <text class="t-small" x="199" y="427" text-anchor="middle" fill="#3f9c74">request_id 链路追踪 + /health</text>
+  <rect class="chip" x="346" y="390" width="270" height="50" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="481" y="410" text-anchor="middle" fill="#0f7b52">令牌桶 TokenBucket</text>
+  <text class="t-small" x="481" y="427" text-anchor="middle" fill="#3f9c74">Lock 原子 + 初始满桶 + 惰性补充</text>
+  <rect class="chip" x="628" y="390" width="304" height="50" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="780" y="410" text-anchor="middle" fill="#0f7b52">三态拒绝语义</text>
+  <text class="t-small" x="780" y="427" text-anchor="middle" fill="#3f9c74">429 限流 / 503 队列满 / 504 超时</text>
+
+  <rect x="964" y="358" width="228" height="92" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="380">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="402">Web 容器 + Micrometer</text>
+  <text class="t-map" x="978" y="420">request_id ≈ <b>TraceId 全链路追踪</b></text>
+  <text class="t-map" x="978" y="438">/health ≈ actuator/health</text>
+
+  <!-- ============ ④ 编排层 ============ -->
+  <line x1="498" y1="450" x2="498" y2="466" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c12Solid)"/>
+  <rect class="c1" x="48" y="468" width="900" height="92" rx="10"/>
+  <text class="t-head" x="64" y="490" fill="#1d4ed8">④ 编排与调度层（03 / 06 篇 —— 拼图：吞吐）</text>
+  <rect class="chip" x="64" y="500" width="270" height="50" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="199" y="520" text-anchor="middle" fill="#1e40af">PriorityQueue（priority, seq）</text>
+  <text class="t-small" x="199" y="537" text-anchor="middle" fill="#5b7fc7">优先级 + 同优先级 FIFO</text>
+  <rect class="chip" x="346" y="500" width="270" height="50" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="481" y="520" text-anchor="middle" fill="#1e40af">Worker 池 ×2</text>
+  <text class="t-small" x="481" y="537" text-anchor="middle" fill="#5b7fc7">finally 必回填 entry.event.set()</text>
+  <rect class="chip" x="628" y="500" width="304" height="50" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="780" y="520" text-anchor="middle" fill="#1e40af">RoundRobin 负载均衡</text>
+  <text class="t-small" x="780" y="537" text-anchor="middle" fill="#5b7fc7">ThreadPoolExecutor + 任务状态落盘</text>
+
+  <rect x="964" y="468" width="228" height="92" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="490">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="512"><b>线程池 + MQ 削峰</b></text>
+  <text class="t-map" x="978" y="530">PriorityQueue ≈ 优先级 MQ</text>
+  <text class="t-map" x="978" y="548">Worker 池 ≈ 消费者集群</text>
+
+  <!-- ============ ⑤ 容错层 ============ -->
+  <line x1="498" y1="560" x2="498" y2="576" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c12Solid)"/>
+  <rect class="c4" x="48" y="578" width="900" height="92" rx="10" stroke-width="2"/>
+  <text class="t-head" x="64" y="600" fill="#b42318">⑤ 容错层（05 / 06 篇 —— 拼图：稳定性）　容错五件套 + 故障注入器</text>
+  <rect class="chip" x="64" y="610" width="200" height="50" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="164" y="630" text-anchor="middle" fill="#b42318">超时 8s</text>
+  <text class="t-small" x="164" y="647" text-anchor="middle" fill="#c96a6a">→ 504</text>
+  <rect class="chip" x="276" y="610" width="200" height="50" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="376" y="630" text-anchor="middle" fill="#b42318">指数退避重试</text>
+  <text class="t-small" x="376" y="647" text-anchor="middle" fill="#c96a6a">避让下游抖动</text>
+  <rect class="chip" x="488" y="610" width="200" height="50" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="588" y="630" text-anchor="middle" fill="#b42318">熔断器</text>
+  <text class="t-small" x="588" y="647" text-anchor="middle" fill="#c96a6a">2 连败打开 · 30s 半开</text>
+  <rect class="chip" x="700" y="610" width="232" height="50" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="816" y="630" text-anchor="middle" fill="#b42318">降级兜底 + 故障注入器</text>
+  <text class="t-small" x="816" y="647" text-anchor="middle" fill="#c96a6a">降级链 final fallback 文案</text>
+
+  <rect x="964" y="578" width="228" height="92" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="600">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="622"><b>Hystrix / Sentinel</b></text>
+  <text class="t-map" x="978" y="640">Sentinel ≈ 熔断 + 降级</text>
+  <text class="t-map" x="978" y="658">Resilience4j ≈ 重试 + 超时</text>
+
+  <!-- ============ ⑥ 记忆/知识层 ============ -->
+  <line x1="498" y1="670" x2="498" y2="686" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c12Solid)"/>
+  <rect class="c5" x="48" y="688" width="900" height="92" rx="10"/>
+  <text class="t-head" x="64" y="710" fill="#6b3fd4">⑥ 记忆 / 知识层（04 / 07 篇 —— 拼图：状态）</text>
+  <rect class="chip" x="64" y="720" width="270" height="50" rx="8" stroke="#d8cdf7"/>
+  <text class="t-chip" x="199" y="740" text-anchor="middle" fill="#6b3fd4">JSONCache 会话历史</text>
+  <text class="t-small" x="199" y="757" text-anchor="middle" fill="#8b6fd0">cache.json 落盘，重启不丢</text>
+  <rect class="chip" x="346" y="720" width="270" height="50" rx="8" stroke="#d8cdf7"/>
+  <text class="t-chip" x="481" y="740" text-anchor="middle" fill="#6b3fd4">语义向量缓存</text>
+  <text class="t-small" x="481" y="757" text-anchor="middle" fill="#8b6fd0">embedding + 余弦 top-k 检索</text>
+  <rect class="chip" x="628" y="720" width="304" height="50" rx="8" stroke="#d8cdf7"/>
+  <text class="t-chip" x="780" y="740" text-anchor="middle" fill="#6b3fd4">MCP tools/call 知识检索</text>
+  <text class="t-small" x="780" y="757" text-anchor="middle" fill="#8b6fd0">isError → 检索置空兜底</text>
+
+  <rect x="964" y="688" width="228" height="92" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="710">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="732"><b>Redis / ES / 向量库</b></text>
+  <text class="t-map" x="978" y="750">JSONCache 是 Redis 的教学替身</text>
+  <text class="t-map" x="978" y="768">语义缓存 ≈ 你熟悉的 ES 检索</text>
+
+  <!-- ============ ⑦ 模型/协议层 ============ -->
+  <line x1="498" y1="780" x2="498" y2="796" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c12Solid)"/>
+  <rect class="c6" x="48" y="798" width="900" height="92" rx="10"/>
+  <text class="t-head" x="64" y="820" fill="#0f7b52">⑦ 模型 / 协议层（05 / 06 / 07 篇 —— 拼图：开放互联）</text>
+  <rect class="chip" x="64" y="830" width="428" height="50" rx="8" stroke="#99f6e4"/>
+  <text class="t-chip" x="278" y="850" text-anchor="middle" fill="#0f7b52">dashscope 降级链</text>
+  <text class="t-small" x="278" y="867" text-anchor="middle" fill="#3f9c74">qwen-plus → qwen-turbo → 兜底文案</text>
+  <rect class="chip" x="504" y="830" width="428" height="50" rx="8" stroke="#99f6e4"/>
+  <text class="t-chip" x="718" y="850" text-anchor="middle" fill="#0f7b52">MCP Server（2025-06-18 规范）</text>
+  <text class="t-small" x="718" y="867" text-anchor="middle" fill="#3f9c74">JSON-RPC 2.0 + initialize + tools/resources 三原语</text>
+
+  <rect x="964" y="798" width="228" height="92" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="820">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="842">三方服务 / 开放平台</text>
+  <text class="t-map" x="978" y="860">MCP ≈ 你的 <b>OpenAPI 规范</b></text>
+  <text class="t-map" x="978" y="878">initialize ≈ 服务注册握手</text>
+
+  <!-- ============ 状态持久化底座 ============ -->
+  <rect x="48" y="902" width="900" height="52" rx="10" fill="#f6f7f9" stroke="#d5d9e0" stroke-dasharray="6 4"/>
+  <text class="t-chip" x="64" y="924" fill="#475467" font-weight="700">状态持久化底座：cache.json</text>
+  <text class="t-small" x="64" y="943" fill="#98a2b3">会话历史 · 任务状态 · 令牌余量 · 语义向量 —— 重启不丢且恢复语义正确（替代 Redis）</text>
+  <path d="M 498 902 V 890" fill="none" stroke="#98a2b3" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#c12Dash)"/>
+  <path d="M 300 902 V 940 V 890 V 780" fill="none" stroke="#98a2b3" stroke-width="1.1" stroke-dasharray="4 3"/>
+  <path d="M 700 902 V 890" fill="none" stroke="#98a2b3" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#c12Dash)"/>
+
+  <!-- ============ 提前返回点标注 ============ -->
+  <text class="t-code" x="956" y="300" text-anchor="end" fill="#b42318" font-size="10.5">401</text>
+  <text class="t-code" x="956" y="410" text-anchor="end" fill="#b42318" font-size="10.5">429</text>
+  <text class="t-code" x="956" y="534" text-anchor="end" fill="#b42318" font-size="10.5">503</text>
+  <text class="t-code" x="956" y="644" text-anchor="end" fill="#b42318" font-size="10.5">504</text>
+
+  <!-- ============ 底部说明 ============ -->
+  <line x1="48" y1="978" x2="1192" y2="978" stroke="#d5d9e0" stroke-width="1"/>
+  <text class="t-leg" x="48" y="1000">三阶段：01–04 把服务摆上线（基础设施）→ 05–06 让服务打不死（稳定性）→ 07 让服务开放互联（协议生态）。</text>
+  <text class="t-leg" x="48" y="1020">五条不变式：① 外部接口必有兜底　② 状态必须落盘　③ 可观测三件套　④ 故障必须实测触发　⑤ 协议与传输解耦。</text>
+  <text class="t-leg" x="48" y="1040">平移要点：<b>②网关=Spring Cloud Gateway+Sentinel　③Web容器+Micrometer　④线程池+MQ　⑤Hystrix/Sentinel/Resilience4j　⑥Redis/ES　⑦OpenAPI</b>——你已有的整套微服务武器库，几乎一一对应。</text>
+  <text class="t-leg" x="48" y="1060">四张配套详图之三 · 对应全书总图 L1–L6 全部层 —— 本图把 ch12 摊开成"生产化七层组件栈"，是对整条纵线的加固视图。</text>
+</svg>

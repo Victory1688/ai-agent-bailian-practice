@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 860" width="1160" height="860" role="img" aria-label="一次请求穿越全书 13 章的完整生命线">
+  <title>一次用户请求穿越《AI Agent 开发》全书的完整生命线</title>
+  <defs>
+    <marker id="lcSolid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7a8699"/>
+    </marker>
+    <marker id="lcLoop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#a98fe8"/>
+    </marker>
+  </defs>
+
+  <style>
+    text { font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif; }
+    .t-title { font-size: 23px; font-weight: 700; fill: #101828; }
+    .t-sub   { font-size: 13.5px; fill: #667085; }
+    .t-cap   { font-size: 12px; fill: #98a2b3; }
+    .t-head  { font-size: 13px; font-weight: 700; }
+    .t-step  { font-size: 12.5px; font-weight: 700; }
+    .t-chip  { font-size: 11.5px; }
+    .t-small { font-size: 10.5px; }
+    .t-leg   { font-size: 11.5px; fill: #667085; }
+    .chip { fill: #ffffff; stroke-width: 1; }
+  </style>
+
+  <rect x="0" y="0" width="1160" height="860" fill="#ffffff"/>
+
+  <text class="t-title" x="48" y="44">一次请求穿越全书 —— 完整生命线</text>
+  <text class="t-sub" x="48" y="70">用户在 Flask 端点发起一次 /ask，到拿到回答，中间依次穿过 L6→L1 六层，并由 ReAct 循环反复回灌</text>
+
+  <!-- ============ 泳道表头 ============ -->
+  <g class="t-head" text-anchor="middle">
+    <text x="140" y="104" fill="#1d4ed8">L6 接入</text>
+    <text x="330" y="104" fill="#b25a08">L5 编排/决策</text>
+    <text x="530" y="104" fill="#0f7b52">L4 上下文/记忆</text>
+    <text x="720" y="104" fill="#6b3fd4">L2 模型服务</text>
+    <text x="910" y="104" fill="#b42318">L3 能力/工具</text>
+    <text x="1075" y="104" fill="#475467">L1 基础设施</text>
+  </g>
+  <g stroke="#eef0f4" stroke-width="1">
+    <line x1="235" y1="112" x2="235" y2="770"/>
+    <line x1="430" y1="112" x2="430" y2="770"/>
+    <line x1="628" y1="112" x2="628" y2="770"/>
+    <line x1="815" y1="112" x2="815" y2="770"/>
+    <line x1="1000" y1="112" x2="1000" y2="770"/>
+  </g>
+  <line x1="48" y1="112" x2="1112" y2="112" stroke="#d5d9e0" stroke-width="1.2"/>
+
+  <!-- ============ 步骤 1 ============ -->
+  <rect class="chip" x="60" y="130" width="160" height="52" rx="8" stroke="#c9dbfd" fill="#eff5ff"/>
+  <text class="t-step" x="70" y="152" fill="#1d4ed8">① 接入</text>
+  <text class="t-small" x="70" y="170" fill="#5b7fc7">HTTP → /ask，鉴权限流</text>
+  <text class="t-small" x="228" y="164" text-anchor="end" fill="#98a2b3">ch11·ch12</text>
+
+  <path d="M 220 156 H 340" fill="none" stroke="#7a8699" stroke-width="1.4" marker-end="url(#lcSolid)"/>
+  <text class="t-small" x="280" y="148" text-anchor="middle" fill="#98a2b3">统一请求对象</text>
+
+  <!-- 步骤 2 -->
+  <rect class="chip" x="345" y="130" width="160" height="52" rx="8" stroke="#f5d3ab" fill="#fff5e9"/>
+  <text class="t-step" x="355" y="152" fill="#b25a08">② 编排入口</text>
+  <text class="t-small" x="355" y="170" fill="#b25a08">构造消息 → agent_chat</text>
+  <text class="t-small" x="513" y="164" text-anchor="end" fill="#98a2b3">ch02·ch04·ch05</text>
+
+  <path d="M 505 156 H 630" fill="none" stroke="#7a8699" stroke-width="1.4" marker-end="url(#lcSolid)"/>
+  <text class="t-small" x="568" y="148" text-anchor="middle" fill="#98a2b3">检索 / 取上下文</text>
+
+  <!-- 步骤 3 -->
+  <rect class="chip" x="635" y="130" width="170" height="52" rx="8" stroke="#b6e3cd" fill="#ecfaf3"/>
+  <text class="t-step" x="645" y="152" fill="#0f7b52">③ 上下文装配</text>
+  <text class="t-small" x="645" y="170" fill="#3f9c74">RAG 双链 + 池化 + 记忆</text>
+  <text class="t-small" x="813" y="164" text-anchor="end" fill="#98a2b3">ch06·ch07·ch08</text>
+
+  <path d="M 805 156 H 830" fill="none" stroke="#7a8699" stroke-width="1.4" marker-end="url(#lcSolid)"/>
+  <path d="M 690 182 V 214" fill="none" stroke="#a98fe8" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#lcLoop)"/>
+
+  <!-- 步骤 4（模型调用，回落到 L2） -->
+  <rect class="chip" x="635" y="216" width="170" height="52" rx="8" stroke="#d8cdf7" fill="#f6f1ff"/>
+  <text class="t-step" x="645" y="238" fill="#6b3fd4">④ 调用模型</text>
+  <text class="t-small" x="645" y="256" fill="#8b6fd0">原生 SDK 门 / OpenAI 兼容门</text>
+  <text class="t-small" x="813" y="250" text-anchor="end" fill="#98a2b3">ch01·ch03</text>
+
+  <path d="M 805 242 H 830" fill="none" stroke="#7a8699" stroke-width="1.4" marker-end="url(#lcSolid)"/>
+  <text class="t-small" x="868" y="234" text-anchor="middle" fill="#98a2b3">返回 tool_call</text>
+
+  <!-- 步骤 5 决策 -->
+  <rect class="chip" x="345" y="216" width="160" height="52" rx="8" stroke="#f5d3ab" fill="#fff5e9"/>
+  <text class="t-step" x="355" y="238" fill="#b25a08">⑤ 决策权在模型</text>
+  <text class="t-small" x="355" y="256" fill="#b25a08">选择调用哪个工具</text>
+  <text class="t-small" x="513" y="250" text-anchor="end" fill="#98a2b3">ch02·ch08</text>
+  <path d="M 830 242 H 815 V 242" fill="none" stroke="#7a8699" stroke-width="1.4"/>
+  <path d="M 635 242 H 513" fill="none" stroke="#7a8699" stroke-width="1.4" marker-end="url(#lcSolid)"/>
+
+  <!-- 步骤 6 执行工具 -->
+  <path d="M 505 242 H 920" fill="none" stroke="#7a8699" stroke-width="1.4"/>
+  <path d="M 505 242 V 300" fill="none" stroke="#7a8699" stroke-width="1.4" marker-end="url(#lcSolid)"/>
+  <rect class="chip" x="850" y="300" width="170" height="64" rx="8" stroke="#f5c6c6" fill="#fdeeee"/>
+  <text class="t-step" x="860" y="322" fill="#b42318">⑥ 执行权在本地</text>
+  <text class="t-small" x="860" y="340" fill="#c96a6a">注册表查表 → 执行工具</text>
+  <text class="t-small" x="860" y="356" fill="#c96a6a">MCP/A2A 跨进程调用</text>
+  <text class="t-small" x="1013" y="330" text-anchor="end" fill="#98a2b3">ch02·ch10·ch13</text>
+  <text class="t-small" x="935" y="292" text-anchor="middle" fill="#b42318">工具永不抛异常</text>
+
+  <!-- 步骤 7 基础设施 -->
+  <path d="M 1020 332 H 1045" fill="none" stroke="#7a8699" stroke-width="1.4" marker-end="url(#lcSolid)"/>
+  <rect class="chip" x="1015" y="392" width="130" height="80" rx="8" stroke="#dcdfe5" fill="#f6f7f9"/>
+  <text class="t-step" x="1025" y="414" fill="#475467">⑦ 落盘</text>
+  <text class="t-small" x="1025" y="432" fill="#475467">持久化会话</text>
+  <text class="t-small" x="1025" y="448" fill="#475467">打 trace</text>
+  <text class="t-small" x="1025" y="464" fill="#475467">记成本预算</text>
+  <text class="t-small" x="1138" y="422" text-anchor="end" fill="#98a2b3">ch02·ch07·ch12</text>
+  <path d="M 1080 392 V 360 V 332" fill="none" stroke="#7a8699" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <path d="M 1080 262 V 216" fill="none" stroke="#98a2b3" stroke-width="1.2" stroke-dasharray="4 3"/>
+
+  <!-- ============ ReAct 回灌大回路 ============ -->
+  <path d="M 850 300 H 300 V 300" fill="none" stroke="#a98fe8" stroke-width="1.6" stroke-dasharray="7 5"/>
+  <path d="M 300 300 V 268" fill="none" stroke="#a98fe8" stroke-width="1.6" stroke-dasharray="7 5" marker-end="url(#lcLoop)"/>
+  <text class="t-small" x="575" y="292" text-anchor="middle" fill="#a98fe8">⑧ 工具结果回灌上下文（Observation）→ 回到主循环，直到模型不再要工具</text>
+
+  <!-- 步骤 9 多智能体（若有） -->
+  <rect class="chip" x="345" y="360" width="260" height="60" rx="8" stroke="#f5d3ab" fill="#fff5e9"/>
+  <text class="t-step" x="355" y="382" fill="#b25a08">⑨ 若为多智能体：Task 七态流转</text>
+  <text class="t-small" x="355" y="400" fill="#b25a08">提交→执行→(输入中)→完成 / 失败 / 取消</text>
+  <text class="t-small" x="593" y="392" text-anchor="end" fill="#98a2b3">ch09·ch10</text>
+
+  <!-- 步骤 10 返回 -->
+  <path d="M 345 390 H 230 V 210" fill="none" stroke="#7a8699" stroke-width="1.4"/>
+  <path d="M 230 210 V 156 V 156" fill="none" stroke="#7a8699" stroke-width="1.4" marker-end="url(#lcSolid)"/>
+  <rect class="chip" x="60" y="250" width="170" height="66" rx="8" stroke="#c9dbfd" fill="#eff5ff"/>
+  <text class="t-step" x="70" y="272" fill="#1d4ed8">⑩ 渲染返回</text>
+  <text class="t-small" x="70" y="290" fill="#5b7fc7">流式 / 非流式输出</text>
+  <text class="t-small" x="70" y="306" fill="#5b7fc7">回给最终用户</text>
+  <text class="t-small" x="222" y="286" text-anchor="end" fill="#98a2b3">ch11·ch12</text>
+  <path d="M 345 380 H 230 V 316" fill="none" stroke="#7a8699" stroke-width="1.4" stroke-dasharray="4 3"/>
+
+  <!-- ============ 底部：十步速查表 ============ -->
+  <line x1="48" y1="470" x2="1112" y2="470" stroke="#d5d9e0" stroke-width="1.2"/>
+  <text class="t-head" x="48" y="496" fill="#101828">十步速查表</text>
+
+  <g class="t-small" fill="#475467">
+    <text x="48" y="524">① 接入　　　L6　ch11·ch12　HTTP → /ask，鉴权、限流、参数校验</text>
+    <text x="48" y="546">② 编排入口　L5　ch02·ch04·ch05　构造消息，进入 agent_chat 主循环 / 图节点调度</text>
+    <text x="48" y="568">③ 上下文装配 L4　ch06·ch07·ch08　RAG 双链召回 → 上下文池路由/压缩/合并 → 记忆注入</text>
+    <text x="48" y="590">④ 调用模型　L2　ch01·ch03　　走"原生 SDK 门"或"OpenAI 兼容门"，result_format='message'</text>
+    <text x="48" y="612">⑤ 决策　　　L5　ch02·ch08　　模型返回 tool_call，决策权交给模型（不是代码 if/else 决定）</text>
+    <text x="48" y="634">⑥ 执行工具　L3　ch02·ch10·ch13　注册表查表执行；跨进程走 MCP/A2A；工具永不抛异常，错误即数据</text>
+    <text x="48" y="656">⑦ 落盘　　　L1　ch02·ch07·ch12　写持久化、打 trace、记成本预算（横切：可观测/成本）</text>
+    <text x="48" y="678">⑧ 回灌　　　L4→L5　ch07·ch08　　工具结果作为 Observation 回灌上下文，回到 ③/④ 继续 ReAct 循环</text>
+    <text x="48" y="700">⑨ 多体汇总　L5　ch09·ch10　　若为多智能体，Task 七态流转（提交→执行→完成/失败/取消）后汇聚结果</text>
+    <text x="48" y="722">⑩ 渲染返回　L6　ch11·ch12　　流式/非流式渲染，回给最终用户；全程可观测</text>
+  </g>
+
+  <!-- 图例 -->
+  <line x1="48" y1="752" x2="1112" y2="752" stroke="#d5d9e0" stroke-width="1"/>
+  <text class="t-leg" x="48" y="774">图例：灰色实箭头 = 正常调用链　·　紫色虚线 = ReAct 回灌回路（工具结果回灌上下文，循环直到模型不再请求工具）</text>
+  <text class="t-leg" x="48" y="792">关键点：整条链上"决策在模型、执行在本地、错误是数据、每一步都可观测"——这四件事做到了，才算"能跑"而非"能跑一次"。</text>
+  <text class="t-leg" x="48" y="810">对应章节：L6 = ch11/ch12　·　L5 = ch02/ch04/ch05/ch08/ch09/ch10　·　L4 = ch06/ch07/ch08　·　L3 = ch02/ch10/ch13　·　L2 = ch01/ch03/ch04/ch12　·　L1 = ch02/ch07/ch12/ch13</text>
+  <text class="t-leg" x="48" y="830">注：图中的"L"编号沿用《全书架构汇总》的六层定义；同一章可跨多层（如 ch02 同时贡献 L3/L5/L1）。</text>
+</svg>

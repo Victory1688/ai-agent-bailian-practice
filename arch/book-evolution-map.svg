@@ -1,0 +1,268 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 780" width="1240" height="780" role="img" aria-label="全书 13 章演进路线与能力栈叠加图">
+  <title>《AI Agent 开发》13 章演进路线 · 能力栈逐章叠加图</title>
+  <defs>
+    <marker id="aFlow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7a8699"/>
+    </marker>
+  </defs>
+
+  <style>
+    text { font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif; }
+    .t-title { font-size: 23px; font-weight: 700; fill: #101828; }
+    .t-sub   { font-size: 13.5px; fill: #667085; }
+    .t-cap   { font-size: 12px; fill: #98a2b3; }
+    .t-phase { font-size: 14px; font-weight: 700; }
+    .t-ch    { font-size: 13.5px; font-weight: 700; }
+    .t-name  { font-size: 11.5px; }
+    .t-small { font-size: 10.5px; }
+    .t-leg   { font-size: 11.5px; fill: #667085; }
+    .chip { fill: #ffffff; stroke-width: 1; }
+  </style>
+
+  <rect x="0" y="0" width="1240" height="780" fill="#ffffff"/>
+
+  <text class="t-title" x="48" y="46">13 章演进路线 · 能力栈逐章叠加</text>
+  <text class="t-sub" x="48" y="72">横向 = 学习/演进顺序　·　纵向 = 每章新叠加的能力积木（下方砖块是上方砖块的地基，越往上越接近生产可用）</text>
+
+  <!-- ===== 阶段条 ===== -->
+  <rect x="48" y="92" width="380" height="30" rx="8" fill="#eff5ff" stroke="#b9cffb"/>
+  <text class="t-phase" x="238" y="113" text-anchor="middle" fill="#1d4ed8">上篇 · 写出一个 Agent（ch01 – ch03）</text>
+  <rect x="436" y="92" width="382" height="30" rx="8" fill="#ecfaf3" stroke="#a8e0c6"/>
+  <text class="t-phase" x="627" y="113" text-anchor="middle" fill="#0f7b52">中篇 · 装上框架与知识（ch04 – ch07）</text>
+  <rect x="826" y="92" width="366" height="30" rx="8" fill="#fff5e9" stroke="#f0bd85"/>
+  <text class="t-phase" x="1009" y="113" text-anchor="middle" fill="#b25a08">下篇 · 做成系统（ch08 – ch13）</text>
+
+  <!-- ===== 13 个章节纵列（x 中心） =====
+       ch01..ch13 centers: 100,185,270,355,470,555,640,760,845,930,1015,1100,1185
+  -->
+  <!-- 列间分隔竖线 -->
+  <g stroke="#eef0f4" stroke-width="1">
+    <line x1="142" y1="130" x2="142" y2="700"/>
+    <line x1="227" y1="130" x2="227" y2="700"/>
+    <line x1="312" y1="130" x2="312" y2="700"/>
+    <line x1="410" y1="130" x2="410" y2="700"/>
+    <line x1="512" y1="130" x2="512" y2="700"/>
+    <line x1="597" y1="130" x2="597" y2="700"/>
+    <line x1="700" y1="130" x2="700" y2="700"/>
+    <line x1="802" y1="130" x2="802" y2="700"/>
+    <line x1="887" y1="130" x2="887" y2="700"/>
+    <line x1="972" y1="130" x2="972" y2="700"/>
+    <line x1="1057" y1="130" x2="1057" y2="700"/>
+    <line x1="1142" y1="130" x2="1142" y2="700"/>
+  </g>
+
+  <!-- ===== 章节标题行 ===== -->
+  <g class="t-ch" text-anchor="middle">
+    <text x="100" y="150" fill="#1d4ed8">ch01</text>
+    <text x="185" y="150" fill="#1d4ed8">ch02</text>
+    <text x="270" y="150" fill="#1d4ed8">ch03</text>
+    <text x="355" y="150" fill="#0f7b52">ch04</text>
+    <text x="468" y="150" fill="#0f7b52">ch05</text>
+    <text x="555" y="150" fill="#0f7b52">ch06</text>
+    <text x="640" y="150" fill="#0f7b52">ch07</text>
+    <text x="760" y="150" fill="#b25a08">ch08</text>
+    <text x="845" y="150" fill="#b25a08">ch09</text>
+    <text x="930" y="150" fill="#b25a08">ch10</text>
+    <text x="1015" y="150" fill="#b25a08">ch11</text>
+    <text x="1100" y="150" fill="#b25a08">ch12</text>
+    <text x="1185" y="150" fill="#b25a08">ch13</text>
+  </g>
+  <g class="t-small" text-anchor="middle" fill="#98a2b3">
+    <text x="100" y="167">提示词</text>
+    <text x="185" y="167">手写Agent</text>
+    <text x="270" y="167">模型服务</text>
+    <text x="355" y="167">LangChain</text>
+    <text x="468" y="167">LangGraph</text>
+    <text x="555" y="167">RAG</text>
+    <text x="640" y="167">上下文</text>
+    <text x="760" y="167">单智能体</text>
+    <text x="845" y="167">多智能体</text>
+    <text x="930" y="167">A2A/MCP</text>
+    <text x="1015" y="167">Flask</text>
+    <text x="1100" y="167">上线</text>
+    <text x="1185" y="167">收官</text>
+  </g>
+  <line x1="48" y1="176" x2="1192" y2="176" stroke="#d5d9e0" stroke-width="1.2"/>
+
+  <!-- ===== 能力砖块：用横向矩形堆叠，x 由中心±宽度 ===== -->
+  <!-- 每章一块"能力积木"，高度递增表示能力叠加 -->
+
+  <!-- ch01 -->
+  <rect x="60" y="620" width="80" height="60" rx="6" fill="#eff5ff" stroke="#b9cffb"/>
+  <text class="t-name" x="100" y="645" text-anchor="middle" fill="#1e40af">提示词</text>
+  <text class="t-small" x="100" y="662" text-anchor="middle" fill="#5b7fc7">即函数契约</text>
+
+  <!-- ch02（最高，主干） -->
+  <rect x="130" y="300" width="110" height="380" rx="6" fill="#fff5e9" stroke="#f0bd85" stroke-width="2"/>
+  <text class="t-name" x="185" y="330" text-anchor="middle" fill="#b25a08" font-weight="700">六层架构主干</text>
+  <text class="t-small" x="185" y="350" text-anchor="middle" fill="#b25a08">交互交付</text>
+  <text class="t-small" x="185" y="368" text-anchor="middle" fill="#b25a08">编排决策</text>
+  <text class="t-small" x="185" y="386" text-anchor="middle" fill="#b25a08">记忆状态</text>
+  <text class="t-small" x="185" y="404" text-anchor="middle" fill="#b25a08">能力工具</text>
+  <text class="t-small" x="185" y="422" text-anchor="middle" fill="#b25a08">模型服务</text>
+  <text class="t-small" x="185" y="440" text-anchor="middle" fill="#b25a08">存储介质</text>
+  <text class="t-small" x="185" y="470" text-anchor="middle" fill="#c96a6a">＋ 会话持久化</text>
+  <text class="t-small" x="185" y="488" text-anchor="middle" fill="#c96a6a">＋ 工具注册表</text>
+  <text class="t-small" x="185" y="506" text-anchor="middle" fill="#c96a6a">＋ ReAct 循环</text>
+  <text class="t-small" x="185" y="524" text-anchor="middle" fill="#c96a6a">＋ 服务化封装</text>
+  <text class="t-small" x="185" y="556" text-anchor="middle" fill="#98a2b3">三条不变式</text>
+  <text class="t-small" x="185" y="574" text-anchor="middle" fill="#98a2b3">奠定全书地基</text>
+
+  <!-- ch03 -->
+  <rect x="235" y="470" width="70" height="210" rx="6" fill="#eff5ff" stroke="#b9cffb"/>
+  <text class="t-name" x="270" y="498" text-anchor="middle" fill="#1e40af">模型服务</text>
+  <text class="t-small" x="270" y="516" text-anchor="middle" fill="#5b7fc7">四层架构</text>
+  <text class="t-small" x="270" y="540" text-anchor="middle" fill="#5b7fc7">对外协议</text>
+  <text class="t-small" x="270" y="558" text-anchor="middle" fill="#5b7fc7">治理层</text>
+  <text class="t-small" x="270" y="576" text-anchor="middle" fill="#5b7fc7">交付模式</text>
+  <text class="t-small" x="270" y="594" text-anchor="middle" fill="#5b7fc7">模型供给</text>
+  <text class="t-small" x="270" y="626" text-anchor="middle" fill="#1e40af">一平台</text>
+  <text class="t-small" x="270" y="644" text-anchor="middle" fill="#1e40af">两扇门</text>
+
+  <!-- ch04 -->
+  <rect x="320" y="470" width="70" height="210" rx="6" fill="#ecfaf3" stroke="#a8e0c6"/>
+  <text class="t-name" x="355" y="498" text-anchor="middle" fill="#0f7b52">LangChain</text>
+  <text class="t-small" x="355" y="516" text-anchor="middle" fill="#3f9c74">四层分层</text>
+  <text class="t-small" x="355" y="540" text-anchor="middle" fill="#3f9c74">任务编排</text>
+  <text class="t-small" x="355" y="558" text-anchor="middle" fill="#3f9c74">能力组件</text>
+  <text class="t-small" x="355" y="576" text-anchor="middle" fill="#3f9c74">工具定义</text>
+  <text class="t-small" x="355" y="594" text-anchor="middle" fill="#3f9c74">模型适配</text>
+  <text class="t-small" x="355" y="626" text-anchor="middle" fill="#0f7b52">六类"死法"</text>
+
+  <!-- ch05 -->
+  <rect x="420" y="340" width="96" height="340" rx="6" fill="#ecfaf3" stroke="#a8e0c6"/>
+  <text class="t-name" x="468" y="368" text-anchor="middle" fill="#0f7b52">LangGraph</text>
+  <text class="t-small" x="468" y="388" text-anchor="middle" fill="#3f9c74">节点 + 边</text>
+  <text class="t-small" x="468" y="406" text-anchor="middle" fill="#3f9c74">显式声明</text>
+  <text class="t-small" x="468" y="430" text-anchor="middle" fill="#3f9c74">L1 图编排</text>
+  <text class="t-small" x="468" y="450" text-anchor="middle" fill="#3f9c74">L2 组件集成</text>
+  <text class="t-small" x="468" y="470" text-anchor="middle" fill="#3f9c74">L3 业务流水线</text>
+  <text class="t-small" x="468" y="490" text-anchor="middle" fill="#3f9c74">L4 多Agent协作</text>
+  <text class="t-small" x="468" y="520" text-anchor="middle" fill="#0f7b52">并行扇出-汇聚</text>
+  <text class="t-small" x="468" y="548" text-anchor="middle" fill="#98a2b3">十连坑</text>
+  <text class="t-small" x="468" y="566" text-anchor="middle" fill="#98a2b3">四笔学费</text>
+
+  <!-- ch06 -->
+  <rect x="520" y="420" width="70" height="260" rx="6" fill="#ecfaf3" stroke="#a8e0c6"/>
+  <text class="t-name" x="555" y="448" text-anchor="middle" fill="#0f7b52">RAG</text>
+  <text class="t-small" x="555" y="468" text-anchor="middle" fill="#3f9c74">双链管道</text>
+  <text class="t-small" x="555" y="492" text-anchor="middle" fill="#3f9c74">L1 检索零件</text>
+  <text class="t-small" x="555" y="510" text-anchor="middle" fill="#3f9c74">L2 预处理</text>
+  <text class="t-small" x="555" y="528" text-anchor="middle" fill="#3f9c74">L3 闭环</text>
+  <text class="t-small" x="555" y="546" text-anchor="middle" fill="#3f9c74">L4 显式</text>
+  <text class="t-small" x="555" y="564" text-anchor="middle" fill="#3f9c74">L5 异构融合</text>
+  <text class="t-small" x="555" y="594" text-anchor="middle" fill="#98a2b3">四笔学费</text>
+
+  <!-- ch07 -->
+  <rect x="605" y="420" width="70" height="260" rx="6" fill="#ecfaf3" stroke="#a8e0c6"/>
+  <text class="t-name" x="640" y="448" text-anchor="middle" fill="#0f7b52">上下文</text>
+  <text class="t-small" x="640" y="468" text-anchor="middle" fill="#3f9c74">上下文池</text>
+  <text class="t-small" x="640" y="492" text-anchor="middle" fill="#3f9c74">L1 表示</text>
+  <text class="t-small" x="640" y="510" text-anchor="middle" fill="#3f9c74">L2 路由</text>
+  <text class="t-small" x="640" y="528" text-anchor="middle" fill="#3f9c74">L3 存储</text>
+  <text class="t-small" x="640" y="546" text-anchor="middle" fill="#3f9c74">L4 合并</text>
+  <text class="t-small" x="640" y="576" text-anchor="middle" fill="#3f9c74">四条不变式</text>
+  <text class="t-small" x="640" y="594" text-anchor="middle" fill="#98a2b3">三笔学费</text>
+
+  <!-- ch08 -->
+  <rect x="715" y="380" width="90" height="300" rx="6" fill="#fff5e9" stroke="#f0bd85"/>
+  <text class="t-name" x="760" y="408" text-anchor="middle" fill="#b25a08">单智能体</text>
+  <text class="t-small" x="760" y="428" text-anchor="middle" fill="#b25a08">五大能力层</text>
+  <text class="t-small" x="760" y="452" text-anchor="middle" fill="#b25a08">L5 预算</text>
+  <text class="t-small" x="760" y="470" text-anchor="middle" fill="#b25a08">L4 记忆</text>
+  <text class="t-small" x="760" y="488" text-anchor="middle" fill="#b25a08">L3 容错</text>
+  <text class="t-small" x="760" y="506" text-anchor="middle" fill="#b25a08">L2 输入</text>
+  <text class="t-small" x="760" y="524" text-anchor="middle" fill="#b25a08">L1 状态</text>
+  <text class="t-small" x="760" y="552" text-anchor="middle" fill="#98a2b3">四条不变式</text>
+  <text class="t-small" x="760" y="570" text-anchor="middle" fill="#98a2b3">三笔学费</text>
+
+  <!-- ch09 -->
+  <rect x="800" y="420" width="90" height="260" rx="6" fill="#fff5e9" stroke="#f0bd85"/>
+  <text class="t-name" x="845" y="448" text-anchor="middle" fill="#b25a08">多智能体</text>
+  <text class="t-small" x="845" y="468" text-anchor="middle" fill="#b25a08">四层</text>
+  <text class="t-small" x="845" y="492" text-anchor="middle" fill="#b25a08">L4 协作模式</text>
+  <text class="t-small" x="845" y="510" text-anchor="middle" fill="#b25a08">L3 调度策略</text>
+  <text class="t-small" x="845" y="528" text-anchor="middle" fill="#b25a08">L2 并发管理</text>
+  <text class="t-small" x="845" y="546" text-anchor="middle" fill="#b25a08">L1 协议格式</text>
+  <text class="t-small" x="845" y="576" text-anchor="middle" fill="#98a2b3">三种协作模式</text>
+  <text class="t-small" x="845" y="594" text-anchor="middle" fill="#98a2b3">四笔学费</text>
+
+  <!-- ch10 -->
+  <rect x="885" y="400" width="90" height="280" rx="6" fill="#fff5e9" stroke="#f0bd85"/>
+  <text class="t-name" x="930" y="428" text-anchor="middle" fill="#b25a08">A2A / MCP</text>
+  <text class="t-small" x="930" y="448" text-anchor="middle" fill="#b25a08">六层架构</text>
+  <text class="t-small" x="930" y="472" text-anchor="middle" fill="#b25a08">L6 编排组合</text>
+  <text class="t-small" x="930" y="490" text-anchor="middle" fill="#b25a08">L5 通信模式</text>
+  <text class="t-small" x="930" y="508" text-anchor="middle" fill="#b25a08">L4 核心能力</text>
+  <text class="t-small" x="930" y="526" text-anchor="middle" fill="#b25a08">L3 业务对象</text>
+  <text class="t-small" x="930" y="544" text-anchor="middle" fill="#b25a08">L2 协议信封</text>
+  <text class="t-small" x="930" y="562" text-anchor="middle" fill="#b25a08">L1 传输</text>
+  <text class="t-small" x="930" y="590" text-anchor="middle" fill="#98a2b3">Task 七态 + 错误码</text>
+
+  <!-- ch11 -->
+  <rect x="970" y="500" width="90" height="180" rx="6" fill="#eff5ff" stroke="#b9cffb"/>
+  <text class="t-name" x="1015" y="528" text-anchor="middle" fill="#1e40af">Flask Web</text>
+  <text class="t-small" x="1015" y="550" text-anchor="middle" fill="#5b7fc7">4 个端点</text>
+  <text class="t-small" x="1015" y="568" text-anchor="middle" fill="#5b7fc7">/ask 五步</text>
+  <text class="t-small" x="1015" y="586" text-anchor="middle" fill="#5b7fc7">双 LLM 后端</text>
+  <text class="t-small" x="1015" y="612" text-anchor="middle" fill="#1e40af">char10→11</text>
+  <text class="t-small" x="1015" y="630" text-anchor="middle" fill="#1e40af">映射表</text>
+
+  <!-- ch12 -->
+  <rect x="1055" y="300" width="90" height="380" rx="6" fill="#fdeeee" stroke="#f0b4b4" stroke-width="2"/>
+  <text class="t-name" x="1100" y="328" text-anchor="middle" fill="#b42318" font-weight="700">上线部署</text>
+  <text class="t-small" x="1100" y="348" text-anchor="middle" fill="#b42318">七层组件栈</text>
+  <text class="t-small" x="1100" y="372" text-anchor="middle" fill="#b42318">客户端</text>
+  <text class="t-small" x="1100" y="390" text-anchor="middle" fill="#b42318">接入防御</text>
+  <text class="t-small" x="1100" y="408" text-anchor="middle" fill="#b42318">Web 服务</text>
+  <text class="t-small" x="1100" y="426" text-anchor="middle" fill="#b42318">编排</text>
+  <text class="t-small" x="1100" y="444" text-anchor="middle" fill="#b42318">容错</text>
+  <text class="t-small" x="1100" y="462" text-anchor="middle" fill="#b42318">记忆·知识</text>
+  <text class="t-small" x="1100" y="480" text-anchor="middle" fill="#b42318">模型·协议</text>
+  <rect x="1063" y="498" width="74" height="150" rx="6" fill="#fff" stroke="#f0b4b4" stroke-dasharray="4 3"/>
+  <text class="t-small" x="1100" y="520" text-anchor="middle" fill="#b42318" font-weight="700">五块拼图</text>
+  <text class="t-small" x="1100" y="542" text-anchor="middle" fill="#c96a6a">可观测</text>
+  <text class="t-small" x="1100" y="560" text-anchor="middle" fill="#c96a6a">安全</text>
+  <text class="t-small" x="1100" y="578" text-anchor="middle" fill="#c96a6a">吞吐</text>
+  <text class="t-small" x="1100" y="596" text-anchor="middle" fill="#c96a6a">容错</text>
+  <text class="t-small" x="1100" y="614" text-anchor="middle" fill="#c96a6a">互联</text>
+
+  <!-- ch13 -->
+  <rect x="1140" y="250" width="90" height="430" rx="6" fill="#f6f1ff" stroke="#c9b6f2" stroke-width="2"/>
+  <text class="t-name" x="1185" y="278" text-anchor="middle" fill="#6b3fd4" font-weight="700">收官</text>
+  <text class="t-small" x="1185" y="298" text-anchor="middle" fill="#6b3fd4">复合智能体</text>
+  <text class="t-small" x="1185" y="316" text-anchor="middle" fill="#6b3fd4">分层总装图</text>
+  <text class="t-small" x="1185" y="340" text-anchor="middle" fill="#6b3fd4">入口层</text>
+  <text class="t-small" x="1185" y="358" text-anchor="middle" fill="#6b3fd4">主控层</text>
+  <text class="t-small" x="1185" y="376" text-anchor="middle" fill="#6b3fd4">能力层</text>
+  <text class="t-small" x="1185" y="394" text-anchor="middle" fill="#6b3fd4">协议层</text>
+  <text class="t-small" x="1185" y="412" text-anchor="middle" fill="#6b3fd4">模型层</text>
+  <text class="t-small" x="1185" y="430" text-anchor="middle" fill="#6b3fd4">测试层</text>
+  <line x1="1152" y1="448" x2="1218" y2="448" stroke="#e0d5f7" stroke-width="1"/>
+  <text class="t-small" x="1185" y="470" text-anchor="middle" fill="#8b6fd0" font-weight="700">测试三部曲</text>
+  <text class="t-small" x="1185" y="490" text-anchor="middle" fill="#8b6fd0">单元</text>
+  <text class="t-small" x="1185" y="508" text-anchor="middle" fill="#8b6fd0">契约</text>
+  <text class="t-small" x="1185" y="526" text-anchor="middle" fill="#8b6fd0">集成</text>
+  <text class="t-small" x="1185" y="556" text-anchor="middle" fill="#6b3fd4">六条不变式</text>
+  <text class="t-small" x="1185" y="574" text-anchor="middle" fill="#98a2b3">305 用例</text>
+  <text class="t-small" x="1185" y="592" text-anchor="middle" fill="#98a2b3">七类通病</text>
+  <text class="t-small" x="1185" y="624" text-anchor="middle" fill="#6b3fd4" font-weight="700">可上线</text>
+
+  <!-- ===== 四次跃迁箭头（在砖块上方横穿） ===== -->
+  <path d="M 270 232 H 355" fill="none" stroke="#7a8699" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#aFlow)"/>
+  <path d="M 355 232 H 468" fill="none" stroke="#7a8699" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#aFlow)"/>
+  <text class="t-small" x="320" y="224" text-anchor="middle" fill="#98a2b3">跃迁 ①/②</text>
+  <path d="M 555 232 H 640" fill="none" stroke="#7a8699" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#aFlow)"/>
+  <text class="t-small" x="598" y="224" text-anchor="middle" fill="#98a2b3">跃迁 ③</text>
+  <path d="M 930 232 H 1015 H 1100" fill="none" stroke="#7a8699" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#aFlow)"/>
+  <text class="t-small" x="1015" y="224" text-anchor="middle" fill="#98a2b3">跃迁 ④</text>
+
+  <!-- 顶部分界虚线 -->
+  <line x1="410" y1="176" x2="410" y2="700" stroke="#98a2b3" stroke-width="1" stroke-dasharray="6 5"/>
+  <line x1="700" y1="176" x2="700" y2="700" stroke="#98a2b3" stroke-width="1" stroke-dasharray="6 5"/>
+
+  <!-- 底部说明 -->
+  <text class="t-leg" x="48" y="726">砖块高度 ∝ 该章叠加的能力体量；同一纵列内的砖块向上堆叠（越上＝越接近生产可用）。</text>
+  <text class="t-leg" x="48" y="744">灰色虚线 = 全书四次关键跃迁：① 单机→服务化 ② 链式→图编排 ③ 检索→上下文工程 ④ 单进程→跨进程生产化。</text>
+  <text class="t-leg" x="48" y="762">ch02 是全书的"地基主干"（六层架构），ch08 与 ch13 分别从"能力收敛"与"可验证"两个方向回收主干；ch12 从生产化方向给全书打补丁。</text>
+</svg>

@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 900" width="1160" height="900" role="img" aria-label="《AI Agent 开发》全书 13 章分层架构总图">
+  <title>《AI Agent 开发：零基础构建复合智能体》全书 13 章分层架构总图</title>
+  <defs>
+    <marker id="aSolid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7a8699"/>
+    </marker>
+    <marker id="aDash" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#98a2b3"/>
+    </marker>
+    <marker id="aVert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#a98fe8"/>
+    </marker>
+  </defs>
+
+  <style>
+    text { font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif; }
+    .t-title { font-size: 23px; font-weight: 700; fill: #101828; }
+    .t-sub   { font-size: 13.5px; fill: #667085; }
+    .t-cap   { font-size: 12px; fill: #98a2b3; }
+    .t-head  { font-size: 13.5px; font-weight: 700; }
+    .t-chip  { font-size: 12px; }
+    .t-small { font-size: 10.5px; }
+    .t-dot   { font-size: 11px; fill: #98a2b3; }
+    .t-leg   { font-size: 11.5px; fill: #667085; }
+    .t-side  { font-size: 11px; fill: #98a2b3; }
+    .chip    { fill: #ffffff; stroke-width: 1; }
+    .c-l6 { fill: #eff5ff; stroke: #b9cffb; }
+    .c-l5 { fill: #fff5e9; stroke: #f0bd85; }
+    .c-l4 { fill: #ecfaf3; stroke: #a8e0c6; }
+    .c-l3 { fill: #fdeeee; stroke: #f0b4b4; }
+    .c-l2 { fill: #f6f1ff; stroke: #c9b6f2; }
+    .c-l1 { fill: #f6f7f9; stroke: #d5d9e0; }
+  </style>
+
+  <rect x="0" y="0" width="1160" height="900" fill="#ffffff"/>
+
+  <text class="t-title" x="56" y="46">全书 13 章分层架构总图</text>
+  <text class="t-sub" x="56" y="72">《AI Agent 开发：零基础构建复合智能体》　·　从"把大模型当函数用"到"把 Agent 做成可上线的系统"</text>
+  <text class="t-cap" x="56" y="94">纵向 = 工程抽象层级（越上越贴近业务交付，越下越贴近基础设施）　·　每层右侧标签 = 在该层做出贡献的章节</text>
+
+  <!-- ============ 左侧层号栏 ============ -->
+  <text class="t-side" x="30" y="140" text-anchor="middle">交付</text>
+  <text class="t-side" x="30" y="152" text-anchor="middle">接入</text>
+
+  <!-- ============ L6 交付与接入层 ============ -->
+  <rect class="c-l6" x="56" y="110" width="880" height="96" rx="10"/>
+  <text class="t-head" x="70" y="132" fill="#1d4ed8">L6　交付与接入层 —— 对外承诺 HTTP 语义、鉴权、限流、流式返回</text>
+  <rect class="chip" x="70" y="144" width="205" height="50" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="172" y="166" text-anchor="middle" fill="#1e40af">Flask Web 服务</text>
+  <text class="t-small" x="172" y="184" text-anchor="middle" fill="#5b7fc7">ch11 · 4 个 HTTP 端点</text>
+  <rect class="chip" x="289" y="144" width="205" height="50" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="391" y="166" text-anchor="middle" fill="#1e40af">A2A 服务端点</text>
+  <text class="t-small" x="391" y="184" text-anchor="middle" fill="#5b7fc7">ch10 · ch11 映射</text>
+  <rect class="chip" x="508" y="144" width="205" height="50" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="610" y="166" text-anchor="middle" fill="#1e40af">客户端与网关</text>
+  <text class="t-small" x="610" y="184" text-anchor="middle" fill="#5b7fc7">ch12 · 接入防御</text>
+  <rect class="chip" x="727" y="144" width="195" height="50" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="824" y="166" text-anchor="middle" fill="#1e40af">流式 / 非流式渲染</text>
+  <text class="t-small" x="824" y="184" text-anchor="middle" fill="#5b7fc7">ch11 · ch12</text>
+
+  <line x1="496" y1="206" x2="496" y2="228" stroke="#7a8699" stroke-width="1.4" marker-end="url(#aSolid)"/>
+  <text class="t-dot" x="506" y="222">统一请求对象</text>
+
+  <!-- ============ L5 编排与决策层 ============ -->
+  <rect class="c-l5" x="56" y="230" width="880" height="132" rx="10" stroke-width="2"/>
+  <text class="t-head" x="70" y="252" fill="#b25a08">L5　编排与决策层 —— 核心：决策权在模型，执行权在本地（ReAct 主循环）</text>
+  <rect class="chip" x="70" y="264" width="168" height="42" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="154" y="290" text-anchor="middle" fill="#b25a08">agent_chat 单循环</text>
+  <rect class="chip" x="250" y="264" width="168" height="42" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="334" y="290" text-anchor="middle" fill="#b25a08">LangChain 声明式链</text>
+  <rect class="chip" x="430" y="264" width="168" height="42" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="514" y="290" text-anchor="middle" fill="#b25a08">LangGraph 图编排</text>
+  <rect class="chip" x="610" y="264" width="312" height="42" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="766" y="290" text-anchor="middle" fill="#b25a08">多智能体协作与调度（流水线 / 辩论 / 主管）</text>
+  <rect class="chip" x="70" y="314" width="256" height="38" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="198" y="338" text-anchor="middle" fill="#b25a08">单智能体五大能力层</text>
+  <rect class="chip" x="338" y="314" width="256" height="38" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="466" y="338" text-anchor="middle" fill="#b25a08">A2A 编排组合 · Task 七态</text>
+  <rect class="chip" x="606" y="314" width="316" height="38" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="764" y="338" text-anchor="middle" fill="#b25a08">状态机 / 分支 / 循环 / 并行扇出-汇聚</text>
+
+  <line x1="496" y1="362" x2="496" y2="384" stroke="#7a8699" stroke-width="1.4" marker-end="url(#aSolid)"/>
+  <text class="t-dot" x="506" y="378">上下文 / 检索请求</text>
+
+  <!-- ============ L4 上下文与记忆层 ============ -->
+  <rect class="c-l4" x="56" y="386" width="880" height="96" rx="10"/>
+  <text class="t-head" x="70" y="408" fill="#0f7b52">L4　上下文与记忆层 —— 知识注入、上下文路由与池化、记忆分层</text>
+  <rect class="chip" x="70" y="420" width="205" height="50" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="172" y="442" text-anchor="middle" fill="#0f7b52">RAG 双链管道</text>
+  <text class="t-small" x="172" y="460" text-anchor="middle" fill="#3f9c74">ch06 · 索引链 + 查询链</text>
+  <rect class="chip" x="289" y="420" width="205" height="50" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="391" y="442" text-anchor="middle" fill="#0f7b52">上下文工程四层 + 池</text>
+  <text class="t-small" x="391" y="460" text-anchor="middle" fill="#3f9c74">ch07 · 表示/路由/存储/合并</text>
+  <rect class="chip" x="508" y="420" width="205" height="50" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="610" y="442" text-anchor="middle" fill="#0f7b52">记忆分层</text>
+  <text class="t-small" x="610" y="460" text-anchor="middle" fill="#3f9c74">ch08 · 短期/长期/情景/语义</text>
+  <rect class="chip" x="727" y="420" width="195" height="50" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="824" y="442" text-anchor="middle" fill="#0f7b52">记忆与知识组件</text>
+  <text class="t-small" x="824" y="460" text-anchor="middle" fill="#3f9c74">ch12 · ch13 装配</text>
+
+  <line x1="496" y1="482" x2="496" y2="504" stroke="#7a8699" stroke-width="1.4" marker-end="url(#aSolid)"/>
+  <text class="t-dot" x="506" y="498">工具调用 / 能力请求</text>
+
+  <!-- ============ L3 能力与工具层 ============ -->
+  <rect class="c-l3" x="56" y="506" width="880" height="96" rx="10"/>
+  <text class="t-head" x="70" y="528" fill="#b42318">L3　能力与工具层 —— 核心：注册表消灭 if/elif；工具永不抛异常</text>
+  <rect class="chip" x="70" y="540" width="205" height="50" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="172" y="562" text-anchor="middle" fill="#b42318">工具注册表</text>
+  <text class="t-small" x="172" y="580" text-anchor="middle" fill="#c96a6a">ch02 · 声明即注册</text>
+  <rect class="chip" x="289" y="540" width="205" height="50" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="391" y="562" text-anchor="middle" fill="#b42318">MCP 工具暴露</text>
+  <text class="t-small" x="391" y="580" text-anchor="middle" fill="#c96a6a">ch10 · 本地能力外发</text>
+  <rect class="chip" x="508" y="540" width="205" height="50" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="610" y="562" text-anchor="middle" fill="#b42318">检索零件与组件</text>
+  <text class="t-small" x="610" y="580" text-anchor="middle" fill="#c96a6a">ch05 · ch06</text>
+  <rect class="chip" x="727" y="540" width="195" height="50" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="824" y="562" text-anchor="middle" fill="#b42318">安全求值器</text>
+  <text class="t-small" x="824" y="580" text-anchor="middle" fill="#c96a6a">ch13 · 代码执行沙箱</text>
+
+  <line x1="496" y1="602" x2="496" y2="624" stroke="#7a8699" stroke-width="1.4" marker-end="url(#aSolid)"/>
+  <text class="t-dot" x="506" y="618">模型调用</text>
+
+  <!-- ============ L2 模型服务层 ============ -->
+  <rect class="c-l2" x="56" y="626" width="880" height="96" rx="10"/>
+  <text class="t-head" x="70" y="648" fill="#6b3fd4">L2　模型服务层 —— 一平台两扇门：原生 SDK ↔ OpenAI 兼容协议</text>
+  <rect class="chip" x="70" y="660" width="205" height="50" rx="8" stroke="#d8cdf7"/>
+  <text class="t-chip" x="172" y="682" text-anchor="middle" fill="#6b3fd4">提示词即函数契约</text>
+  <text class="t-small" x="172" y="700" text-anchor="middle" fill="#8b6fd0">ch01 · 输入/输出契约</text>
+  <rect class="chip" x="289" y="660" width="205" height="50" rx="8" stroke="#d8cdf7"/>
+  <text class="t-chip" x="391" y="682" text-anchor="middle" fill="#6b3fd4">模型服务四层</text>
+  <text class="t-small" x="391" y="700" text-anchor="middle" fill="#8b6fd0">ch03 · 协议/治理/交付/供给</text>
+  <rect class="chip" x="508" y="660" width="205" height="50" rx="8" stroke="#d8cdf7"/>
+  <text class="t-chip" x="610" y="682" text-anchor="middle" fill="#6b3fd4">模型适配层</text>
+  <text class="t-small" x="610" y="700" text-anchor="middle" fill="#8b6fd0">ch04 · 统一接口</text>
+  <rect class="chip" x="727" y="660" width="195" height="50" rx="8" stroke="#d8cdf7"/>
+  <text class="t-chip" x="824" y="682" text-anchor="middle" fill="#6b3fd4">模型与协议组件</text>
+  <text class="t-small" x="824" y="700" text-anchor="middle" fill="#8b6fd0">ch12 · 双 LLM 后端</text>
+
+  <line x1="496" y1="722" x2="496" y2="744" stroke="#7a8699" stroke-width="1.4" marker-end="url(#aSolid)"/>
+  <text class="t-dot" x="506" y="738">读写 / 落盘 / 传输</text>
+
+  <!-- ============ L1 基础设施与介质层 ============ -->
+  <rect class="c-l1" x="56" y="746" width="880" height="80" rx="10"/>
+  <text class="t-head" x="70" y="768" fill="#475467">L1　基础设施与介质层 —— 持久化、传输、观测、测试夹具</text>
+  <rect class="chip" x="70" y="778" width="205" height="38" rx="8" stroke="#dcdfe5"/>
+  <text class="t-chip" x="172" y="802" text-anchor="middle" fill="#475467">会话持久化（ch02·ch07）</text>
+  <rect class="chip" x="289" y="778" width="205" height="38" rx="8" stroke="#dcdfe5"/>
+  <text class="t-chip" x="391" y="802" text-anchor="middle" fill="#475467">传输层 HTTP/SSE（ch10·ch11）</text>
+  <rect class="chip" x="508" y="778" width="205" height="38" rx="8" stroke="#dcdfe5"/>
+  <text class="t-chip" x="610" y="802" text-anchor="middle" fill="#475467">可观测 Tracing（ch12）</text>
+  <rect class="chip" x="727" y="778" width="195" height="38" rx="8" stroke="#dcdfe5"/>
+  <text class="t-chip" x="824" y="802" text-anchor="middle" fill="#475467">测试夹具（ch13·305 用例）</text>
+
+  <!-- ============ 横切条 ============ -->
+  <rect x="56" y="840" width="880" height="46" rx="10" fill="#f6f7f9" stroke="#c9b6f2" stroke-dasharray="6 4"/>
+  <text class="t-head" x="70" y="860" fill="#6b3fd4">横切贯穿（ch08 · ch12 · ch13）</text>
+  <rect class="chip" x="290" y="848" width="152" height="30" rx="8" stroke="#dcdfe5"/>
+  <text class="t-chip" x="366" y="868" text-anchor="middle" fill="#475467">可观测 Observability</text>
+  <rect class="chip" x="450" y="848" width="152" height="30" rx="8" stroke="#dcdfe5"/>
+  <text class="t-chip" x="526" y="868" text-anchor="middle" fill="#475467">安全对齐 Guardrails</text>
+  <rect class="chip" x="610" y="848" width="152" height="30" rx="8" stroke="#dcdfe5"/>
+  <text class="t-chip" x="686" y="868" text-anchor="middle" fill="#475467">成本预算 Budget</text>
+  <rect class="chip" x="770" y="848" width="152" height="30" rx="8" stroke="#dcdfe5"/>
+  <text class="t-chip" x="846" y="868" text-anchor="middle" fill="#475467">测试与验证 Verify</text>
+
+  <!-- ============ 右侧纵向补丁栏 ============ -->
+  <text class="t-side" x="965" y="200" text-anchor="middle">纵向</text>
+  <text class="t-side" x="965" y="213" text-anchor="middle">贯穿</text>
+  <rect x="952" y="230" width="180" height="300" rx="10" fill="#fbf7ff" stroke="#c9b6f2" stroke-dasharray="6 4"/>
+  <text class="t-head" x="1042" y="254" text-anchor="middle" fill="#6b3fd4">贯穿全书的两条纵线</text>
+  <text class="t-chip" x="1042" y="284" text-anchor="middle" fill="#6b3fd4">ch12 上线部署</text>
+  <text class="t-small" x="1042" y="302" text-anchor="middle" fill="#8b6fd0">七层组件栈</text>
+  <text class="t-small" x="1042" y="318" text-anchor="middle" fill="#8b6fd0">五块生产化拼图</text>
+  <text class="t-small" x="1042" y="336" text-anchor="middle" fill="#8b6fd0">→ 给每层打生产补丁</text>
+  <line x1="972" y1="352" x2="1112" y2="352" stroke="#e0d5f7" stroke-width="1"/>
+  <text class="t-chip" x="1042" y="378" text-anchor="middle" fill="#6b3fd4">ch13 收官</text>
+  <text class="t-small" x="1042" y="396" text-anchor="middle" fill="#8b6fd0">复合智能体总装</text>
+  <text class="t-small" x="1042" y="412" text-anchor="middle" fill="#8b6fd0">测试三部曲</text>
+  <text class="t-small" x="1042" y="430" text-anchor="middle" fill="#8b6fd0">→ 给每层打验证补丁</text>
+  <line x1="972" y1="446" x2="1112" y2="446" stroke="#e0d5f7" stroke-width="1"/>
+  <text class="t-small" x="1042" y="470" text-anchor="middle" fill="#98a2b3">二者合起来，把</text>
+  <text class="t-small" x="1042" y="486" text-anchor="middle" fill="#98a2b3">"能跑一次"变成"能跑"</text>
+  <path d="M 952 380 H 938" fill="none" stroke="#a98fe8" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#aVert)"/>
+
+  <!-- 标题下说明 -->
+  <text class="t-cap" x="952" y="552" text-anchor="middle">实箭头 = 层间调用流</text>
+  <text class="t-cap" x="952" y="568" text-anchor="middle">虚紫箭头 = 纵向贯穿</text>
+
+  <!-- 图例 -->
+  <text class="t-leg" x="56" y="896">图例：实线箭头 = 相邻层间的同步调用/数据流　·　左侧层号 L1–L6 = 工程抽象层级　·　虚线框 = 纵向贯穿全书的生产化与可验证补丁。</text>
+</svg>

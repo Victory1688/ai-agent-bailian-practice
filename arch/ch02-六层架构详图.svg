@@ -1,0 +1,193 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 940" width="1240" height="940" role="img" aria-label="chapter02 Agent 六层架构详图（含 SpringBoot 微服务平移对照）">
+  <title>chapter02 · 手写 Agent 六层架构详图 —— 一个智能体的完整解剖（附微服务平移对照）</title>
+  <defs>
+    <marker id="c2Solid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7a8699"/>
+    </marker>
+    <marker id="c2Loop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#a98fe8"/>
+    </marker>
+  </defs>
+
+  <style>
+    text { font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif; }
+    .t-title { font-size: 23px; font-weight: 700; fill: #101828; }
+    .t-sub   { font-size: 13.5px; fill: #667085; }
+    .t-cap   { font-size: 12px; fill: #98a2b3; }
+    .t-head  { font-size: 13.5px; font-weight: 700; }
+    .t-chip  { font-size: 12px; }
+    .t-small { font-size: 10.5px; }
+    .t-dot   { font-size: 11px; fill: #98a2b3; }
+    .t-leg   { font-size: 11.5px; fill: #667085; }
+    .t-map   { font-size: 10.5px; fill: #0f766e; }
+    .t-maph  { font-size: 11px; font-weight: 700; fill: #0d9488; }
+    .chip { fill: #ffffff; stroke-width: 1; }
+    .c-l5 { fill: #eff5ff; stroke: #b9cffb; }
+    .c-l4 { fill: #fff5e9; stroke: #f0bd85; }
+    .c-l3 { fill: #ecfaf3; stroke: #a8e0c6; }
+    .c-l2 { fill: #fdeeee; stroke: #f0b4b4; }
+    .c-l0 { fill: #f6f1ff; stroke: #c9b6f2; }
+    .c-ls { fill: #f6f7f9; stroke: #d5d9e0; }
+  </style>
+
+  <rect x="0" y="0" width="1240" height="940" fill="#ffffff"/>
+
+  <text class="t-title" x="48" y="42">ch02 · 手写 Agent 六层架构（一个智能体的完整解剖）</text>
+  <text class="t-sub" x="48" y="67">8 篇文件剥离出的同一副骨架　·　变化只有两处：<b>tools 说明书里加了什么工具</b>、<b>tool_registry 里挂了什么执行体</b></text>
+  <text class="t-cap" x="48" y="88">右侧青色栏 = 微服务 / SpringBoot 概念平移对照（Redis、注册中心、网关、Controller 等）</text>
+
+  <!-- ============ 调用方 ============ -->
+  <rect class="chip" x="48" y="102" width="900" height="44" rx="9" stroke="#d5d9e0" fill="#f7f8fa"/>
+  <text class="t-chip" x="498" y="130" text-anchor="middle" fill="#344054">调用方：任何前端 / 脚本 / curl　（chapter01 的提示词调用在此被包进 Agent 循环）</text>
+  <line x1="498" y1="146" x2="498" y2="166" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c2Solid)"/>
+
+  <!-- ============ L5 交互交付层 ============ -->
+  <rect class="c-l5" x="48" y="168" width="900" height="92" rx="10"/>
+  <text class="t-head" x="64" y="190" fill="#1d4ed8">L5　交互交付层 —— 怎么被使用（08 篇 FastAPI 中间 API）</text>
+  <rect class="chip" x="64" y="200" width="270" height="46" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="199" y="220" text-anchor="middle" fill="#1e40af">POST /chat　＋　CORS</text>
+  <text class="t-small" x="199" y="238" text-anchor="middle" fill="#5b7fc7">UI ↔ 中间 API ↔ 智能体 三段式</text>
+  <rect class="chip" x="348" y="200" width="270" height="46" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="483" y="220" text-anchor="middle" fill="#1e40af">FastAPI / uvicorn</text>
+  <text class="t-small" x="483" y="238" text-anchor="middle" fill="#5b7fc7">agent_ui_api:app</text>
+  <rect class="chip" x="632" y="200" width="300" height="46" rx="8" stroke="#c9dbfd"/>
+  <text class="t-chip" x="782" y="220" text-anchor="middle" fill="#1e40af">session_id 收下（教学版未使用）</text>
+  <text class="t-small" x="782" y="238" text-anchor="middle" fill="#5b7fc7">🔴 生产第一课：接上 03 篇持久化记忆做会话隔离</text>
+
+  <!-- 平移对照 -->
+  <rect x="964" y="168" width="228" height="92" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="190">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="212">Gateway / Controller 层</text>
+  <text class="t-map" x="978" y="230">对外 HTTP 契约、CORS</text>
+  <text class="t-map" x="978" y="248">（≈ Spring WebFlux / MVC）</text>
+
+  <line x1="498" y1="260" x2="498" y2="280" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c2Solid)"/>
+  <text class="t-dot" x="508" y="276">统一请求对象</text>
+
+  <!-- ============ L4 编排决策层 ============ -->
+  <rect class="c-l4" x="48" y="282" width="900" height="126" rx="10" stroke-width="2"/>
+  <text class="t-head" x="64" y="304" fill="#b25a08">L4　编排决策层 —— 大脑怎么运转（01 agent_chat 循环 + 02 状态追踪）　★全书地基</text>
+  <rect class="chip" x="64" y="314" width="300" height="80" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="214" y="336" text-anchor="middle" fill="#b25a08">01 agent_chat 主循环</text>
+  <text class="t-small" x="214" y="356" text-anchor="middle" fill="#b25a08">while True：调模型 → 拿 tool_calls</text>
+  <text class="t-small" x="214" y="372" text-anchor="middle" fill="#b25a08">→ 本地执行 → role=tool 回灌</text>
+  <text class="t-small" x="214" y="388" text-anchor="middle" fill="#c96a6a">决策权在模型 · 执行权在本地</text>
+  <rect class="chip" x="378" y="314" width="270" height="80" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="513" y="336" text-anchor="middle" fill="#b25a08">02 状态追踪</text>
+  <text class="t-small" x="513" y="356" text-anchor="middle" fill="#b25a08">task_state 字典逐轮填充</text>
+  <text class="t-small" x="513" y="372" text-anchor="middle" fill="#b25a08">主题 / 时间 / 参会人</text>
+  <text class="t-small" x="513" y="388" text-anchor="middle" fill="#c96a6a">业务状态 ≠ 对话记忆，不混用</text>
+  <rect class="chip" x="662" y="314" width="270" height="80" rx="8" stroke="#f5d3ab"/>
+  <text class="t-chip" x="797" y="336" text-anchor="middle" fill="#b25a08">json.loads 解析参数</text>
+  <text class="t-small" x="797" y="356" text-anchor="middle" fill="#b25a08">call['function']['name']</text>
+  <text class="t-small" x="797" y="372" text-anchor="middle" fill="#b25a08">call['function']['arguments']</text>
+  <text class="t-small" x="797" y="388" text-anchor="middle" fill="#c96a6a">参数是 JSON 字符串，需解析</text>
+
+  <rect x="964" y="282" width="228" height="126" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="304">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="326">业务编排 Service 层</text>
+  <text class="t-map" x="978" y="344">（≈ 流程编排 / 状态机）</text>
+  <text class="t-map" x="978" y="366">agent_chat ≈ 你手写的</text>
+  <text class="t-map" x="978" y="384">编排引擎 / 工作流引擎</text>
+  <text class="t-map" x="978" y="402">（未来可被 LangGraph 取代）</text>
+
+  <line x1="498" y1="408" x2="498" y2="428" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c2Solid)"/>
+  <text class="t-dot" x="508" y="424">读写记忆 / 取工具</text>
+
+  <!-- ============ L3 记忆状态层 ============ -->
+  <rect class="c-l3" x="48" y="430" width="900" height="106" rx="10"/>
+  <text class="t-head" x="64" y="452" fill="#0f7b52">L3　记忆状态层 —— 怎么记住与放下（03 JSON 持久化 + 04 注销机制）</text>
+  <rect class="chip" x="64" y="462" width="290" height="60" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="209" y="484" text-anchor="middle" fill="#0f7b52">03 PersistentJSONMemory</text>
+  <text class="t-small" x="209" y="504" text-anchor="middle" fill="#3f9c74">同 session_id 中断后恢复</text>
+  <rect class="chip" x="366" y="462" width="290" height="60" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="511" y="484" text-anchor="middle" fill="#0f7b52">04 注销三步</text>
+  <text class="t-small" x="511" y="504" text-anchor="middle" fill="#3f9c74">save 留底 → clear 删档 → 日志审计</text>
+  <rect class="chip" x="668" y="462" width="264" height="60" rx="8" stroke="#b6e3cd"/>
+  <text class="t-chip" x="800" y="484" text-anchor="middle" fill="#0f7b52">memory 显式传递</text>
+  <text class="t-small" x="800" y="504" text-anchor="middle" fill="#3f9c74">框架不帮你记——记什么全可见</text>
+
+  <rect x="964" y="430" width="228" height="106" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="452">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="474">Session / Cache 层</text>
+  <text class="t-map" x="978" y="492">PersistentJSONMemory</text>
+  <text class="t-map" x="978" y="510">≈ 你熟悉的 <b>Redis 会话存储</b></text>
+  <text class="t-map" x="978" y="528">（教学版用 JSON 文件代替 Redis）</text>
+
+  <line x1="498" y1="536" x2="498" y2="556" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c2Solid)"/>
+  <text class="t-dot" x="508" y="552">dispatch 执行工具</text>
+
+  <!-- ============ L2 能力工具层 ============ -->
+  <rect class="c-l2" x="48" y="558" width="900" height="132" rx="10"/>
+  <text class="t-head" x="64" y="580" fill="#b42318">L2　能力工具层 —— 会办什么事（每篇的变量）　工具永不抛异常，出错返回"失败：xxx"</text>
+  <rect class="chip" x="64" y="590" width="166" height="44" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="147" y="610" text-anchor="middle" fill="#b42318">01 自检 / 时间</text>
+  <text class="t-small" x="147" y="626" text-anchor="middle" fill="#c96a6a">本机时间</text>
+  <rect class="chip" x="238" y="590" width="166" height="44" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="321" y="610" text-anchor="middle" fill="#b42318">05 外部天气 API</text>
+  <text class="t-small" x="321" y="626" text-anchor="middle" fill="#c96a6a">HTTP + 四层防御</text>
+  <rect class="chip" x="412" y="590" width="166" height="44" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="495" y="610" text-anchor="middle" fill="#b42318">06 SQLite 增查</text>
+  <text class="t-small" x="495" y="626" text-anchor="middle" fill="#c96a6a">? 占位符防注入</text>
+  <rect class="chip" x="586" y="590" width="166" height="44" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="669" y="610" text-anchor="middle" fill="#b42318">07 文件读写 + exec</text>
+  <text class="t-small" x="669" y="626" text-anchor="middle" fill="#c96a6a">⚠ 最危险的工具</text>
+  <rect class="chip" x="760" y="590" width="172" height="44" rx="8" stroke="#f5c6c6"/>
+  <text class="t-chip" x="846" y="610" text-anchor="middle" fill="#b42318">08 记账工具</text>
+  <text class="t-small" x="846" y="626" text-anchor="middle" fill="#c96a6a">智能体自身能力</text>
+  <rect class="chip" x="64" y="642" width="868" height="38" rx="8" stroke="#f0b4b4" fill="#fff7f7"/>
+  <text class="t-chip" x="498" y="666" text-anchor="middle" fill="#b42318">dispatch：tool_registry.get(fn_name) —— 注册表查表执行，<b>消灭 if/elif</b>，加一个工具不改调用方</text>
+
+  <rect x="964" y="558" width="228" height="132" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="580">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="602">Feign / RPC 出站调用</text>
+  <text class="t-map" x="978" y="620">但方向反了：不是你调</text>
+  <text class="t-map" x="978" y="638">微服务的固定接口，而是</text>
+  <text class="t-map" x="978" y="656"><b>模型现场决定调哪个</b></text>
+  <text class="t-map" x="978" y="676">注册表 ≈ Spring 的 Bean 注册</text>
+
+  <line x1="498" y1="690" x2="498" y2="710" stroke="#7a8699" stroke-width="1.4" marker-end="url(#c2Solid)"/>
+  <text class="t-dot" x="508" y="706">模型调用 + 介质读写</text>
+
+  <!-- ============ L0 模型服务层 ============ -->
+  <rect class="c-l0" x="48" y="712" width="440" height="96" rx="10"/>
+  <text class="t-head" x="64" y="734" fill="#6b3fd4">L0　模型服务层 —— 永远不变的底座</text>
+  <rect class="chip" x="64" y="742" width="408" height="54" rx="8" stroke="#d8cdf7"/>
+  <text class="t-chip" x="268" y="764" text-anchor="middle" fill="#6b3fd4">dashscope 调用　·　8 篇共用同一写法</text>
+  <text class="t-small" x="268" y="782" text-anchor="middle" fill="#8b6fd0">result_format='message' 必需（否则 output 是字符串）</text>
+
+  <rect x="964" y="712" width="228" height="96" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="734">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="756">外部依赖 / 三方服务</text>
+  <text class="t-map" x="978" y="774">≈ 你调支付网关、短信网关</text>
+  <text class="t-map" x="978" y="792">它比你的服务更不可控</text>
+
+  <!-- ============ LS 存储介质层 ============ -->
+  <rect class="c-ls" x="508" y="712" width="440" height="96" rx="10"/>
+  <text class="t-head" x="524" y="734" fill="#475467">LS　存储介质层 —— 数据住哪里</text>
+  <rect class="chip" x="524" y="742" width="96" height="54" rx="8" stroke="#dcdfe5"/>
+  <text class="t-small" x="572" y="772" text-anchor="middle" fill="#475467">变量(内存)</text>
+  <rect class="chip" x="628" y="742" width="96" height="54" rx="8" stroke="#dcdfe5"/>
+  <text class="t-small" x="676" y="772" text-anchor="middle" fill="#475467">JSON 文件</text>
+  <rect class="chip" x="732" y="742" width="96" height="54" rx="8" stroke="#dcdfe5"/>
+  <text class="t-small" x="780" y="772" text-anchor="middle" fill="#475467">SQLite 数据库</text>
+  <rect class="chip" x="836" y="742" width="96" height="54" rx="8" stroke="#dcdfe5"/>
+  <text class="t-small" x="884" y="772" text-anchor="middle" fill="#475467">任意本地文件</text>
+
+  <rect x="964" y="712" width="228" height="96" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text class="t-maph" x="978" y="742">⇄ 微服务对照</text>
+  <text class="t-map" x="978" y="764">MySQL / Redis / OSS</text>
+  <text class="t-map" x="978" y="782">这里的 JSON/SQLite</text>
+  <text class="t-map" x="978" y="800">就是它们的教学替身</text>
+
+  <!-- ============ ReAct 回灌回路 ============ -->
+  <path d="M 48 640 H 24 V 345 H 48" fill="none" stroke="#a98fe8" stroke-width="1.6" stroke-dasharray="7 5" marker-end="url(#c2Loop)"/>
+  <text class="t-leg" x="16" y="500" transform="rotate(-90 16 500)" text-anchor="middle" fill="#a98fe8">ReAct 回灌：工具结果作为 role=tool 消息回流，循环直到模型不再调工具</text>
+
+  <!-- ============ 底部说明 ============ -->
+  <line x1="48" y1="832" x2="1192" y2="832" stroke="#d5d9e0" stroke-width="1"/>
+  <text class="t-leg" x="48" y="856">01 篇就是 L4+L0 两层（最小骨架）——之后每篇往某一层添砖：02 添状态、03/04 添记忆、05/06/07 添工具、08 添交付。全部叠完，就是六层齐备的智能体。</text>
+  <text class="t-leg" x="48" y="876">三条不变式：① 决策权在模型，执行权在本地　② 工具永不抛异常，错误是数据　③ memory 是唯一对话记忆，全显式可见。</text>
+  <text class="t-leg" x="48" y="896">平移要点：<b>L5≈网关/Controller　L4≈编排引擎　L3≈Redis 会话　L2≈出站调用（但由模型决定调谁）　L0≈三方依赖　LS≈MySQL/Redis/OSS</b>。</text>
+  <text class="t-leg" x="48" y="916">四张配套详图之一 · 对应全书总图 L2/L3/L4/L5/L6 与 L1 —— 本图把 ch02 摊开成"一个 Agent 的完整内部结构"。</text>
+</svg>

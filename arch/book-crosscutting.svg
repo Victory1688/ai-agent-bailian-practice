@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 720" width="1160" height="720" role="img" aria-label="全书横切关注点与八条不变式图解">
+  <title>《AI Agent 开发》全书横切关注点与八条跨章不变式</title>
+  <defs>
+    <marker id="ccArw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#98a2b3"/>
+    </marker>
+    <marker id="ccRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#e57373"/>
+    </marker>
+  </defs>
+
+  <style>
+    text { font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif; }
+    .t-title { font-size: 23px; font-weight: 700; fill: #101828; }
+    .t-sub   { font-size: 13.5px; fill: #667085; }
+    .t-head  { font-size: 13.5px; font-weight: 700; }
+    .t-inv   { font-size: 11.5px; }
+    .t-small { font-size: 10px; }
+    .t-leg   { font-size: 11.5px; fill: #667085; }
+    .chip { fill: #ffffff; stroke-width: 1; }
+  </style>
+
+  <rect x="0" y="0" width="1160" height="720" fill="#ffffff"/>
+
+  <text class="t-title" x="48" y="44">全书横切关注点 · 八条跨章不变式</text>
+  <text class="t-sub" x="48" y="70">左侧：四条横切关注点贯穿 L1–L6 每一层　·　右侧：八条不变式 + 违反后果（违反即"能跑一次 ≠ 能跑"）</text>
+
+  <!-- ================= 左半：横切关注点 ================= -->
+  <rect x="48" y="92" width="470" height="560" rx="12" fill="#fafbfc" stroke="#e4e7ec"/>
+  <text class="t-head" x="66" y="118" fill="#101828">四条横切关注点（Cross-cutting）</text>
+  <text class="t-small" x="66" y="138" fill="#98a2b3">不单独承载业务流程，但作用于 L1–L6 每一层；ch08·ch12·ch13 集中交付</text>
+
+  <!-- 四条 -->
+  <rect class="chip" x="66" y="156" width="434" height="108" rx="10" stroke="#dcdfe5" fill="#ffffff"/>
+  <circle cx="90" cy="182" r="12" fill="#eff5ff" stroke="#b9cffb"/>
+  <text class="t-inv" x="90" y="187" text-anchor="middle" fill="#1d4ed8" font-weight="700">1</text>
+  <text class="t-head" x="112" y="187" fill="#1d4ed8">可观测 Observability</text>
+  <text class="t-small" x="112" y="210" fill="#475467">Trace / Span / Token 计量 / 日志分级　·　定位"第几步断链"的唯一手段</text>
+  <text class="t-small" x="112" y="228" fill="#98a2b3">缺失后果：线上报错只能"猜"，无法区分模型错还是工具错</text>
+  <text class="t-small" x="112" y="246" fill="#98a2b3">负责章节：ch12（Tracing 组件）· ch13（测试夹具可复现）</text>
+
+  <rect class="chip" x="66" y="276" width="434" height="108" rx="10" stroke="#dcdfe5" fill="#ffffff"/>
+  <circle cx="90" cy="302" r="12" fill="#ecfaf3" stroke="#a8e0c6"/>
+  <text class="t-inv" x="90" y="307" text-anchor="middle" fill="#0f7b52" font-weight="700">2</text>
+  <text class="t-head" x="112" y="307" fill="#0f7b52">安全与对齐 Guardrails</text>
+  <text class="t-small" x="112" y="330" fill="#475467">输入校验 / 工具白名单 / 代码沙箱 / 输出过滤　·　"执行权在本地"的安全边界</text>
+  <text class="t-small" x="112" y="348" fill="#98a2b3">缺失后果：模型一旦生成危险调用，直接落到真实环境</text>
+  <text class="t-small" x="112" y="366" fill="#98a2b3">负责章节：ch12（接入防御）· ch13（安全求值器 safe_eval）</text>
+
+  <rect class="chip" x="66" y="396" width="434" height="108" rx="10" stroke="#dcdfe5" fill="#ffffff"/>
+  <circle cx="90" cy="422" r="12" fill="#fff5e9" stroke="#f0bd85"/>
+  <text class="t-inv" x="90" y="427" text-anchor="middle" fill="#b25a08" font-weight="700">3</text>
+  <text class="t-head" x="112" y="427" fill="#b25a08">成本与预算 Budget</text>
+  <text class="t-small" x="112" y="450" fill="#475467">Token 预算 / 轮次上限 / 模型降级路由　·　防止 ReAct 循环烧穿预算</text>
+  <text class="t-small" x="112" y="468" fill="#98a2b3">缺失后果：一次异常长循环 = 一次账单事故</text>
+  <text class="t-small" x="112" y="486" fill="#98a2b3">负责章节：ch08（预算层 L5）· ch12（吞吐与限流）</text>
+
+  <rect class="chip" x="66" y="516" width="434" height="108" rx="10" stroke="#dcdfe5" fill="#ffffff"/>
+  <circle cx="90" cy="542" r="12" fill="#f6f1ff" stroke="#c9b6f2"/>
+  <text class="t-inv" x="90" y="547" text-anchor="middle" fill="#6b3fd4" font-weight="700">4</text>
+  <text class="t-head" x="112" y="547" fill="#6b3fd4">测试与验证 Verification</text>
+  <text class="t-small" x="112" y="570" fill="#475467">单元 / 契约 / 集成三部曲　·　把"看起来对"变成"验证过对"</text>
+  <text class="t-small" x="112" y="588" fill="#98a2b3">缺失后果：六类通病（虚构/过时/假回退/字符串判错/死代码）必然漏网</text>
+  <text class="t-small" x="112" y="606" fill="#98a2b3">负责章节：ch13（305 用例，11 个测试文件）</text>
+
+  <!-- ================= 右半：八条不变式 ================= -->
+  <rect x="542" y="92" width="570" height="560" rx="12" fill="#fafbfc" stroke="#e4e7ec"/>
+  <text class="t-head" x="562" y="118" fill="#101828">八条跨章不变式（Invariants）</text>
+  <text class="t-small" x="562" y="138" fill="#98a2b3">每章都必须遵守；越靠前的越基础，违反后越致命</text>
+
+  <!-- 8 条，两列 × 4 行 -->
+  <!-- 列 x: 562 / 852；行 y: 158, 258, 358, 458 高度 88 -->
+  <rect class="chip" x="562" y="152" width="270" height="88" rx="9" stroke="#f0b4b4" fill="#fdf3f3"/>
+  <text class="t-inv" x="576" y="174" fill="#b42318" font-weight="700">① 决策权在模型，执行权在本地</text>
+  <text class="t-small" x="576" y="194" fill="#475467">模型决策 / 代码执行，边界绝不混</text>
+  <text class="t-small" x="576" y="212" fill="#98a2b3">首现 ch02 · 复现 ch04/05/08/09/10/13</text>
+  <text class="t-small" x="576" y="230" fill="#c96a6a">违反 → 模型瞎指挥 或 代码越权替模型判断</text>
+
+  <rect class="chip" x="852" y="152" width="250" height="88" rx="9" stroke="#f0b4b4" fill="#fdf3f3"/>
+  <text class="t-inv" x="866" y="174" fill="#b42318" font-weight="700">② 工具永不抛异常</text>
+  <text class="t-small" x="866" y="194" fill="#475467">错误是数据，不是故障</text>
+  <text class="t-small" x="866" y="212" fill="#98a2b3">首现 ch02 · 复现 ch08/10/11/12/13</text>
+  <text class="t-small" x="866" y="230" fill="#c96a6a">违反 → 单点工具报错打穿整条编排链</text>
+
+  <rect class="chip" x="562" y="252" width="270" height="88" rx="9" stroke="#f0bd85" fill="#fffbf3"/>
+  <text class="t-inv" x="576" y="274" fill="#b25a08" font-weight="700">③ 注册表驱动，消灭 if/elif</text>
+  <text class="t-small" x="576" y="294" fill="#475467">声明即注册，加能力不改调用方</text>
+  <text class="t-small" x="576" y="312" fill="#98a2b3">首现 ch02 · 复现 ch03/04/10/13</text>
+  <text class="t-small" x="576" y="330" fill="#c96a6a">违反 → 加一个工具改十处，产生死代码分支</text>
+
+  <rect class="chip" x="852" y="252" width="250" height="88" rx="9" stroke="#f0bd85" fill="#fffbf3"/>
+  <text class="t-inv" x="866" y="274" fill="#b25a08" font-weight="700">④ 统一改写范式</text>
+  <text class="t-small" x="866" y="294" fill="#475467">原注释保留 → dashscope 接入</text>
+  <text class="t-small" x="866" y="312" fill="#98a2b3">首现 ch01 · 复现全书 13 章</text>
+  <text class="t-small" x="866" y="330" fill="#c96a6a">违反 → 代码与教学意图脱节，无法对照</text>
+
+  <rect class="chip" x="562" y="352" width="270" height="88" rx="9" stroke="#a8e0c6" fill="#f3fbf7"/>
+  <text class="t-inv" x="576" y="374" fill="#0f7b52" font-weight="700">⑤ result_format='message'</text>
+  <text class="t-small" x="576" y="394" fill="#475467">返回结构统一，解析才稳定</text>
+  <text class="t-small" x="576" y="412" fill="#98a2b3">首现 ch01 · 复现全书 13 章</text>
+  <text class="t-small" x="576" y="430" fill="#3f9c74">违反 → 返回结构不一致，解析全线崩</text>
+
+  <rect class="chip" x="852" y="352" width="250" height="88" rx="9" stroke="#a8e0c6" fill="#f3fbf7"/>
+  <text class="t-inv" x="866" y="374" fill="#0f7b52" font-weight="700">⑥ 显式优于隐式</text>
+  <text class="t-small" x="866" y="394" fill="#475467">显式图 / 显式 RAG / 显式上下文路由</text>
+  <text class="t-small" x="866" y="412" fill="#98a2b3">首现 ch05 · 复现 ch06/07/08</text>
+  <text class="t-small" x="866" y="430" fill="#3f9c74">违反 → 隐式行为不可观测、不可控、不可测</text>
+
+  <rect class="chip" x="562" y="452" width="270" height="88" rx="9" stroke="#c9b6f2" fill="#faf7ff"/>
+  <text class="t-inv" x="576" y="474" fill="#6b3fd4" font-weight="700">⑦ 失败也是信息</text>
+  <text class="t-small" x="576" y="494" fill="#475467">降级 / 兜底 / 重试 / 幂等</text>
+  <text class="t-small" x="576" y="512" fill="#98a2b3">首现 ch08 · 复现 ch10/11/12</text>
+  <text class="t-small" x="576" y="530" fill="#8b6fd0">违反 → 一次下游抖动 = 一次线上事故</text>
+
+  <rect class="chip" x="852" y="452" width="250" height="88" rx="9" stroke="#c9b6f2" fill="#faf7ff"/>
+  <text class="t-inv" x="866" y="474" fill="#6b3fd4" font-weight="700">⑧ 可验证性优先</text>
+  <text class="t-small" x="866" y="494" fill="#475467">测试先行 / 可执行夹具</text>
+  <text class="t-small" x="866" y="512" fill="#98a2b3">ch13 回填全书 · 复现 ch12/13</text>
+  <text class="t-small" x="866" y="530" fill="#8b6fd0">违反 → "能跑一次"被误判为"能跑"</text>
+
+  <!-- 底部收束 -->
+  <line x1="48" y1="668" x2="1112" y2="668" stroke="#d5d9e0" stroke-width="1"/>
+  <text class="t-leg" x="48" y="690">四条横切关注点（可观测 / 安全 / 成本 / 测试）是"运行时的护栏"，八条不变式是"写代码时的红线"；两者共同定义本书工程底线。</text>
+  <text class="t-leg" x="48" y="708">记忆口诀：决策在模型、执行在本地、工具不抛错、注册不分支、改写有范式、返回有格式、显式不隐式、失败也成信息、一切可验证。</text>
+</svg>
